@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="配達進捗" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f1115" />
+  <title>Uber Eats 進捗計算</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --muted: #9aa3b2;
+      --text: #f4f6fb;
+      --line: #2a2f3a;
+      --good: #33d17a;
+      --warn: #f6c343;
+      --bad: #ff6b6b;
+      --accent: #7aa2ff;
+      --input: #10131a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: max(16px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+      line-height: 1.45;
+    }
+    .wrap { max-width: 740px; margin: 0 auto; }
+    h1 { font-size: 24px; margin: 4px 0 4px; letter-spacing: .02em; }
+    .sub { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      margin: 12px 0;
+      box-shadow: 0 8px 28px rgba(0,0,0,.25);
+    }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    select {
+      width: 100%;
+      font-size: 22px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--input);
+      color: var(--text);
+      outline: none;
+      appearance: auto;
+    }
+    select:focus { border-color: var(--accent); }
+    .fixedBox {
+      width: 100%;
+      font-size: 22px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.035);
+      color: var(--text);
+      font-weight: 800;
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 10px;
+      color: var(--text);
+      background: #202532;
+      font-size: 17px;
+      font-weight: 800;
+    }
+    button:active { transform: translateY(1px); }
+    .status {
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+      border: 1px solid var(--line);
+    }
+    .status.good { color: var(--good); background: rgba(51,209,122,.10); }
+    .status.warn { color: var(--warn); background: rgba(246,195,67,.10); }
+    .status.bad { color: var(--bad); background: rgba(255,107,107,.10); }
+    .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (max-width: 560px) { .metrics { grid-template-columns: 1fr; } }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255,255,255,.025);
+    }
+    .metric .k { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+    .metric .v { font-size: 21px; font-weight: 800; white-space: nowrap; }
+    .goodTxt { color: var(--good); }
+    .badTxt { color: var(--bad); }
+    .formula {
+      font-size: 13px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      margin-top: 14px;
+      padding-top: 12px;
+    }
+    .footer { color: var(--muted); font-size: 12px; margin: 14px 4px; }
+    .small { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Uber Eats 進捗計算</h1>
+    <div class="sub">12時間固定。目標件数・完了件数・残り稼働時間だけで進捗を確認できます。</div>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label>上限稼働時間</label>
+          <div class="fixedBox">12時間固定 / 720分</div>
+        </div>
+        <div>
+          <label>今日の目標件数</label>
+          <select id="target"></select>
+        </div>
+        <div>
+          <label>完了件数</label>
+          <select id="done"></select>
+          <div class="small">普段は下の「＋1件」で更新するのが最速です。</div>
+        </div>
+        <div>
+          <label>残り稼働時間</label>
+          <div class="row2">
+            <select id="remainH"></select>
+            <select id="remainM"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="btns">
+        <button id="minus">−1件</button>
+        <button id="plus">＋1件</button>
+        <button id="reset">リセット</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="status" class="status">計算中</div>
+      <div style="height:10px"></div>
+      <div class="metrics">
+        <div class="metric"><div class="k">1件あたり目標時間</div><div id="perOrder" class="v">-</div></div>
+        <div class="metric"><div class="k">残り件数</div><div id="remainingOrders" class="v">-</div></div>
+        <div class="metric"><div class="k">残り必要時間</div><div id="requiredTime" class="v">-</div></div>
+        <div class="metric"><div class="k">残り稼働時間</div><div id="availableTime" class="v">-</div></div>
+        <div class="metric"><div class="k">余裕 / 遅れ</div><div id="slackTime" class="v">-</div></div>
+        <div class="metric"><div class="k">件数換算</div><div id="slackOrders" class="v">-</div></div>
+        <div class="metric"><div class="k">ここから必要なペース</div><div id="neededPace" class="v">-</div></div>
+        <div class="metric"><div class="k">現時点の予定比</div><div id="scheduleDelta" class="v">-</div></div>
+      </div>
+      <div class="formula">
+        計算式：残り稼働時間 −〔残り件数 × 1件あたり目標時間〕＝ 余裕/遅れ<br>
+        1件あたり目標時間は「720分 ÷ 今日の目標件数」で自動計算します。
+      </div>
+    </div>
+
+    <div class="footer">入力値はこのiPhoneのブラウザ内に保存されます。初期値は46件目標・10件完了・残り10時間12分です。</div>
+  </div>
+
+  <script>
+    const LIMIT_MINUTES = 720;
+    const $ = (id) => document.getElementById(id);
+
+    function addOptions(select, start, end, suffix = "", step = 1, pad = false) {
+      for (let v = start; v <= end; v += step) {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = `${pad ? String(v).padStart(2, "0") : v}${suffix}`;
+        select.appendChild(opt);
+      }
+    }
+
+    function setupOptions() {
+      addOptions($("target"), 20, 80, "件");
+      addOptions($("done"), 0, 80, "件");
+      addOptions($("remainH"), 0, 12, "時間");
+      addOptions($("remainM"), 0, 59, "分", 1, true);
+    }
+
+    function setDefaultValues() {
+      $("target").value = "46";
+      $("done").value = "10";
+      $("remainH").value = "10";
+      $("remainM").value = "12";
+    }
+
+    function n(id) {
+      const v = parseFloat($(id).value);
+      return Number.isFinite(v) ? v : 0;
+    }
+
+    function fmtMinutes(mins) {
+      const sign = mins < 0 ? "-" : "";
+      const abs = Math.abs(mins);
+      const h = Math.floor(abs / 60);
+      const m = Math.round((abs % 60) * 10) / 10;
+      if (h <= 0) return `${sign}${m.toFixed(1)}分`;
+      return `${sign}${h}時間${m.toFixed(1)}分`;
+    }
+
+    function fmtPace(mins) {
+      if (!Number.isFinite(mins) || mins < 0) return "-";
+      return `${mins.toFixed(2)}分/件`;
+    }
+
+    function signed(value, unit, decimals = 1) {
+      const sign = value >= 0 ? "+" : "";
+      return `${sign}${value.toFixed(decimals)}${unit}`;
+    }
+
+    function save() {
+      const data = {
+        target: $("target").value,
+        done: $("done").value,
+        remainH: $("remainH").value,
+        remainM: $("remainM").value
+      };
+      localStorage.setItem("ubereatsProgressFixed12Data", JSON.stringify(data));
+    }
+
+    function load() {
+      try {
+        const raw = localStorage.getItem("ubereatsProgressFixed12Data");
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        Object.keys(data).forEach(id => {
+          if ($(id) && data[id] !== undefined) $(id).value = data[id];
+        });
+        return true;
+      } catch(e) { return false; }
+    }
+
+    function calc() {
+      const target = Math.max(n("target"), 1);
+      const done = Math.max(n("done"), 0);
+      const remainMinutes = Math.max(n("remainH") * 60 + n("remainM"), 0);
+      const perOrder = LIMIT_MINUTES / target;
+      const remainingOrders = Math.max(target - done, 0);
+      const requiredMinutes = remainingOrders * perOrder;
+      const slackMinutes = remainMinutes - requiredMinutes;
+      const slackOrder = slackMinutes / perOrder;
+      const neededPace = remainingOrders > 0 ? remainMinutes / remainingOrders : 0;
+      const elapsedMinutes = Math.max(LIMIT_MINUTES - remainMinutes, 0);
+      const scheduledDoneNow = elapsedMinutes / perOrder;
+      const deltaVsSchedule = done - scheduledDoneNow;
+
+      $("perOrder").textContent = fmtPace(perOrder);
+      $("remainingOrders").textContent = `${remainingOrders.toFixed(0)}件`;
+      $("requiredTime").textContent = fmtMinutes(requiredMinutes);
+      $("availableTime").textContent = fmtMinutes(remainMinutes);
+
+      const slackEl = $("slackTime");
+      const orderEl = $("slackOrders");
+      const deltaEl = $("scheduleDelta");
+      slackEl.textContent = `${slackMinutes >= 0 ? "余裕 " : "遅れ "}${fmtMinutes(slackMinutes)}`;
+      orderEl.textContent = `${slackOrder >= 0 ? "先行 " : "遅れ "}${signed(slackOrder, "件", 2)}`;
+      deltaEl.textContent = signed(deltaVsSchedule, "件", 2);
+
+      [slackEl, orderEl, deltaEl].forEach(el => {
+        el.classList.remove("goodTxt", "badTxt");
+        el.classList.add(slackMinutes >= 0 ? "goodTxt" : "badTxt");
+      });
+
+      $("neededPace").textContent = remainingOrders > 0 ? fmtPace(neededPace) : "達成済み";
+
+      const status = $("status");
+      status.classList.remove("good", "warn", "bad");
+      if (remainingOrders === 0) {
+        status.textContent = "目標達成";
+        status.classList.add("good");
+      } else if (slackMinutes >= perOrder) {
+        status.textContent = `先行中：${fmtMinutes(slackMinutes)}余裕`;
+        status.classList.add("good");
+      } else if (slackMinutes >= 0) {
+        status.textContent = `ほぼ予定通り：${fmtMinutes(slackMinutes)}余裕`;
+        status.classList.add("warn");
+      } else {
+        status.textContent = `遅れ：${fmtMinutes(slackMinutes)}不足`;
+        status.classList.add("bad");
+      }
+      save();
+    }
+
+    setupOptions();
+    setDefaultValues();
+    load();
+
+    ["target", "done", "remainH", "remainM"].forEach(id => $(id).addEventListener("change", calc));
+
+    $("plus").addEventListener("click", () => {
+      const next = Math.min(n("done") + 1, 80);
+      $("done").value = String(next);
+      calc();
+    });
+
+    $("minus").addEventListener("click", () => {
+      const next = Math.max(n("done") - 1, 0);
+      $("done").value = String(next);
+      calc();
+    });
+
+    $("reset").addEventListener("click", () => {
+      $("done").value = "0";
+      $("remainH").value = "12";
+      $("remainM").value = "0";
+      calc();
+    });
+
+    calc();
+  </script>
+</body>
+</html>
