@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="配達進捗" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f1115" />
+  <title>配達進捗｜コンパクト</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --card2: #11151d;
+      --muted: #9aa3b2;
+      --text: #f4f6fb;
+      --line: #2a2f3a;
+      --good: #33d17a;
+      --warn: #f6c343;
+      --bad: #ff6b6b;
+      --accent: #7aa2ff;
+      --input: #10131a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+      line-height: 1.38;
+      -webkit-text-size-adjust: 100%;
+    }
+    .wrap { max-width: 680px; margin: 0 auto; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin: 2px 2px 10px;
+    }
+    h1 { font-size: 22px; margin: 0; letter-spacing: .02em; }
+    .tag {
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(255,255,255,.03);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      margin: 10px 0;
+      box-shadow: 0 8px 26px rgba(0,0,0,.22);
+    }
+    .hero {
+      text-align: center;
+      padding: 18px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.018));
+    }
+    .hero.good { border-color: rgba(51,209,122,.35); background: rgba(51,209,122,.08); }
+    .hero.warn { border-color: rgba(246,195,67,.35); background: rgba(246,195,67,.08); }
+    .hero.bad { border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.08); }
+    .caption { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+    .mainValue { font-size: clamp(34px, 11vw, 54px); font-weight: 900; letter-spacing: -.04em; line-height: 1.05; }
+    .mainValue.goodTxt { color: var(--good); }
+    .mainValue.warnTxt { color: var(--warn); }
+    .mainValue.badTxt { color: var(--bad); }
+    .subValue { font-size: 21px; font-weight: 800; margin-top: 8px; }
+    .subValue.goodTxt { color: var(--good); }
+    .subValue.badTxt { color: var(--bad); }
+    .miniSummary { margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .chips {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    @media (max-width: 390px) { .chips { grid-template-columns: 1fr; } }
+    .chip {
+      background: rgba(255,255,255,.035);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .chip .k { color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+    .chip .v { font-size: 18px; font-weight: 850; white-space: nowrap; }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1.55fr;
+      gap: 10px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      color: var(--text);
+      background: #202532;
+      font-weight: 900;
+      touch-action: manipulation;
+    }
+    button:active { transform: translateY(1px); }
+    .minusBtn { font-size: 20px; padding: 18px 10px; }
+    .plusBtn { font-size: 26px; padding: 18px 10px; background: #25304a; border-color: rgba(122,162,255,.35); }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 520px) { .controls { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    select {
+      width: 100%;
+      font-size: 20px;
+      padding: 11px 10px;
+      border-radius: 13px;
+      border: 1px solid var(--line);
+      background: var(--input);
+      color: var(--text);
+      outline: none;
+      appearance: auto;
+    }
+    select:focus { border-color: var(--accent); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .subControls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .resetBtn { font-size: 15px; padding: 12px 10px; background: #181d28; }
+    .linkBtn {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 10px;
+      background: #181d28;
+      font-weight: 750;
+      font-size: 15px;
+    }
+    details {
+      background: var(--card2);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+    summary {
+      color: var(--muted);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .detailGrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    @media (max-width: 520px) { .detailGrid { grid-template-columns: 1fr; } }
+    .detailItem {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,.025);
+    }
+    .detailItem .k { color: var(--muted); font-size: 12px; }
+    .detailItem .v { font-size: 17px; font-weight: 800; margin-top: 2px; }
+    .formula { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .footer { color: var(--muted); font-size: 12px; margin: 12px 4px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1>配達進捗</h1>
+      <div class="tag">12時間固定</div>
+    </div>
+
+    <div id="hero" class="hero">
+      <div class="caption">現在の進捗</div>
+      <div id="slackMain" class="mainValue">-</div>
+      <div id="slackOrders" class="subValue">-</div>
+      <div id="miniSummary" class="miniSummary">-</div>
+    </div>
+
+    <div class="chips">
+      <div class="chip"><div class="k">残り件数</div><div id="remainingOrders" class="v">-</div></div>
+      <div class="chip"><div class="k">必要ペース</div><div id="neededPace" class="v">-</div></div>
+      <div class="chip"><div class="k">目標ペース</div><div id="targetPace" class="v">-</div></div>
+    </div>
+
+    <div class="card">
+      <div class="actions">
+        <button id="minus" class="minusBtn">−1件</button>
+        <button id="plus" class="plusBtn">＋1件</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="controls">
+        <div>
+          <label>目標件数</label>
+          <select id="target"></select>
+        </div>
+        <div>
+          <label>完了件数</label>
+          <select id="done"></select>
+        </div>
+        <div>
+          <label>残り稼働時間</label>
+          <div class="row2">
+            <select id="remainH"></select>
+            <select id="remainM"></select>
+          </div>
+        </div>
+        <div>
+          <label>操作</label>
+          <div class="subControls">
+            <button id="reset" class="resetBtn">リセット</button>
+            <a class="linkBtn" href="./">通常版</a>
+          </div>
+        </div>
+      </div>
+
+      <details>
+        <summary>詳細を見る</summary>
+        <div class="detailGrid">
+          <div class="detailItem"><div class="k">残り必要時間</div><div id="requiredTime" class="v">-</div></div>
+          <div class="detailItem"><div class="k">残り稼働時間</div><div id="availableTime" class="v">-</div></div>
+          <div class="detailItem"><div class="k">予定比</div><div id="scheduleDelta" class="v">-</div></div>
+          <div class="detailItem"><div class="k">完了率</div><div id="completionRate" class="v">-</div></div>
+        </div>
+        <div class="formula">残り稼働時間 −〔残り件数 × 720分 ÷ 目標件数〕＝ 余裕/遅れ</div>
+      </details>
+    </div>
+
+    <div class="footer">入力値は端末内に保存されます。通常版と同じ保存データを使います。</div>
+  </div>
+
+  <script>
+    const LIMIT_MINUTES = 720;
+    const STORAGE_KEY = "ubereatsProgressFixed12Data";
+    const $ = (id) => document.getElementById(id);
+
+    function addOptions(select, start, end, suffix = "", step = 1, pad = false) {
+      for (let v = start; v <= end; v += step) {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = `${pad ? String(v).padStart(2, "0") : v}${suffix}`;
+        select.appendChild(opt);
+      }
+    }
+
+    function setupOptions() {
+      addOptions($("target"), 20, 80, "件");
+      addOptions($("done"), 0, 80, "件");
+      addOptions($("remainH"), 0, 12, "時間");
+      addOptions($("remainM"), 0, 59, "分", 1, true);
+    }
+
+    function setDefaultValues() {
+      $("target").value = "46";
+      $("done").value = "10";
+      $("remainH").value = "10";
+      $("remainM").value = "12";
+    }
+
+    function n(id) {
+      const value = parseFloat($(id).value);
+      return Number.isFinite(value) ? value : 0;
+    }
+
+    function fmtMinutes(mins) {
+      const abs = Math.abs(mins);
+      const h = Math.floor(abs / 60);
+      const m = Math.round((abs % 60) * 10) / 10;
+      if (h <= 0) return `${m.toFixed(1)}分`;
+      return `${h}時間${m.toFixed(1)}分`;
+    }
+
+    function fmtPace(mins) {
+      if (!Number.isFinite(mins) || mins < 0) return "-";
+      return `${mins.toFixed(2)}分/件`;
+    }
+
+    function signed(value, unit, decimals = 1) {
+      const sign = value >= 0 ? "+" : "";
+      return `${sign}${value.toFixed(decimals)}${unit}`;
+    }
+
+    function save() {
+      const data = {
+        target: $("target").value,
+        done: $("done").value,
+        remainH: $("remainH").value,
+        remainM: $("remainM").value
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        Object.keys(data).forEach(id => {
+          if ($(id) && data[id] !== undefined) $(id).value = data[id];
+        });
+        return true;
+      } catch(e) { return false; }
+    }
+
+    function setTone(slackMinutes, perOrder, remainingOrders) {
+      const hero = $("hero");
+      const main = $("slackMain");
+      const sub = $("slackOrders");
+      hero.classList.remove("good", "warn", "bad");
+      main.classList.remove("goodTxt", "warnTxt", "badTxt");
+      sub.classList.remove("goodTxt", "badTxt");
+
+      if (remainingOrders === 0) {
+        hero.classList.add("good");
+        main.classList.add("goodTxt");
+        sub.classList.add("goodTxt");
+        return;
+      }
+      if (slackMinutes >= perOrder) {
+        hero.classList.add("good");
+        main.classList.add("goodTxt");
+        sub.classList.add("goodTxt");
+      } else if (slackMinutes >= 0) {
+        hero.classList.add("warn");
+        main.classList.add("warnTxt");
+        sub.classList.add("goodTxt");
+      } else {
+        hero.classList.add("bad");
+        main.classList.add("badTxt");
+        sub.classList.add("badTxt");
+      }
+    }
+
+    function calc() {
+      const target = Math.max(n("target"), 1);
+      const done = Math.max(n("done"), 0);
+      const remainMinutes = Math.max(n("remainH") * 60 + n("remainM"), 0);
+      const perOrder = LIMIT_MINUTES / target;
+      const remainingOrders = Math.max(target - done, 0);
+      const requiredMinutes = remainingOrders * perOrder;
+      const slackMinutes = remainMinutes - requiredMinutes;
+      const slackOrder = slackMinutes / perOrder;
+      const neededPace = remainingOrders > 0 ? remainMinutes / remainingOrders : 0;
+      const elapsedMinutes = Math.max(LIMIT_MINUTES - remainMinutes, 0);
+      const scheduledDoneNow = elapsedMinutes / perOrder;
+      const deltaVsSchedule = done - scheduledDoneNow;
+      const completionRate = Math.min(done / target * 100, 100);
+
+      setTone(slackMinutes, perOrder, remainingOrders);
+
+      if (remainingOrders === 0) {
+        $("slackMain").textContent = "目標達成";
+        $("slackOrders").textContent = `${done}件完了`;
+        $("miniSummary").textContent = "お疲れさまです";
+      } else {
+        $("slackMain").textContent = `${fmtMinutes(slackMinutes)}${slackMinutes >= 0 ? "余裕" : "遅れ"}`;
+        $("slackOrders").textContent = `${slackOrder >= 0 ? "先行 " : "遅れ "}${signed(slackOrder, "件", 2)}`;
+        $("miniSummary").textContent = `残り${remainingOrders}件 / 残り${Math.floor(remainMinutes / 60)}時間${String(remainMinutes % 60).padStart(2, "0")}分`;
+      }
+
+      $("remainingOrders").textContent = `${remainingOrders}件`;
+      $("neededPace").textContent = remainingOrders > 0 ? fmtPace(neededPace) : "達成済み";
+      $("targetPace").textContent = fmtPace(perOrder);
+      $("requiredTime").textContent = fmtMinutes(requiredMinutes);
+      $("availableTime").textContent = fmtMinutes(remainMinutes);
+      $("scheduleDelta").textContent = signed(deltaVsSchedule, "件", 2);
+      $("completionRate").textContent = `${completionRate.toFixed(1)}%`;
+
+      save();
+    }
+
+    setupOptions();
+    setDefaultValues();
+    load();
+
+    ["target", "done", "remainH", "remainM"].forEach(id => $(id).addEventListener("change", calc));
+
+    $("plus").addEventListener("click", () => {
+      const next = Math.min(n("done") + 1, 80);
+      $("done").value = String(next);
+      calc();
+    });
+
+    $("minus").addEventListener("click", () => {
+      const next = Math.max(n("done") - 1, 0);
+      $("done").value = String(next);
+      calc();
+    });
+
+    $("reset").addEventListener("click", () => {
+      $("done").value = "0";
+      $("remainH").value = "12";
+      $("remainM").value = "0";
+      calc();
+    });
+
+    calc();
+  </script>
+</body>
+</html>
