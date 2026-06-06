@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">配達進捗アイコン</title>
+  <desc id="desc">配達スクーターと進捗リング、チェックマークを組み合わせたアプリアイコン</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#262b36"/><stop offset="55%" stop-color="#101722"/><stop offset="100%" stop-color="#0a1018"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#89f05d"/><stop offset="100%" stop-color="#47c83f"/></linearGradient>
+    <linearGradient id="ringDark" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#575d69" stop-opacity="0.95"/><stop offset="100%" stop-color="#343a46" stop-opacity="0.95"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity="0.28"/></filter>
+  </defs>
+  <rect x="80" y="80" width="864" height="864" rx="150" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <path d="M305 718 A255 255 0 1 1 749 698" fill="none" stroke="url(#ringDark)" stroke-width="54" stroke-linecap="round"/>
+    <path d="M505 229 A255 255 0 0 1 820 695" fill="none" stroke="url(#green)" stroke-width="54" stroke-linecap="round"/>
+  </g>
+  <g fill="#f4f6fb" filter="url(#shadow)">
+    <rect x="343" y="430" width="128" height="128" rx="22"/>
+    <path d="M524 368c0-22 18-40 40-40 17 0 34 11 42 27l-31 22c-8-8-18-12-27-12-13 0-24 10-24 23 0 12 11 22 24 22h36v38h-62c-28 0-50-22-50-50z"/>
+    <path d="M522 456c32 0 62 18 76 47l28 58h34c18 0 34 11 41 28l27 64c5 11-4 23-16 23h-71c-11 0-21-6-25-16l-29-67-22 72c-4 13-16 21-29 21h-48c-12 0-23-8-27-20l-30-99c-7-25-2-52 15-73 18-24 47-38 76-38z"/>
+    <path d="M396 577h139c14 0 27 10 30 23l15 65h109c16 0 28 13 28 29s-12 29-28 29H361c-16 0-28-13-28-29s12-29 28-29h35l-9-38c-7-30 16-59 46-59z"/>
+    <circle cx="402" cy="703" r="43"/>
+    <circle cx="656" cy="703" r="43"/>
+  </g>
+  <g filter="url(#shadow)">
+    <circle cx="712" cy="744" r="72" fill="url(#green)"/>
+    <path d="M678 744l20 20 49-51" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
