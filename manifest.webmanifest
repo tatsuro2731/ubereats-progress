@@ -1,18 +1,22 @@
 {
-  "name": "配達進捗",
-  "short_name": "配達進捗",
-  "description": "Uber Eats配達の目標件数に対する進捗を確認するツール",
-  "start_url": "./",
+  "name": "Uber配達進捗",
+  "short_name": "Uber進捗",
+  "description": "配達の目標件数に対する進捗を確認するツール",
+  "start_url": "./?v=4",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f1115",
   "theme_color": "#0f1115",
   "icons": [
     {
-      "src": "assets/app-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "src": "apple-touch-icon-192-uber.png?v=4",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "apple-touch-icon-512-uber.png?v=4",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
