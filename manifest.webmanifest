@@ -9,12 +9,17 @@
   "theme_color": "#0f1115",
   "icons": [
     {
-      "src": "apple-touch-icon-192-uber.png?v=4",
+      "src": "apple-touch-icon.png?v=4",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "apple-touch-icon.png?v=4",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "apple-touch-icon-512-uber.png?v=4",
+      "src": "apple-touch-icon.png?v=4",
       "sizes": "512x512",
       "type": "image/png"
     }
