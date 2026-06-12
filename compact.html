@@ -32,7 +32,22 @@
       line-height: 1.38;
       -webkit-text-size-adjust: 100%;
     }
-    .wrap { max-width: 680px; margin: 0 auto; }
+    .wrap { max-width: 680px; margin: 0 auto; padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+    .actionsCard {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: 0;
+      border: none;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      background: var(--card2);
+      box-shadow: 0 -6px 20px rgba(0,0,0,.32);
+      padding: 12px 14px max(14px, env(safe-area-inset-bottom));
+      z-index: 30;
+    }
+    .actionsCard .actions { max-width: 680px; margin: 0 auto; }
     .header {
       display: flex;
       justify-content: space-between;
@@ -199,7 +214,7 @@
       <div class="chip"><div class="k">目標ペース</div><div id="targetPace" class="v">-</div></div>
     </div>
 
-    <div class="card">
+    <div class="card actionsCard">
       <div class="actions">
         <button id="minus" class="minusBtn">−1件</button>
         <button id="plus" class="plusBtn">＋1件</button>
@@ -281,11 +296,11 @@
     }
 
     function fmtMinutes(mins) {
-      const abs = Math.abs(mins);
+      const abs = Math.round(Math.abs(mins));
       const h = Math.floor(abs / 60);
-      const m = Math.round((abs % 60) * 10) / 10;
-      if (h <= 0) return `${m.toFixed(1)}分`;
-      return `${h}時間${m.toFixed(1)}分`;
+      const m = abs % 60;
+      if (h <= 0) return `${m}分`;
+      return `${h}時間${m}分`;
     }
 
     function fmtPace(mins) {
@@ -406,6 +421,7 @@
     });
 
     $("reset").addEventListener("click", () => {
+      if (!confirm("完了件数と残り時間をリセットしますか？")) return;
       $("done").value = "0";
       $("remainH").value = "12";
       $("remainM").value = "0";
@@ -413,6 +429,10 @@
     });
 
     calc();
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
   </script>
 </body>
 </html>
