@@ -13,7 +13,30 @@
   <link rel="manifest" href="manifest.webmanifest?v=9">
   <title>Uber配達進捗</title>
   <style>
-    :root{--bg:#0b1018;--card:#111827;--card2:#0d1421;--line:#243149;--text:#f4f7fb;--muted:#a6b1c3;--good:#22c55e;--warn:#f6c343;--late:#f97316;--bad:#ff6b6b;--input:#0a1220;--blue:#2b3c6a;--green:#16a34a}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:max(14px,env(safe-area-inset-top)) 14px max(18px,env(safe-area-inset-bottom));line-height:1.4}.wrap{max-width:760px;margin:auto;padding-bottom:calc(104px + env(safe-area-inset-bottom))}.header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:2px 2px 10px}h1{font-size:22px;margin:0;font-weight:900}.tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 10px;white-space:nowrap}.hero{border:1px solid #856519;border-radius:24px;padding:18px 14px;text-align:center;background:linear-gradient(180deg,rgba(246,195,67,.10),rgba(246,195,67,.06));margin:10px 0 12px}.hero.good{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.08)}.hero.warn{border-color:rgba(246,195,67,.48)}.hero.late{border-color:rgba(249,115,22,.58);background:rgba(249,115,22,.12)}.hero.bad{border-color:rgba(255,107,107,.45);background:rgba(255,107,107,.08)}.caption{font-size:13px;color:#d7dde8}.main{font-size:clamp(38px,11vw,60px);font-weight:900;letter-spacing:-.04em;line-height:1.05}.sub{font-size:22px;font-weight:900;margin-top:8px}.mini{margin-top:10px;color:#d4d9e3;font-size:15px}.warnTxt{color:var(--warn)}.lateTxt{color:var(--late)}.badTxt{color:var(--bad)}.goodTxt{color:var(--good)}.limits{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:8px}.lim{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);border-radius:999px;padding:6px 9px;font-size:14px}.bike{position:relative;display:inline-block;width:23px;height:15px;color:currentColor}.bike:before,.bike:after{content:"";position:absolute;bottom:0;width:6px;height:6px;border:2px solid currentColor;border-radius:50%}.bike:before{left:1px}.bike:after{right:1px}.bike i{position:absolute;left:8px;bottom:6px;width:10px;height:2px;background:currentColor;transform:skew(-20deg)}.bike b{position:absolute;right:2px;top:0;width:8px;height:6px;border:2px solid currentColor;border-radius:2px}.bikes{display:inline-flex;gap:1px}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.metric,.card,details{background:var(--card);border:1px solid var(--line);border-radius:20px}.metric{padding:12px 10px;min-height:96px}.metric .k,.detail .k,label{font-size:11px;color:var(--muted)}.metric .v,.detail .v{font-size:clamp(16px,4.4vw,21px);font-weight:900;line-height:1.16;word-break:keep-all}.note{font-size:10px;color:var(--muted);margin-top:6px}.card{padding:16px;margin:12px 0;box-shadow:0 8px 26px rgba(0,0,0,.18)}button{appearance:none;border:none;border-radius:20px;color:var(--text);font-weight:900;touch-action:manipulation}.actions,.row2{display:grid;grid-template-columns:1fr 1.55fr;gap:14px}.actionsCard{position:fixed;left:0;right:0;bottom:0;margin:0;border:none;border-top:1px solid var(--line);border-radius:0;background:var(--card2);box-shadow:0 -6px 20px rgba(0,0,0,.32);padding:12px 14px max(14px,env(safe-area-inset-bottom));z-index:30}.actionsCard .actions{max-width:760px;margin:0 auto}.minus,.plus{padding:24px 12px;font-size:32px;background:#23335c;border:1px solid #31456f}.plus{background:var(--blue)}.countHead,.countTop,.status{display:flex;align-items:center;gap:10px}.countHead{justify-content:space-between;margin-bottom:10px}.countTitle{font-size:18px;font-weight:900}.help{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#1d2840;border:1px solid #33415d;padding:0;font-size:14px}.countPanel{background:linear-gradient(180deg,#07131f,#0c1727);border:1px solid #22334f;border-radius:22px;padding:16px}.countTop{justify-content:space-between;flex-wrap:wrap}.status{font-size:18px;font-weight:900;color:#6ef099}.dot{width:18px;height:18px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(34,197,94,.18)}.dot.stop{background:#6b7280;box-shadow:0 0 0 4px rgba(107,114,128,.18)}.countPanel.run{background:linear-gradient(180deg,rgba(34,197,94,.12),rgba(34,197,94,.05));border-color:rgba(34,197,94,.34)}.remainBig{font-size:clamp(22px,6.8vw,34px);font-weight:900}.desc{margin-top:10px;color:#dbe3ef;font-size:13px}.toggleBtn{width:100%;margin-top:14px;padding:18px 14px;background:linear-gradient(180deg,#1db954,var(--green));border:1px solid rgba(255,255,255,.18);font-size:28px;line-height:1.05}.toggleBtn.off{background:linear-gradient(180deg,#ef4444,#b91c1c)}.toggleSub{display:block;font-size:14px;opacity:.9;margin-top:6px}.hint{margin-top:10px;color:var(--muted);font-size:12px}.helpText{margin-top:10px;padding:10px 12px;border:1px solid #33415d;border-radius:14px;background:#101b2c;color:#dbe3ef;font-size:12px}.helpText[hidden]{display:none}.controls{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;margin-bottom:8px;color:#c8d0dd;font-size:14px}select,input[type=time]{width:100%;background:var(--input);border:1px solid var(--line);color:var(--text);border-radius:18px;padding:14px;font-size:22px}input[type=time]{min-height:58px;color-scheme:dark}.row2{grid-template-columns:1fr 1fr}.endRow{display:grid;grid-template-columns:1fr auto;gap:10px}.clearEnd{padding:0 14px;background:#18253d;border:1px solid #30405e;font-size:14px;border-radius:18px}.reset{width:100%;padding:18px;background:#18253d;border:1px solid #30405e;font-size:18px}details{margin-top:18px;background:var(--card2);padding:14px}summary{list-style:none;cursor:pointer;font-size:18px;font-weight:900}summary:before{content:"▸ ";color:#b8c3d6}details[open] summary:before{content:"▾ "}.detailGrid,.settingsGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.detail{background:#111a2d;border:1px solid #22334f;border-radius:18px;padding:12px}.settings{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}.settingsTitle{font-size:16px;font-weight:900}.selBox label{font-size:11px;margin-bottom:5px}.selBox select,.settings select{font-size:15px;padding:10px 12px}.foot{color:var(--muted);font-size:12px;text-align:center;margin:12px 0}@media(max-width:560px){.controls,.detailGrid,.settingsGrid{grid-template-columns:1fr}}@media(max-height:860px){body{padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}.header{margin-bottom:6px}h1{font-size:20px}.tag{padding:5px 9px;font-size:11px}.hero{padding:12px 10px;margin:6px 0 8px}.main{font-size:clamp(31px,9.2vw,48px)}.sub{font-size:19px}.mini{font-size:13px}.metric{padding:9px 7px;min-height:76px}.card{padding:12px;margin:8px 0}.minus,.plus{padding:18px 8px;font-size:28px}.countPanel{padding:12px}.remainBig{font-size:clamp(20px,5.8vw,28px)}.toggleBtn{padding:14px;font-size:24px}select,input[type=time]{padding:10px 12px;font-size:19px}.reset{padding:14px;font-size:16px}}@media(max-height:760px){body{padding:max(8px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom))}.hero{padding:10px 8px;margin:5px 0 6px}.main{font-size:clamp(28px,8.6vw,42px)}.sub{font-size:17px}.mini{font-size:12px}.metric{padding:7px 6px;min-height:66px}.metric .v{font-size:clamp(13px,3.55vw,16px)}.note{display:none}.card{padding:10px;margin:7px 0}.minus,.plus{padding:14px 8px;font-size:24px}.countPanel{padding:10px}.desc{font-size:11px}.toggleBtn{padding:12px;font-size:22px}.hint{display:none}}@media(max-width:390px){.metric{padding:7px 5px}.limits{display:grid;grid-template-columns:1fr;gap:5px}.lim{justify-content:center}.countTop{display:block}.remainBig{margin-top:6px}.endRow{grid-template-columns:1fr 66px}.actions{gap:8px}.minus,.plus{font-size:24px}}
+    :root {
+      --bg:#0b1018;--card:#111827;--card2:#0d1421;--line:#243149;--text:#f4f7fb;--muted:#a6b1c3;
+      --good:#22c55e;--warn:#f6c343;--late:#f97316;--bad:#ff6b6b;--input:#0a1220;--blue:#2b3c6a;--green:#16a34a;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:max(14px,env(safe-area-inset-top)) 14px max(18px,env(safe-area-inset-bottom));line-height:1.4}
+    .wrap{max-width:760px;margin:auto;padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+    .header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:2px 2px 10px}
+    h1{font-size:22px;margin:0;font-weight:900}.tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 10px;white-space:nowrap}
+    .hero{border:1px solid #856519;border-radius:24px;padding:18px 14px;text-align:center;background:linear-gradient(180deg,rgba(246,195,67,.10),rgba(246,195,67,.06));margin:10px 0 12px}
+    .hero.good{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.08)}.hero.warn{border-color:rgba(246,195,67,.48)}.hero.late{border-color:rgba(249,115,22,.58);background:rgba(249,115,22,.12)}.hero.bad{border-color:rgba(255,107,107,.45);background:rgba(255,107,107,.08)}
+    .caption{font-size:13px;color:#d7dde8}.main{font-size:clamp(38px,11vw,60px);font-weight:900;letter-spacing:-.04em;line-height:1.05}.sub{font-size:22px;font-weight:900;margin-top:8px}.mini{margin-top:10px;color:#d4d9e3;font-size:15px}
+    .warnTxt{color:var(--warn)}.lateTxt{color:var(--late)}.badTxt{color:var(--bad)}.goodTxt{color:var(--good)}
+    .limits{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:8px}.lim{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);border-radius:999px;padding:6px 9px;font-size:14px}
+    .bike{position:relative;display:inline-block;width:23px;height:15px;color:currentColor}.bike:before,.bike:after{content:"";position:absolute;bottom:0;width:6px;height:6px;border:2px solid currentColor;border-radius:50%}.bike:before{left:1px}.bike:after{right:1px}.bike i{position:absolute;left:8px;bottom:6px;width:10px;height:2px;background:currentColor;transform:skew(-20deg)}.bike b{position:absolute;right:2px;top:0;width:8px;height:6px;border:2px solid currentColor;border-radius:2px}.bikes{display:inline-flex;gap:1px}
+    .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.metric,.card,details{background:var(--card);border:1px solid var(--line);border-radius:20px}.metric{padding:12px 10px;min-height:96px}.metric .k,.detail .k,label{font-size:11px;color:var(--muted)}.metric .v,.detail .v{font-size:clamp(16px,4.4vw,21px);font-weight:900;line-height:1.16;word-break:keep-all}.note{font-size:10px;color:var(--muted);margin-top:6px}
+    .card{padding:16px;margin:12px 0;box-shadow:0 8px 26px rgba(0,0,0,.18)}button{appearance:none;border:none;border-radius:20px;color:var(--text);font-weight:900;touch-action:manipulation}.actions,.row2{display:grid;grid-template-columns:1fr 1.55fr;gap:14px}.actionsCard{position:fixed;left:0;right:0;bottom:0;margin:0;border:none;border-top:1px solid var(--line);border-radius:0;background:var(--card2);box-shadow:0 -6px 20px rgba(0,0,0,.32);padding:12px 14px max(14px,env(safe-area-inset-bottom));z-index:30}.actionsCard .actions{max-width:760px;margin:0 auto}.minus,.plus{padding:24px 12px;font-size:32px;background:#23335c;border:1px solid #31456f}.plus{background:var(--blue)}
+    .countHead,.countTop,.status{display:flex;align-items:center;gap:10px}.countHead{justify-content:space-between;margin-bottom:10px}.countTitle{font-size:18px;font-weight:900}.help{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#1d2840;border:1px solid #33415d;padding:0;font-size:14px}.countPanel{background:linear-gradient(180deg,#07131f,#0c1727);border:1px solid #22334f;border-radius:22px;padding:16px}.countTop{justify-content:space-between;flex-wrap:wrap}.status{font-size:18px;font-weight:900;color:#6ef099}.dot{width:18px;height:18px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(34,197,94,.18)}.dot.stop{background:#6b7280;box-shadow:0 0 0 4px rgba(107,114,128,.18)}.countPanel.run{background:linear-gradient(180deg,rgba(34,197,94,.12),rgba(34,197,94,.05));border-color:rgba(34,197,94,.34)}.remainBig{font-size:clamp(22px,6.8vw,34px);font-weight:900}.desc{margin-top:10px;color:#dbe3ef;font-size:13px}.toggleBtn{width:100%;margin-top:14px;padding:18px 14px;background:linear-gradient(180deg,#1db954,var(--green));border:1px solid rgba(255,255,255,.18);font-size:28px;line-height:1.05}.toggleBtn.off{background:linear-gradient(180deg,#ef4444,#b91c1c)}.toggleSub{display:block;font-size:14px;opacity:.9;margin-top:6px}.hint{margin-top:10px;color:var(--muted);font-size:12px}.helpText{margin-top:10px;padding:10px 12px;border:1px solid #33415d;border-radius:14px;background:#101b2c;color:#dbe3ef;font-size:12px}.helpText[hidden]{display:none}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;margin-bottom:8px;color:#c8d0dd;font-size:14px}select,input[type=time]{width:100%;background:var(--input);border:1px solid var(--line);color:var(--text);border-radius:18px;padding:14px;font-size:22px}input[type=time]{min-height:58px;color-scheme:dark}.row2{grid-template-columns:1fr 1fr}.endRow{display:grid;grid-template-columns:1fr auto;gap:10px}.clearEnd{padding:0 14px;background:#18253d;border:1px solid #30405e;font-size:14px;border-radius:18px}.reset{width:100%;padding:18px;background:#18253d;border:1px solid #30405e;font-size:18px}
+    details{margin-top:18px;background:var(--card2);padding:14px}summary{list-style:none;cursor:pointer;font-size:18px;font-weight:900}summary:before{content:"▸ ";color:#b8c3d6}details[open] summary:before{content:"▾ "}.detailGrid,.settingsGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.detail{background:#111a2d;border:1px solid #22334f;border-radius:18px;padding:12px}.settings{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}.settingsTitle{font-size:16px;font-weight:900}.selBox label{font-size:11px;margin-bottom:5px}.selBox select,.settings select{font-size:15px;padding:10px 12px}.foot{color:var(--muted);font-size:12px;text-align:center;margin:12px 0}
+    @media(max-width:560px){.controls,.detailGrid,.settingsGrid{grid-template-columns:1fr}}
+    @media(max-height:860px){body{padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}.header{margin-bottom:6px}h1{font-size:20px}.tag{padding:5px 9px;font-size:11px}.hero{padding:12px 10px;margin:6px 0 8px}.main{font-size:clamp(31px,9.2vw,48px)}.sub{font-size:19px}.mini{font-size:13px}.metric{padding:9px 7px;min-height:76px}.card{padding:12px;margin:8px 0}.minus,.plus{padding:18px 8px;font-size:28px}.countPanel{padding:12px}.remainBig{font-size:clamp(20px,5.8vw,28px)}.toggleBtn{padding:14px;font-size:24px}select,input[type=time]{padding:10px 12px;font-size:19px}.reset{padding:14px;font-size:16px}}
+    @media(max-height:760px){body{padding:max(8px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom))}.hero{padding:10px 8px;margin:5px 0 6px}.main{font-size:clamp(28px,8.6vw,42px)}.sub{font-size:17px}.mini{font-size:12px}.metric{padding:7px 6px;min-height:66px}.metric .v{font-size:clamp(13px,3.55vw,16px)}.note{display:none}.card{padding:10px;margin:7px 0}.minus,.plus{padding:14px 8px;font-size:24px}.countPanel{padding:10px}.desc{font-size:11px}.toggleBtn{padding:12px;font-size:22px}.hint{display:none}}
+    @media(max-width:390px){.metric{padding:7px 5px}.limits{display:grid;grid-template-columns:1fr;gap:5px}.lim{justify-content:center}.countTop{display:block}.remainBig{margin-top:6px}.endRow{grid-template-columns:1fr 66px}.actions{gap:8px}.minus,.plus{font-size:24px}}
   </style>
 </head>
 <body>
@@ -22,34 +45,475 @@
   <div id="hero" class="hero"><div class="caption">現在の進捗</div><div id="mainValue" class="main">-</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div></div>
   <div id="metrics" class="metrics"></div>
   <div class="card actionsCard"><div class="actions"><button id="minus" class="minus">−1件</button><button id="plus" class="plus">＋1件</button></div></div>
-  <div class="card"><div class="countHead"><div class="countTitle">残り時間カウント</div><button id="helpBtn" class="help" type="button" aria-expanded="false" aria-controls="helpText">?</button></div><div id="countPanel" class="countPanel"><div class="countTop"><div class="status"><span id="countDot" class="dot stop"></span><span id="countStatus">停止中</span></div><div id="countRemain" class="remainBig">残り 0時間00分</div></div><div class="desc">ON中は残り時間を自動で減らします</div><button id="countToggle" class="toggleBtn">時間ON<span id="countSub" class="toggleSub">進める</span></button><div class="hint">案件中・走行中はON、停止して鳴り待ちはOFF。残り時間を手で直すと、その値を基準に再計算します。</div><div id="helpText" class="helpText" hidden>案件中・走行中はON。鳴り待ち・休憩中はOFF。ON中は残り稼働時間が自動で減ります。手動で残り時間を変更すると、その値を基準に再計算します。</div></div></div>
-  <div class="card"><div class="controls"><div><label>目標件数</label><select id="target"></select></div><div><label>完了件数</label><select id="done"></select></div><div><label>残り稼働時間</label><div class="row2"><select id="remainH"></select><select id="remainM"></select></div></div><div><label>終了上限 <span id="endText">なし</span></label><div class="endRow"><input id="endLimit" type="time"><button id="clearEnd" class="clearEnd" type="button">クリア</button></div></div><div><label>操作</label><button id="reset" class="reset">リセット</button></div></div>
-    <details><summary>詳細を見る</summary><div class="detailGrid"><div class="detail"><div class="k">実績ペース</div><div id="actualPace" class="v">-</div></div><div class="detail"><div class="k">残り必要時間</div><div id="requiredTime" class="v">-</div></div><div class="detail"><div class="k">有効残り時間</div><div id="availableTime" class="v">-</div></div><div class="detail"><div class="k">予定比</div><div id="scheduleDelta" class="v">-</div></div><div class="detail"><div class="k">完了率</div><div id="completionRate" class="v">-</div></div><div class="detail"><div class="k">現在時刻</div><div id="nowClock" class="v">-</div></div></div><div class="settings"><div class="settingsTitle">小カード表示</div><div class="settingsGrid"><div class="selBox"><label>表示枚数</label><select id="cardCount"><option value="3">3枚</option><option value="6">6枚</option></select></div></div><div id="cardSelectors" class="settingsGrid"></div></div></details>
+  <div class="card">
+    <div class="countHead"><div class="countTitle">残り時間カウント</div><button id="helpBtn" class="help" type="button" aria-expanded="false" aria-controls="helpText">?</button></div>
+    <div id="countPanel" class="countPanel">
+      <div class="countTop"><div class="status"><span id="countDot" class="dot stop"></span><span id="countStatus">停止中</span></div><div id="countRemain" class="remainBig">残り 0時間00分</div></div>
+      <div class="desc">ON中は残り時間を自動で減らします</div>
+      <button id="countToggle" class="toggleBtn">時間ON<span id="countSub" class="toggleSub">進める</span></button>
+      <div class="hint">案件中・走行中はON、停止して鳴り待ちはOFF。残り時間を手で直すと、その値を基準に再計算します。</div>
+      <div id="helpText" class="helpText" hidden>案件中・走行中はON。鳴り待ち・休憩中はOFF。ON中は残り稼働時間が自動で減ります。手動で残り時間を変更すると、その値を基準に再計算します。</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="controls">
+      <div><label>目標件数</label><select id="target"></select></div>
+      <div><label>完了件数</label><select id="done"></select></div>
+      <div><label>残り稼働時間</label><div class="row2"><select id="remainH"></select><select id="remainM"></select></div></div>
+      <div><label>終了上限 <span id="endText">なし</span></label><div class="endRow"><input id="endLimit" type="time"><button id="clearEnd" class="clearEnd" type="button">クリア</button></div></div>
+      <div><label>操作</label><button id="reset" class="reset">リセット</button></div>
+    </div>
+    <details>
+      <summary>詳細を見る</summary>
+      <div class="detailGrid">
+        <div class="detail"><div class="k">実績ペース</div><div id="actualPace" class="v">-</div></div>
+        <div class="detail"><div class="k">残り必要時間</div><div id="requiredTime" class="v">-</div></div>
+        <div class="detail"><div class="k">有効残り時間</div><div id="availableTime" class="v">-</div></div>
+        <div class="detail"><div class="k">予定比</div><div id="scheduleDelta" class="v">-</div></div>
+        <div class="detail"><div class="k">完了率</div><div id="completionRate" class="v">-</div></div>
+        <div class="detail"><div class="k">現在時刻</div><div id="nowClock" class="v">-</div></div>
+      </div>
+      <div class="settings">
+        <div class="settingsTitle">小カード表示</div>
+        <div class="settingsGrid"><div class="selBox"><label>表示枚数</label><select id="cardCount"><option value="3">3枚</option><option value="6">6枚</option></select></div></div>
+        <div id="cardSelectors" class="settingsGrid"></div>
+      </div>
+    </details>
   </div>
   <div class="foot">終了予測はスマホの現在時刻を使った目安です。</div>
 </div>
 <script>
-const L=720,D="ubereatsProgressFixed12Data",C="ubereatsProgressClockState",$=id=>document.getElementById(id);
-const DEF=["remaining","need","eta","safe","project12","targetPace"],OP=[["remaining","残り件数"],["need","必要ペース"],["eta","終了予測"],["safe","狙える件数"],["targetPace","目標ペース"],["project12","上限まで走ると"],["constraint","制約条件"]];
-let cs={on:false,baseRemain:0,baseAt:Date.now()},cnt=6,cards=[...DEF];
-function opt(e,a,b,s="",st=1,p=false){for(let v=a;v<=b;v+=st){let o=document.createElement("option");o.value=v;o.textContent=(p?String(v).padStart(2,"0"):v)+s;e.appendChild(o)}}
-function n(id){let v=parseFloat($(id).value);return Number.isFinite(v)?v:0}function man(){return Math.max(n("remainH")*60+n("remainM"),0)}function setR(m){m=Math.max(0,Math.round(m));$("remainH").value=Math.min(Math.floor(m/60),12);$("remainM").value=Math.min(m%60,59)}
-function rem(){if(!cs.on)return man();let e=Math.floor((Date.now()-cs.baseAt)/60000),r=Math.max(0,cs.baseRemain-e);if(r<=0){cs.on=false;cs.baseRemain=0;saveC()}return r}function syncC(){cs.baseRemain=man();cs.baseAt=Date.now();saveC()}function tog(){let r=rem();setR(r);cs={on:!cs.on,baseRemain:r,baseAt:Date.now()};saveC();save();calc()}function saveC(){localStorage.setItem(C,JSON.stringify(cs))}function loadC(){try{let d=JSON.parse(localStorage.getItem(C)||"{}");if(typeof d.on==="boolean")cs={on:d.on,baseRemain:Number(d.baseRemain)||man(),baseAt:Number(d.baseAt)||Date.now()}}catch(e){}}
-function fill(a){let r=[...a];DEF.forEach(id=>{if(r.length<6&&!r.includes(id))r.push(id)});OP.forEach(o=>{if(r.length<6&&!r.includes(o[0]))r.push(o[0])});return r.slice(0,6)}
-function save(){let endLimitTime=$("endLimit").value;localStorage.setItem(D,JSON.stringify({target:$("target").value,done:$("done").value,remainH:$("remainH").value,remainM:$("remainM").value,endLimitTime,endLimit:endLimitTime,displayCount:String(cnt),cardCount:String(cnt),displayCards:cards}))}
-function load(){try{let d=JSON.parse(localStorage.getItem(D)||"{}");Object.keys(d).forEach(k=>{$(k)&&($(k).value=d[k])});if(d.endLimitTime!==undefined)$("endLimit").value=d.endLimitTime||"";else if(d.endLimit!==undefined)$("endLimit").value=d.endLimit||"";cnt=Number(d.displayCount||d.cardCount)===3?3:6;if(Array.isArray(d.displayCards))cards=d.displayCards.filter(id=>OP.some(o=>o[0]===id))}catch(e){}cards=fill(cards);$("cardCount").value=String(cnt)}
-function fm(m){let a=Math.round(Math.abs(m)),h=Math.floor(a/60),mm=a%60;return h?`${h}時間${mm}分`:`${mm}分`}function rs(m){m=Math.max(0,Math.round(m));return`${Math.floor(m/60)}時間${String(m%60).padStart(2,"0")}分`}function pace(m){return Number.isFinite(m)&&m>0?`${m.toFixed(2)}分/件`:"-"}function clk(d){return d.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",hour12:false})}function eta(m){if(!Number.isFinite(m)||m<0)return"-";let n=new Date(),e=new Date(n.getTime()+m*60000);return(e.toDateString()!==n.toDateString()?"翌":"")+clk(e)}
-function endV(){return $("endLimit").value||""}function endI(){let v=endV();if(!v)return null;let[h,m]=v.split(":").map(Number);if(!Number.isFinite(h)||!Number.isFinite(m))return null;let n=new Date(),e=new Date(n);e.setHours(h,m,0,0);if(e<=n){if(n-e<=21600000)return{m:0,d:e,over:true,label:clk(e)};e.setDate(e.getDate()+1)}return{m:Math.max(0,Math.floor((e-n)/60000)),d:e,over:false,label:(e.toDateString()!==n.toDateString()?"翌":"")+clk(e)}}
-function active(r,ei){if(!ei)return{m:r,label:"12時間制限",kind:"12h",endOn:false,endM:null,endLabel:"",over:false};if(ei.over)return{m:0,label:`${ei.label}上限`,kind:"end",endOn:true,endM:0,endLabel:ei.label,over:true};if(ei.m<r)return{m:ei.m,label:`${ei.label}上限`,kind:"end",endOn:true,endM:ei.m,endLabel:ei.label,over:false};return{m:r,label:"12時間制限",kind:"12h",endOn:true,endM:ei.m,endLabel:ei.label,over:false}}
-function tag(a){if(!a.endOn)return"12時間制限基準";return a.kind==="end"?"終了上限基準":"12時間制限基準"}function tone(m,p,l){let h=$("hero"),mv=$("mainValue");h.className="hero";mv.className="main";$("subValue").className="sub";if(l===0||m>=15){h.classList.add("good");mv.classList.add("goodTxt")}else if(m>=0){h.classList.add("warn");mv.classList.add("warnTxt")}else if(Math.abs(m)<p){h.classList.add("late");mv.classList.add("lateTxt")}else{h.classList.add("bad");mv.classList.add("badTxt")}}
-function bike(k){let b="<span class=bike><i></i><b></b></span>";return`<span class="bikes">${b.repeat(k)}</span>`}function lim(v,t){if(Number.isFinite(v)&&v>0){let r=Math.round(v);if(t==="s"&&r<10)return"シングル：ショート優先";if(t==="d"&&r<20)return"ダブル：厳しめ";return`${t==="s"?"シングル":"ダブル"} ${r}分まで`}return t==="s"?"シングル：ショート優先":"ダブル：非推奨"}function lims(p,m){return`<div class="limits"><span class="lim">${bike(1)}${lim(p+m,"s")}</span><span class="lim">${bike(2)}${lim(p*2+m,"d")}</span></div>`}
-function countUI(r){$("countRemain").textContent=`残り ${rs(r)}`;let b=$("countToggle"),s=$("countSub"),dot=$("countDot"),panel=$("countPanel");if(cs.on){$("countStatus").textContent="カウント中";b.classList.add("off");b.firstChild.nodeValue="時間OFF";s.textContent="止める";dot.classList.remove("stop");panel.classList.add("run")}else{$("countStatus").textContent="停止中";b.classList.remove("off");b.firstChild.nodeValue="時間ON";s.textContent="進める";dot.classList.add("stop");panel.classList.remove("run")}}
-function selectors(){let box=$("cardSelectors");box.innerHTML="";for(let i=0;i<6;i++){let w=document.createElement("div"),l=document.createElement("label"),s=document.createElement("select");w.className="selBox";l.textContent=`カード${i+1}`;s.id=`cardSel${i}`;OP.forEach(o=>{let p=document.createElement("option");p.value=o[0];p.textContent=o[1];s.appendChild(p)});s.value=cards[i]||DEF[i];s.onchange=()=>{cards[i]=s.value;save();calc()};w.append(l,s);box.appendChild(w)}}function setUI(){cnt=Number($("cardCount").value)===3?3:6;for(let i=0;i<6;i++){let e=$(`cardSel${i}`);if(e)e.parentElement.style.display=i<cnt?"block":"none"}}
-function draw(c){let ids=fill(cards).slice(0,cnt);$("metrics").innerHTML=ids.map(id=>{let x=c[id]||c.remaining;return`<div class="metric"><div class="k">${x.k}</div><div class="v">${x.v}</div>${x.n?`<div class="note">${x.n}</div>`:""}</div>`}).join("")}
-function calc(){let target=Math.max(n("target"),1),done=Math.max(n("done"),0),was=cs.on,r=rem();if(was)setR(r);let ei=endI(),a=active(r,ei),er=a.m,used=Math.max(0,L-r),budget=used+er,p=budget/target,left=Math.max(target-done,0),req=left*p,margin=er-req,need=left?er/left:0,cur=done>0&&used>0?used/done:NaN,finish=Number.isFinite(cur)?cur*left:NaN,delta=p>0?done-used/p:NaN,rate=Math.min(done/target*100,100),safe=Number.isFinite(cur)&&cur>0?done+Math.floor(er/cur):NaN,proj=Number.isFinite(cur)&&cur>0?(used+er)/cur:NaN,etaCap=a.over?r:er,etaText=left===0?"達成済み":!Number.isFinite(finish)?"計測待ち":`${eta(Math.min(finish,etaCap))}予測`,etaNote=left===0?"目標達成済み":a.over?`${a.endLabel}を超過 / 稼働延長が必要`:!Number.isFinite(finish)?"実績ペース計測待ち":finish>etaCap?"上限到達見込み":"現ペース継続";tone(margin,p,left);$("constraintTag").textContent=tag(a);$("endText").textContent=a.endOn?`${a.endLabel}上限`:"なし";if(left===0){$("mainValue").textContent="目標達成";$("subValue").textContent=`${done}件完了`;$("miniValue").textContent="お疲れさまです"}else{$("mainValue").textContent=fm(margin)+(margin>=0?"余裕":"遅れ");$("subValue").innerHTML=lims(p,margin);$("miniValue").textContent=a.over?`残り${left}件 / ${a.endLabel}を超過`:`残り${left}件 / ${a.label}まで${rs(er)}`}$("actualPace").textContent=pace(cur);$("requiredTime").textContent=fm(req);$("availableTime").textContent=`${rs(er)} / ${a.label}`;$("scheduleDelta").textContent=Number.isFinite(delta)?`${delta>=0?"+":""}${delta.toFixed(2)}件`:"-";$("completionRate").textContent=`${rate.toFixed(1)}%`;$("nowClock").textContent=clk(new Date());countUI(r);let constraintNote=a.endOn?(a.kind==="end"?"終了上限が12時間制限より短い":`${a.endLabel}上限は補助情報`):"終了上限なし";let c={remaining:{k:"残り件数",v:`${left}件`},need:{k:"必要ペース",v:left?pace(need):"達成済み",n:`${a.label}基準`},eta:{k:"終了予測",v:etaText,n:etaNote},safe:{k:"狙える件数",v:Number.isFinite(safe)?`${safe}件まで`:"計測待ち",n:"実績ペース基準"},targetPace:{k:"目標ペース",v:pace(p),n:`${a.label}反映`},project12:{k:"上限まで走ると",v:Number.isFinite(proj)?`${proj.toFixed(1)}件`:"計測待ち",n:`${a.label}基準`},constraint:{k:"制約条件",v:a.kind==="end"?"終了上限基準":"12時間制限基準",n:constraintNote}};setUI();draw(c)}
-function setup(){opt($("target"),20,80,"件");opt($("done"),0,80,"件");opt($("remainH"),0,12,"時間");opt($("remainM"),0,59,"分",1,true);$("target").value=46;$("done").value=10;$("remainH").value=10;$("remainM").value=12;load();loadC();selectors();calc();setInterval(calc,15000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)calc()});["target","done","remainH","remainM","endLimit"].forEach(id=>$(id).addEventListener("change",()=>{if(id==="remainH"||id==="remainM")syncC();save();calc()}));$("cardCount").onchange=()=>{cnt=Number($("cardCount").value)===3?3:6;save();calc()};$("clearEnd").onclick=()=>{$("endLimit").value="";save();calc()};$("plus").onclick=()=>{$("done").value=Math.min(n("done")+1,80);save();calc()};$("minus").onclick=()=>{$("done").value=Math.max(n("done")-1,0);save();calc()};$("reset").onclick=()=>{if(!confirm("完了件数と残り時間をリセットしますか？"))return;$("done").value=0;$("remainH").value=12;$("remainM").value=0;$("endLimit").value="";cs={on:false,baseRemain:720,baseAt:Date.now()};saveC();save();calc()};$("countToggle").onclick=tog;$("helpBtn").onclick=()=>{let h=$("helpText"),o=h.hidden;h.hidden=!o;$("helpBtn").setAttribute("aria-expanded",String(o))}}
+const WORK_LIMIT_MINUTES = 720;
+const STORAGE_KEY = "ubereatsProgressFixed12Data";
+const CLOCK_KEY = "ubereatsProgressClockState";
+const $ = id => document.getElementById(id);
+const DEFAULT_CARDS = ["remaining", "need", "eta", "safe", "project12", "targetPace"];
+const CARD_OPTIONS = [
+  ["remaining", "残り件数"],
+  ["need", "必要ペース"],
+  ["eta", "終了予測"],
+  ["safe", "狙える件数"],
+  ["targetPace", "目標ペース"],
+  ["project12", "上限まで走ると"],
+  ["constraint", "制約条件"]
+];
+let clockState = { on: false, baseRemain: 0, baseAt: Date.now() };
+let cardCount = 6;
+let cards = [...DEFAULT_CARDS];
+
+function addOptions(element, start, end, suffix = "", step = 1, pad = false) {
+  for (let value = start; value <= end; value += step) {
+    const option = document.createElement("option");
+    option.value = String(value);
+    option.textContent = `${pad ? String(value).padStart(2, "0") : value}${suffix}`;
+    element.appendChild(option);
+  }
+}
+
+function n(id) {
+  const value = parseFloat($(id).value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function manualRemain() {
+  return Math.max(n("remainH") * 60 + n("remainM"), 0);
+}
+
+function setRemain(minutes) {
+  const value = Math.max(0, Math.round(minutes));
+  $("remainH").value = String(Math.min(Math.floor(value / 60), 12));
+  $("remainM").value = String(Math.min(value % 60, 59));
+}
+
+function remain() {
+  if (!clockState.on) return manualRemain();
+  const elapsed = Math.floor((Date.now() - clockState.baseAt) / 60000);
+  const value = Math.max(0, clockState.baseRemain - elapsed);
+  if (value <= 0) {
+    clockState.on = false;
+    clockState.baseRemain = 0;
+    saveClock();
+  }
+  return value;
+}
+
+function syncClock() {
+  clockState.baseRemain = manualRemain();
+  clockState.baseAt = Date.now();
+  saveClock();
+}
+
+function toggleClock() {
+  const value = remain();
+  setRemain(value);
+  clockState = { on: !clockState.on, baseRemain: value, baseAt: Date.now() };
+  saveClock();
+  save();
+  calc();
+}
+
+function saveClock() {
+  localStorage.setItem(CLOCK_KEY, JSON.stringify(clockState));
+}
+
+function loadClock() {
+  try {
+    const data = JSON.parse(localStorage.getItem(CLOCK_KEY) || "{}");
+    if (typeof data.on === "boolean") {
+      clockState = {
+        on: data.on,
+        baseRemain: Number(data.baseRemain) || manualRemain(),
+        baseAt: Number(data.baseAt) || Date.now()
+      };
+    }
+  } catch (e) {}
+}
+
+function fillCards(value) {
+  const result = [...value];
+  DEFAULT_CARDS.forEach(id => {
+    if (result.length < 6 && !result.includes(id)) result.push(id);
+  });
+  CARD_OPTIONS.forEach(option => {
+    if (result.length < 6 && !result.includes(option[0])) result.push(option[0]);
+  });
+  return result.slice(0, 6);
+}
+
+function save() {
+  const endLimitTime = $("endLimit").value;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    target: $("target").value,
+    done: $("done").value,
+    remainH: $("remainH").value,
+    remainM: $("remainM").value,
+    endLimitTime,
+    endLimit: endLimitTime,
+    displayCount: String(cardCount),
+    cardCount: String(cardCount),
+    displayCards: cards
+  }));
+}
+
+function load() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    Object.keys(data).forEach(key => {
+      if ($(key)) $(key).value = data[key];
+    });
+    if (data.endLimitTime !== undefined) $("endLimit").value = data.endLimitTime || "";
+    else if (data.endLimit !== undefined) $("endLimit").value = data.endLimit || "";
+    cardCount = Number(data.displayCount || data.cardCount) === 3 ? 3 : 6;
+    if (Array.isArray(data.displayCards)) {
+      cards = data.displayCards.filter(id => CARD_OPTIONS.some(option => option[0] === id));
+    }
+  } catch (e) {}
+  cards = fillCards(cards);
+  $("cardCount").value = String(cardCount);
+}
+
+function formatMinutes(minutes) {
+  const value = Math.round(Math.abs(minutes));
+  const hours = Math.floor(value / 60);
+  const mins = value % 60;
+  return hours ? `${hours}時間${mins}分` : `${mins}分`;
+}
+
+function remainText(minutes) {
+  const value = Math.max(0, Math.round(minutes));
+  return `${Math.floor(value / 60)}時間${String(value % 60).padStart(2, "0")}分`;
+}
+
+function pace(minutes) {
+  return Number.isFinite(minutes) && minutes > 0 ? `${minutes.toFixed(2)}分/件` : "-";
+}
+
+function clock(date) {
+  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function eta(minutes) {
+  if (!Number.isFinite(minutes) || minutes < 0) return "-";
+  const now = new Date();
+  const end = new Date(now.getTime() + minutes * 60000);
+  return `${end.toDateString() !== now.toDateString() ? "翌" : ""}${clock(end)}`;
+}
+
+function endValue() {
+  return $("endLimit").value || "";
+}
+
+function endInfo() {
+  const value = endValue();
+  if (!value) return null;
+  const [hours, mins] = value.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(mins)) return null;
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(hours, mins, 0, 0);
+  if (end <= now) {
+    if (now - end <= 21600000) return { m: 0, d: end, over: true, label: clock(end) };
+    end.setDate(end.getDate() + 1);
+  }
+  return {
+    m: Math.max(0, Math.floor((end - now) / 60000)),
+    d: end,
+    over: false,
+    label: `${end.toDateString() !== now.toDateString() ? "翌" : ""}${clock(end)}`
+  };
+}
+
+function activeConstraint(remaining, limit) {
+  if (!limit) return { m: remaining, label: "12時間制限", kind: "12h", endOn: false, endM: null, endLabel: "", over: false };
+  if (limit.over) return { m: 0, label: `${limit.label}上限`, kind: "end", endOn: true, endM: 0, endLabel: limit.label, over: true };
+  if (limit.m < remaining) return { m: limit.m, label: `${limit.label}上限`, kind: "end", endOn: true, endM: limit.m, endLabel: limit.label, over: false };
+  return { m: remaining, label: "12時間制限", kind: "12h", endOn: true, endM: limit.m, endLabel: limit.label, over: false };
+}
+
+function constraintTag(active) {
+  if (!active.endOn) return "12時間制限基準";
+  return active.kind === "end" ? "終了上限基準" : "12時間制限基準";
+}
+
+function setTone(margin, targetPace, left) {
+  const hero = $("hero");
+  const main = $("mainValue");
+  hero.className = "hero";
+  main.className = "main";
+  $("subValue").className = "sub";
+  if (left === 0 || margin >= 15) {
+    hero.classList.add("good");
+    main.classList.add("goodTxt");
+  } else if (margin >= 0) {
+    hero.classList.add("warn");
+    main.classList.add("warnTxt");
+  } else if (Math.abs(margin) < targetPace) {
+    hero.classList.add("late");
+    main.classList.add("lateTxt");
+  } else {
+    hero.classList.add("bad");
+    main.classList.add("badTxt");
+  }
+}
+
+function bikeIcon(count) {
+  const icon = "<span class=bike><i></i><b></b></span>";
+  return `<span class="bikes">${icon.repeat(count)}</span>`;
+}
+
+function limitText(value, type) {
+  if (Number.isFinite(value) && value > 0) {
+    const rounded = Math.round(value);
+    if (type === "s" && rounded < 10) return "シングル：ショート優先";
+    if (type === "d" && rounded < 20) return "ダブル：厳しめ";
+    return `${type === "s" ? "シングル" : "ダブル"} ${rounded}分まで`;
+  }
+  return type === "s" ? "シングル：ショート優先" : "ダブル：非推奨";
+}
+
+function limits(targetPace, margin) {
+  return `<div class="limits"><span class="lim">${bikeIcon(1)}${limitText(targetPace + margin, "s")}</span><span class="lim">${bikeIcon(2)}${limitText(targetPace * 2 + margin, "d")}</span></div>`;
+}
+
+function renderClock(remaining) {
+  $("countRemain").textContent = `残り ${remainText(remaining)}`;
+  const button = $("countToggle");
+  const sub = $("countSub");
+  const dot = $("countDot");
+  const panel = $("countPanel");
+  if (clockState.on) {
+    $("countStatus").textContent = "カウント中";
+    button.classList.add("off");
+    button.firstChild.nodeValue = "時間OFF";
+    sub.textContent = "止める";
+    dot.classList.remove("stop");
+    panel.classList.add("run");
+  } else {
+    $("countStatus").textContent = "停止中";
+    button.classList.remove("off");
+    button.firstChild.nodeValue = "時間ON";
+    sub.textContent = "進める";
+    dot.classList.add("stop");
+    panel.classList.remove("run");
+  }
+}
+
+function renderCardSelectors() {
+  const box = $("cardSelectors");
+  box.innerHTML = "";
+  for (let i = 0; i < 6; i++) {
+    const wrapper = document.createElement("div");
+    const label = document.createElement("label");
+    const select = document.createElement("select");
+    wrapper.className = "selBox";
+    label.textContent = `カード${i + 1}`;
+    select.id = `cardSel${i}`;
+    CARD_OPTIONS.forEach(option => {
+      const item = document.createElement("option");
+      item.value = option[0];
+      item.textContent = option[1];
+      select.appendChild(item);
+    });
+    select.value = cards[i] || DEFAULT_CARDS[i];
+    select.onchange = () => {
+      cards[i] = select.value;
+      save();
+      calc();
+    };
+    wrapper.append(label, select);
+    box.appendChild(wrapper);
+  }
+}
+
+function applyCardCount() {
+  cardCount = Number($("cardCount").value) === 3 ? 3 : 6;
+  for (let i = 0; i < 6; i++) {
+    const element = $(`cardSel${i}`);
+    if (element) element.parentElement.style.display = i < cardCount ? "block" : "none";
+  }
+}
+
+function drawCards(values) {
+  const ids = fillCards(cards).slice(0, cardCount);
+  $("metrics").innerHTML = ids.map(id => {
+    const item = values[id] || values.remaining;
+    return `<div class="metric"><div class="k">${item.k}</div><div class="v">${item.v}</div>${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
+  }).join("");
+}
+
+function calc() {
+  const target = Math.max(n("target"), 1);
+  const done = Math.max(n("done"), 0);
+  const wasCounting = clockState.on;
+  const currentRemain = remain();
+  if (wasCounting) setRemain(currentRemain);
+
+  const end = endInfo();
+  const active = activeConstraint(currentRemain, end);
+  const effectiveRemain = active.m;
+  const used = Math.max(0, WORK_LIMIT_MINUTES - currentRemain);
+  const budget = used + effectiveRemain;
+  const targetPace = budget / target;
+  const left = Math.max(target - done, 0);
+  const required = left * targetPace;
+  const margin = effectiveRemain - required;
+  const neededPace = left ? effectiveRemain / left : 0;
+  const actualPace = done > 0 && used > 0 ? used / done : NaN;
+  const finish = Number.isFinite(actualPace) ? actualPace * left : NaN;
+  const delta = targetPace > 0 ? done - used / targetPace : NaN;
+  const rate = Math.min(done / target * 100, 100);
+  const safe = Number.isFinite(actualPace) && actualPace > 0 ? done + Math.floor(effectiveRemain / actualPace) : NaN;
+  const projection = Number.isFinite(actualPace) && actualPace > 0 ? (used + effectiveRemain) / actualPace : NaN;
+  const etaCap = active.over ? currentRemain : effectiveRemain;
+  const etaText = left === 0 ? "達成済み" : !Number.isFinite(finish) ? "計測待ち" : `${eta(Math.min(finish, etaCap))}予測`;
+  const etaNote = left === 0 ? "目標達成済み" : active.over ? `${active.endLabel}を超過 / 稼働延長が必要` : !Number.isFinite(finish) ? "実績ペース計測待ち" : finish > etaCap ? "上限到達見込み" : "現ペース継続";
+
+  setTone(margin, targetPace, left);
+  $("constraintTag").textContent = constraintTag(active);
+  $("endText").textContent = active.endOn ? `${active.endLabel}上限` : "なし";
+
+  if (left === 0) {
+    $("mainValue").textContent = "目標達成";
+    $("subValue").textContent = `${done}件完了`;
+    $("miniValue").textContent = "お疲れさまです";
+  } else {
+    $("mainValue").textContent = `${formatMinutes(margin)}${margin >= 0 ? "余裕" : "遅れ"}`;
+    $("subValue").innerHTML = limits(targetPace, margin);
+    $("miniValue").textContent = active.over ? `残り${left}件 / ${active.endLabel}を超過` : `残り${left}件 / ${active.label}まで${remainText(effectiveRemain)}`;
+  }
+
+  $("actualPace").textContent = pace(actualPace);
+  $("requiredTime").textContent = formatMinutes(required);
+  $("availableTime").textContent = `${remainText(effectiveRemain)} / ${active.label}`;
+  $("scheduleDelta").textContent = Number.isFinite(delta) ? `${delta >= 0 ? "+" : ""}${delta.toFixed(2)}件` : "-";
+  $("completionRate").textContent = `${rate.toFixed(1)}%`;
+  $("nowClock").textContent = clock(new Date());
+  renderClock(currentRemain);
+
+  const constraintNote = active.endOn ? (active.kind === "end" ? "終了上限が12時間制限より短い" : `${active.endLabel}上限は補助情報`) : "終了上限なし";
+  const values = {
+    remaining: { k: "残り件数", v: `${left}件` },
+    need: { k: "必要ペース", v: left ? pace(neededPace) : "達成済み", n: `${active.label}基準` },
+    eta: { k: "終了予測", v: etaText, n: etaNote },
+    safe: { k: "狙える件数", v: Number.isFinite(safe) ? `${safe}件まで` : "計測待ち", n: "実績ペース基準" },
+    targetPace: { k: "目標ペース", v: pace(targetPace), n: `${active.label}反映` },
+    project12: { k: "上限まで走ると", v: Number.isFinite(projection) ? `${projection.toFixed(1)}件` : "計測待ち", n: `${active.label}基準` },
+    constraint: { k: "制約条件", v: active.kind === "end" ? "終了上限基準" : "12時間制限基準", n: constraintNote }
+  };
+  applyCardCount();
+  drawCards(values);
+}
+
+function setup() {
+  addOptions($("target"), 10, 80, "件");
+  addOptions($("done"), 0, 80, "件");
+  addOptions($("remainH"), 0, 12, "時間");
+  addOptions($("remainM"), 0, 59, "分", 1, true);
+  $("target").value = "46";
+  $("done").value = "10";
+  $("remainH").value = "10";
+  $("remainM").value = "12";
+
+  load();
+  loadClock();
+  renderCardSelectors();
+  calc();
+  setInterval(calc, 15000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) calc();
+  });
+
+  ["target", "done", "remainH", "remainM", "endLimit"].forEach(id => {
+    $(id).addEventListener("change", () => {
+      if (id === "remainH" || id === "remainM") syncClock();
+      save();
+      calc();
+    });
+  });
+  $("cardCount").onchange = () => {
+    cardCount = Number($("cardCount").value) === 3 ? 3 : 6;
+    save();
+    calc();
+  };
+  $("clearEnd").onclick = () => {
+    $("endLimit").value = "";
+    save();
+    calc();
+  };
+  $("plus").onclick = () => {
+    $("done").value = String(Math.min(n("done") + 1, 80));
+    save();
+    calc();
+  };
+  $("minus").onclick = () => {
+    $("done").value = String(Math.max(n("done") - 1, 0));
+    save();
+    calc();
+  };
+  $("reset").onclick = () => {
+    if (!confirm("完了件数と残り時間をリセットしますか？")) return;
+    $("done").value = "0";
+    $("remainH").value = "12";
+    $("remainM").value = "0";
+    $("endLimit").value = "";
+    clockState = { on: false, baseRemain: 720, baseAt: Date.now() };
+    saveClock();
+    save();
+    calc();
+  };
+  $("countToggle").onclick = toggleClock;
+  $("helpBtn").onclick = () => {
+    const help = $("helpText");
+    const open = help.hidden;
+    help.hidden = !open;
+    $("helpBtn").setAttribute("aria-expanded", String(open));
+  };
+}
+
 setup();
-if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+if ("serviceWorker" in navigator) {
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 </script>
 </body>
 </html>
