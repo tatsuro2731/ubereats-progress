@@ -143,6 +143,14 @@ function syncClock() {
   saveClock();
 }
 
+function stopClock(remaining) {
+  const value = Math.max(0, Math.round(remaining));
+  setRemain(value);
+  clockState = { on: false, baseRemain: value, baseAt: Date.now() };
+  saveClock();
+  save();
+}
+
 function toggleClock() {
   const value = remain();
   setRemain(value);
@@ -386,7 +394,9 @@ function calc() {
   const done = Math.max(n("done"), 0);
   const wasCounting = clockState.on;
   const currentRemain = remain();
+  const left = Math.max(target - done, 0);
   if (wasCounting) setRemain(currentRemain);
+  if (left === 0 && wasCounting) stopClock(currentRemain);
 
   const end = endInfo();
   const active = activeConstraint(currentRemain, end);
@@ -394,7 +404,6 @@ function calc() {
   const used = Math.max(0, WORK_LIMIT_MINUTES - currentRemain);
   const budget = used + effectiveRemain;
   const targetPace = budget / target;
-  const left = Math.max(target - done, 0);
   const required = left * targetPace;
   const margin = effectiveRemain - required;
   const neededPace = left ? effectiveRemain / left : 0;
