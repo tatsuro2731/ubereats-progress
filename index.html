@@ -28,7 +28,7 @@
     .warnTxt{color:var(--warn)}.lateTxt{color:var(--late)}.badTxt{color:var(--bad)}.goodTxt{color:var(--good)}
     .limits{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:8px}.lim{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);border-radius:999px;padding:6px 9px;font-size:14px}
     .bike{position:relative;display:inline-block;width:23px;height:15px;color:currentColor}.bike:before,.bike:after{content:"";position:absolute;bottom:0;width:6px;height:6px;border:2px solid currentColor;border-radius:50%}.bike:before{left:1px}.bike:after{right:1px}.bike i{position:absolute;left:8px;bottom:6px;width:10px;height:2px;background:currentColor;transform:skew(-20deg)}.bike b{position:absolute;right:2px;top:0;width:8px;height:6px;border:2px solid currentColor;border-radius:2px}.bikes{display:inline-flex;gap:1px}
-    .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.metric,.card,details{background:var(--card);border:1px solid var(--line);border-radius:20px}.metric{padding:12px 10px;min-height:96px}.metric .k,.detail .k,label{font-size:11px;color:var(--muted)}.metric .v,.detail .v{font-size:clamp(16px,4.4vw,21px);font-weight:900;line-height:1.16;word-break:keep-all}.note{font-size:10px;color:var(--muted);margin-top:6px}
+    .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.metric,.card,details{background:var(--card);border:1px solid var(--line);border-radius:20px}.metric{padding:12px 10px;min-height:96px}.metric.paceToggle{cursor:pointer;-webkit-tap-highlight-color:rgba(246,195,67,.18);user-select:none}.metric.paceToggle:active{transform:scale(.99);border-color:rgba(246,195,67,.45)}.metric .k,.detail .k,label{font-size:11px;color:var(--muted)}.metric .v,.detail .v{font-size:clamp(16px,4.4vw,21px);font-weight:900;line-height:1.16;word-break:keep-all}.note{font-size:10px;color:var(--muted);margin-top:6px}
     .card{padding:16px;margin:12px 0;box-shadow:0 8px 26px rgba(0,0,0,.18)}button{appearance:none;border:none;border-radius:20px;color:var(--text);font-weight:900;touch-action:manipulation}.actions,.row2{display:grid;grid-template-columns:1fr 1.55fr;gap:14px}.actionsCard{position:fixed;left:0;right:0;bottom:0;margin:0;border:none;border-top:1px solid var(--line);border-radius:0;background:var(--card2);box-shadow:0 -6px 20px rgba(0,0,0,.32);padding:12px 14px max(14px,env(safe-area-inset-bottom));z-index:30}.actionsCard .actions{max-width:760px;margin:0 auto}.minus,.plus{padding:24px 12px;font-size:32px;background:#23335c;border:1px solid #31456f}.plus{background:var(--blue)}
     .countHead,.countTop,.status{display:flex;align-items:center;gap:10px}.countHead{justify-content:space-between;margin-bottom:10px}.countTitle{font-size:18px;font-weight:900}.help{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#1d2840;border:1px solid #33415d;padding:0;font-size:14px}.countPanel{background:linear-gradient(180deg,#07131f,#0c1727);border:1px solid #22334f;border-radius:22px;padding:16px}.countTop{justify-content:space-between;flex-wrap:wrap}.status{font-size:18px;font-weight:900;color:#6ef099}.dot{width:18px;height:18px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(34,197,94,.18)}.dot.stop{background:#6b7280;box-shadow:0 0 0 4px rgba(107,114,128,.18)}.countPanel.run{background:linear-gradient(180deg,rgba(34,197,94,.12),rgba(34,197,94,.05));border-color:rgba(34,197,94,.34)}.remainBig{font-size:clamp(22px,6.8vw,34px);font-weight:900}.desc{margin-top:10px;color:#dbe3ef;font-size:13px}.toggleBtn{width:100%;margin-top:14px;padding:18px 14px;background:linear-gradient(180deg,#1db954,var(--green));border:1px solid rgba(255,255,255,.18);font-size:28px;line-height:1.05}.toggleBtn.off{background:linear-gradient(180deg,#ef4444,#b91c1c)}.toggleSub{display:block;font-size:14px;opacity:.9;margin-top:6px}.hint{margin-top:10px;color:var(--muted);font-size:12px}.helpText{margin-top:10px;padding:10px 12px;border:1px solid #33415d;border-radius:14px;background:#101b2c;color:#dbe3ef;font-size:12px}.helpText[hidden]{display:none}
     .controls{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;margin-bottom:8px;color:#c8d0dd;font-size:14px}select,input[type=time]{width:100%;background:var(--input);border:1px solid var(--line);color:var(--text);border-radius:18px;padding:14px;font-size:22px}input[type=time]{min-height:58px;color-scheme:dark}.row2{grid-template-columns:1fr 1fr}.endRow{display:grid;grid-template-columns:1fr auto;gap:10px}.clearEnd{padding:0 14px;background:#18253d;border:1px solid #30405e;font-size:14px;border-radius:18px}.reset{width:100%;padding:18px;background:#18253d;border:1px solid #30405e;font-size:18px}
@@ -86,6 +86,7 @@
 const WORK_LIMIT_MINUTES = 720;
 const STORAGE_KEY = "ubereatsProgressFixed12Data";
 const CLOCK_KEY = "ubereatsProgressClockState";
+const PACE_MODE_KEY = "ubereatsProgressPaceDisplayMode";
 const $ = id => document.getElementById(id);
 const DEFAULT_CARDS = ["remaining", "need", "eta", "safe", "project12", "targetPace"];
 const CARD_OPTIONS = [
@@ -98,6 +99,7 @@ const CARD_OPTIONS = [
   ["constraint", "制約条件"]
 ];
 let clockState = { on: false, baseRemain: 0, baseAt: Date.now() };
+let paceDisplayMode = localStorage.getItem(PACE_MODE_KEY) === "hourly" ? "hourly" : "minutes";
 let cardCount = 6;
 let cards = [...DEFAULT_CARDS];
 
@@ -234,6 +236,24 @@ function remainText(minutes) {
 
 function pace(minutes) {
   return Number.isFinite(minutes) && minutes > 0 ? `${minutes.toFixed(2)}分/件` : "-";
+}
+
+function pacePerOrder(minutes) {
+  return Number.isFinite(minutes) && minutes > 0 ? `1件 ${minutes.toFixed(1)}分` : "-";
+}
+
+function pacePerHour(minutes) {
+  return Number.isFinite(minutes) && minutes > 0 ? `1時間 ${(60 / minutes).toFixed(1)}件` : "-";
+}
+
+function paceCardText(minutes) {
+  return paceDisplayMode === "hourly" ? pacePerHour(minutes) : pacePerOrder(minutes);
+}
+
+function togglePaceDisplayMode() {
+  paceDisplayMode = paceDisplayMode === "hourly" ? "minutes" : "hourly";
+  localStorage.setItem(PACE_MODE_KEY, paceDisplayMode);
+  calc();
 }
 
 function clock(date) {
@@ -381,11 +401,17 @@ function applyCardCount() {
   }
 }
 
+function isPaceToggleCard(id) {
+  return id === "need" || id === "targetPace";
+}
+
 function drawCards(values) {
   const ids = fillCards(cards).slice(0, cardCount);
   $("metrics").innerHTML = ids.map(id => {
     const item = values[id] || values.remaining;
-    return `<div class="metric"><div class="k">${item.k}</div><div class="v">${item.v}</div>${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
+    const toggle = isPaceToggleCard(id);
+    const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで1件あたり分数と1時間あたり件数を切替"` : "";
+    return `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}"${attrs}><div class="k">${item.k}</div><div class="v">${item.v}</div>${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
   }).join("");
 }
 
@@ -440,12 +466,13 @@ function calc() {
   renderClock(currentRemain);
 
   const constraintNote = active.endOn ? (active.kind === "end" ? "終了上限が12時間制限より短い" : `${active.endLabel}上限は補助情報`) : "終了上限なし";
+  const paceToggleNote = `タップで切替 / ${paceDisplayMode === "hourly" ? "件/時" : "分/件"}`;
   const values = {
     remaining: { k: "残り件数", v: `${left}件` },
-    need: { k: "必要ペース", v: left ? pace(neededPace) : "達成済み", n: `${active.label}基準` },
+    need: { k: "必要ペース", v: left ? paceCardText(neededPace) : "達成済み", n: `${paceToggleNote} / ${active.label}基準` },
     eta: { k: "終了予測", v: etaText, n: etaNote },
     safe: { k: "狙える件数", v: Number.isFinite(safe) ? `${safe}件まで` : "計測待ち", n: "実績ペース基準" },
-    targetPace: { k: "目標ペース", v: pace(targetPace), n: `${active.label}反映` },
+    targetPace: { k: "目標ペース", v: paceCardText(targetPace), n: `${paceToggleNote} / ${active.label}反映` },
     project12: { k: "上限まで走ると", v: Number.isFinite(projection) ? `${projection.toFixed(1)}件` : "計測待ち", n: `${active.label}基準` },
     constraint: { k: "制約条件", v: active.kind === "end" ? "終了上限基準" : "12時間制限基準", n: constraintNote }
   };
@@ -484,6 +511,17 @@ function setup() {
     save();
     calc();
   };
+  $("metrics").addEventListener("click", event => {
+    const card = event.target.closest(".metric");
+    if (card && isPaceToggleCard(card.dataset.cardId)) togglePaceDisplayMode();
+  });
+  $("metrics").addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const card = event.target.closest(".metric");
+    if (!card || !isPaceToggleCard(card.dataset.cardId)) return;
+    event.preventDefault();
+    togglePaceDisplayMode();
+  });
   $("clearEnd").onclick = () => {
     $("endLimit").value = "";
     save();
