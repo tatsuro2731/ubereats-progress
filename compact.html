@@ -106,6 +106,8 @@
       padding: 10px;
       min-width: 0;
     }
+    .chip.togglePace { cursor: pointer; -webkit-tap-highlight-color: rgba(122,162,255,.18); user-select: none; }
+    .chip.togglePace:active { transform: scale(.99); border-color: rgba(122,162,255,.45); }
     .chip .k { color: var(--muted); font-size: 12px; margin-bottom: 3px; }
     .chip .v { font-size: 18px; font-weight: 850; white-space: nowrap; }
     .actions {
@@ -210,8 +212,8 @@
 
     <div class="chips">
       <div class="chip"><div class="k">残り件数</div><div id="remainingOrders" class="v">-</div></div>
-      <div class="chip"><div class="k">必要ペース</div><div id="neededPace" class="v">-</div></div>
-      <div class="chip"><div class="k">目標ペース</div><div id="targetPace" class="v">-</div></div>
+      <div class="chip togglePace" data-pace-toggle="true" role="button" tabindex="0" aria-label="必要ペースの表示を切り替え" title="タップで1件あたり分数と1時間あたり件数を切替"><div class="k">必要ペース</div><div id="neededPace" class="v">-</div></div>
+      <div class="chip togglePace" data-pace-toggle="true" role="button" tabindex="0" aria-label="目標ペースの表示を切り替え" title="タップで1件あたり分数と1時間あたり件数を切替"><div class="k">目標ペース</div><div id="targetPace" class="v">-</div></div>
     </div>
 
     <div class="card actionsCard">
@@ -265,7 +267,9 @@
   <script>
     const LIMIT_MINUTES = 720;
     const STORAGE_KEY = "ubereatsProgressFixed12Data";
+    const PACE_MODE_KEY = "ubereatsProgressPaceDisplayMode";
     const $ = (id) => document.getElementById(id);
+    let paceDisplayMode = localStorage.getItem(PACE_MODE_KEY) === "hourly" ? "hourly" : "minutes";
 
     function addOptions(select, start, end, suffix = "", step = 1, pad = false) {
       for (let v = start; v <= end; v += step) {
@@ -277,7 +281,7 @@
     }
 
     function setupOptions() {
-      addOptions($("target"), 20, 80, "件");
+      addOptions($("target"), 10, 80, "件");
       addOptions($("done"), 0, 80, "件");
       addOptions($("remainH"), 0, 12, "時間");
       addOptions($("remainM"), 0, 59, "分", 1, true);
@@ -304,8 +308,19 @@
     }
 
     function fmtPace(mins) {
-      if (!Number.isFinite(mins) || mins < 0) return "-";
+      if (!Number.isFinite(mins) || mins <= 0) return "-";
       return `${mins.toFixed(2)}分/件`;
+    }
+
+    function fmtPaceCard(mins) {
+      if (!Number.isFinite(mins) || mins <= 0) return "-";
+      return paceDisplayMode === "hourly" ? `1時間 ${(60 / mins).toFixed(1)}件` : `1件 ${mins.toFixed(1)}分`;
+    }
+
+    function togglePaceDisplayMode() {
+      paceDisplayMode = paceDisplayMode === "hourly" ? "minutes" : "hourly";
+      localStorage.setItem(PACE_MODE_KEY, paceDisplayMode);
+      calc();
     }
 
     function signed(value, unit, decimals = 1) {
@@ -392,8 +407,8 @@
       }
 
       $("remainingOrders").textContent = `${remainingOrders}件`;
-      $("neededPace").textContent = remainingOrders > 0 ? fmtPace(neededPace) : "達成済み";
-      $("targetPace").textContent = fmtPace(perOrder);
+      $("neededPace").textContent = remainingOrders > 0 ? fmtPaceCard(neededPace) : "達成済み";
+      $("targetPace").textContent = fmtPaceCard(perOrder);
       $("requiredTime").textContent = fmtMinutes(requiredMinutes);
       $("availableTime").textContent = fmtMinutes(remainMinutes);
       $("scheduleDelta").textContent = signed(deltaVsSchedule, "件", 2);
@@ -407,6 +422,15 @@
     load();
 
     ["target", "done", "remainH", "remainM"].forEach(id => $(id).addEventListener("change", calc));
+
+    document.querySelectorAll("[data-pace-toggle]").forEach(card => {
+      card.addEventListener("click", togglePaceDisplayMode);
+      card.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        togglePaceDisplayMode();
+      });
+    });
 
     $("plus").addEventListener("click", () => {
       const next = Math.min(n("done") + 1, 80);
