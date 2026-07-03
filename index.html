@@ -86,7 +86,7 @@
 const WORK_LIMIT_MINUTES = 720;
 const STORAGE_KEY = "ubereatsProgressFixed12Data";
 const CLOCK_KEY = "ubereatsProgressClockState";
-const PACE_MODE_KEY = "ubereatsProgressPaceDisplayMode";
+const PACE_MODE_KEY_PREFIX = "ubereatsProgressPaceDisplayMode:";
 const $ = id => document.getElementById(id);
 const DEFAULT_CARDS = ["remaining", "need", "eta", "safe", "project12", "targetPace"];
 const CARD_OPTIONS = [
@@ -99,7 +99,6 @@ const CARD_OPTIONS = [
   ["constraint", "制約条件"]
 ];
 let clockState = { on: false, baseRemain: 0, baseAt: Date.now() };
-let paceDisplayMode = localStorage.getItem(PACE_MODE_KEY) === "hourly" ? "hourly" : "minutes";
 let cardCount = 6;
 let cards = [...DEFAULT_CARDS];
 
@@ -238,21 +237,29 @@ function pace(minutes) {
   return Number.isFinite(minutes) && minutes > 0 ? `${minutes.toFixed(2)}分/件` : "-";
 }
 
+function paceMode(cardId) {
+  return localStorage.getItem(PACE_MODE_KEY_PREFIX + cardId) === "hourly" ? "hourly" : "minutes";
+}
+
+function paceModeLabel(cardId) {
+  return paceMode(cardId) === "hourly" ? "件/時" : "分/件";
+}
+
 function pacePerOrder(minutes) {
-  return Number.isFinite(minutes) && minutes > 0 ? `1件 ${minutes.toFixed(1)}分` : "-";
+  return Number.isFinite(minutes) && minutes > 0 ? `${minutes.toFixed(1)}分/件` : "-";
 }
 
 function pacePerHour(minutes) {
-  return Number.isFinite(minutes) && minutes > 0 ? `1時間 ${(60 / minutes).toFixed(1)}件` : "-";
+  return Number.isFinite(minutes) && minutes > 0 ? `${(60 / minutes).toFixed(1)}件/時` : "-";
 }
 
-function paceCardText(minutes) {
-  return paceDisplayMode === "hourly" ? pacePerHour(minutes) : pacePerOrder(minutes);
+function paceCardText(minutes, cardId) {
+  return paceMode(cardId) === "hourly" ? pacePerHour(minutes) : pacePerOrder(minutes);
 }
 
-function togglePaceDisplayMode() {
-  paceDisplayMode = paceDisplayMode === "hourly" ? "minutes" : "hourly";
-  localStorage.setItem(PACE_MODE_KEY, paceDisplayMode);
+function togglePaceDisplayMode(cardId) {
+  const next = paceMode(cardId) === "hourly" ? "minutes" : "hourly";
+  localStorage.setItem(PACE_MODE_KEY_PREFIX + cardId, next);
   calc();
 }
 
@@ -410,7 +417,7 @@ function drawCards(values) {
   $("metrics").innerHTML = ids.map(id => {
     const item = values[id] || values.remaining;
     const toggle = isPaceToggleCard(id);
-    const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで1件あたり分数と1時間あたり件数を切替"` : "";
+    const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     return `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}"${attrs}><div class="k">${item.k}</div><div class="v">${item.v}</div>${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
   }).join("");
 }
@@ -466,13 +473,12 @@ function calc() {
   renderClock(currentRemain);
 
   const constraintNote = active.endOn ? (active.kind === "end" ? "終了上限が12時間制限より短い" : `${active.endLabel}上限は補助情報`) : "終了上限なし";
-  const paceToggleNote = `タップで切替 / ${paceDisplayMode === "hourly" ? "件/時" : "分/件"}`;
   const values = {
     remaining: { k: "残り件数", v: `${left}件` },
-    need: { k: "必要ペース", v: left ? paceCardText(neededPace) : "達成済み", n: `${paceToggleNote} / ${active.label}基準` },
+    need: { k: "必要ペース", v: left ? paceCardText(neededPace, "need") : "達成済み", n: `タップで切替 / ${paceModeLabel("need")} / ${active.label}基準` },
     eta: { k: "終了予測", v: etaText, n: etaNote },
     safe: { k: "狙える件数", v: Number.isFinite(safe) ? `${safe}件まで` : "計測待ち", n: "実績ペース基準" },
-    targetPace: { k: "目標ペース", v: paceCardText(targetPace), n: `${paceToggleNote} / ${active.label}反映` },
+    targetPace: { k: "目標ペース", v: paceCardText(targetPace, "targetPace"), n: `タップで切替 / ${paceModeLabel("targetPace")} / ${active.label}反映` },
     project12: { k: "上限まで走ると", v: Number.isFinite(projection) ? `${projection.toFixed(1)}件` : "計測待ち", n: `${active.label}基準` },
     constraint: { k: "制約条件", v: active.kind === "end" ? "終了上限基準" : "12時間制限基準", n: constraintNote }
   };
@@ -513,14 +519,14 @@ function setup() {
   };
   $("metrics").addEventListener("click", event => {
     const card = event.target.closest(".metric");
-    if (card && isPaceToggleCard(card.dataset.cardId)) togglePaceDisplayMode();
+    if (card && isPaceToggleCard(card.dataset.cardId)) togglePaceDisplayMode(card.dataset.cardId);
   });
   $("metrics").addEventListener("keydown", event => {
     if (event.key !== "Enter" && event.key !== " ") return;
     const card = event.target.closest(".metric");
     if (!card || !isPaceToggleCard(card.dataset.cardId)) return;
     event.preventDefault();
-    togglePaceDisplayMode();
+    togglePaceDisplayMode(card.dataset.cardId);
   });
   $("clearEnd").onclick = () => {
     $("endLimit").value = "";
