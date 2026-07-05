@@ -90,7 +90,7 @@ const PACE_MODE_KEY_PREFIX = "ubereatsProgressPaceDisplayMode:";
 const $ = id => document.getElementById(id);
 const DEFAULT_CARDS = ["remaining", "need", "eta", "safe", "project12", "targetPace"];
 const CARD_OPTIONS = [
-  ["remaining", "残り件数"],
+  ["remaining", "進捗件数"],
   ["need", "必要ペース"],
   ["eta", "終了予測"],
   ["safe", "狙える件数"],
@@ -474,7 +474,7 @@ function calc() {
 
   const constraintNote = active.endOn ? (active.kind === "end" ? "終了上限が12時間制限より短い" : `${active.endLabel}上限は補助情報`) : "終了上限なし";
   const values = {
-    remaining: { k: "残り件数", v: `${left}件` },
+    remaining: { k: "進捗件数", v: `${Math.min(done, target)} / ${target}件`, n: `残り${left}件` },
     need: { k: "必要ペース", v: left ? paceCardText(neededPace, "need") : "達成済み", n: `タップで切替 / ${paceModeLabel("need")} / ${active.label}基準` },
     eta: { k: "終了予測", v: etaText, n: etaNote },
     safe: { k: "狙える件数", v: Number.isFinite(safe) ? `${safe}件まで` : "計測待ち", n: "実績ペース基準" },
