@@ -332,7 +332,13 @@
     }
 
     function save() {
+      let previous = {};
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        if (stored && typeof stored === "object" && !Array.isArray(stored)) previous = stored;
+      } catch (e) {}
       const data = {
+        ...previous,
         target: $("target").value,
         done: $("done").value,
         remainH: $("remainH").value,
