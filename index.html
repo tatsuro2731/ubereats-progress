@@ -455,10 +455,10 @@ function calc() {
   } else if (Number.isFinite(finish)) {
     if (active.over) {
       etaText = "上限超過";
-      etaNote = `${active.endLabel}上限 / 現ペースなら${eta(finish)}`;
+      etaNote = `${active.endLabel}上限 / 目標まで${formatMinutes(finish)}`;
     } else if (finish > etaCap) {
       etaText = "未達見込み";
-      etaNote = `${active.label}時点で約${safe}件 / 達成は${eta(finish)}`;
+      etaNote = `${active.label}時点で約${safe}件 / 目標まであと${formatMinutes(finish - etaCap)}`;
     } else {
       etaText = `${eta(finish)}予測`;
       etaNote = "現ペース継続";
