@@ -53,7 +53,7 @@
     .hero.bad{--tone-rgb:255,102,114;border-color:rgba(255,102,114,.76);background:radial-gradient(circle at 50% -22%,rgba(255,102,114,.17),transparent 48%),linear-gradient(180deg,rgba(34,20,28,.92),rgba(18,16,23,.90));box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.30),0 0 26px rgba(255,102,114,.11)}
     .caption{font-size:13px;font-weight:800;color:rgb(var(--tone-rgb));letter-spacing:.04em}.main{margin-top:5px;font-size:clamp(40px,10.5vw,64px);font-weight:950;letter-spacing:-.055em;text-shadow:0 0 24px rgba(var(--tone-rgb),.18)}.sub{margin-top:10px;font-size:21px}.mini{margin-top:11px;color:#eef3f8;font-size:15px;font-weight:700}
     .limits{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.lim{justify-content:center;min-height:54px;padding:10px 9px;border-color:rgba(var(--tone-rgb),.21);border-radius:18px;background:linear-gradient(180deg,rgba(11,29,37,.80),rgba(4,20,29,.72));box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 20px rgba(0,0,0,.15);color:#f5f8fb;font-size:14px;font-weight:760}
-    .bike{width:20px;height:13px;color:rgb(var(--tone-rgb));opacity:.88;filter:drop-shadow(0 0 5px rgba(var(--tone-rgb),.16))}.bike:before,.bike:after{width:5px;height:5px;border-width:1.5px}.bike i{left:7px;bottom:5px;width:8px;height:1.5px}.bike b{right:2px;width:7px;height:5px;border-width:1.5px}.bikes{gap:0;margin-right:2px}
+    .bike{width:20px;height:13px;color:rgb(var(--tone-rgb));opacity:.88;filter:drop-shadow(0 0 5px rgba(var(--tone-rgb),.16))}.bike:before,.bike:after{width:5px;height:5px;border-width:1.5px}.bike i{left:7px;bottom:5px;width:8px;height:1.5px}.bike b{right:2px;width:7px;height:5px;border-width:1.5px}.bikes{gap:0;margin-right:2px}.lim.recovery{justify-content:center;text-align:left}.recoveryCopy{display:flex;min-width:0;flex-direction:column;align-items:flex-start;line-height:1.15}.recoveryCopy strong{font-size:13px;white-space:nowrap}.recoveryCopy small{margin-top:3px;color:#c7d3df;font-size:10.5px;font-weight:700;white-space:nowrap}
     .metrics{grid-auto-rows:1fr;gap:9px;margin-bottom:12px}.metric,.card,details{border-color:var(--line);background:linear-gradient(155deg,rgba(10,27,41,.94),rgba(5,18,30,.91));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 12px 28px rgba(0,0,0,.23)}
     .metric{--metric-accent:#58a6ff;--metric-rgb:88,166,255;--metric-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cpath%20d%3D%22m15%209-2%205-5%202%202-5%205-2Z%22%2F%3E%3C%2Fsvg%3E");position:relative;overflow:hidden;min-height:116px;padding:13px 12px;border-color:rgba(var(--metric-rgb),.36);border-radius:22px;background:radial-gradient(circle at 16% -5%,rgba(var(--metric-rgb),.13),transparent 42%),linear-gradient(155deg,rgba(9,27,40,.96),rgba(4,18,30,.93));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 12px 28px rgba(0,0,0,.22),0 0 18px rgba(var(--metric-rgb),.035)}
     .metric:before{content:"";position:absolute;top:14px;left:13px;width:21px;height:21px;background:var(--metric-accent);-webkit-mask:var(--metric-icon) center/contain no-repeat;mask:var(--metric-icon) center/contain no-repeat;filter:drop-shadow(0 0 7px rgba(var(--metric-rgb),.22))}
@@ -126,6 +126,7 @@
 </div>
 <script>
 const WORK_LIMIT_MINUTES = 720;
+const RECOVERY_PACE_MINUTES = 10;
 const STORAGE_KEY = "ubereatsProgressFixed12Data";
 const CLOCK_KEY = "ubereatsProgressClockState";
 const PACE_MODE_KEY_PREFIX = "ubereatsProgressPaceDisplayMode:";
@@ -389,6 +390,23 @@ function limitText(value, type) {
 }
 
 function limits(targetPace, margin) {
+  if (margin < 0) {
+    const delay = Math.abs(margin);
+    const gainPerOrder = targetPace - RECOVERY_PACE_MINUTES;
+    const recoveryLimit = orders => {
+      const isDouble = orders === 2;
+      const title = `${isDouble ? "ダブル" : "シングル"} ${RECOVERY_PACE_MINUTES * orders}分以内`;
+      let note = "10分/件では回復不可";
+      if (Number.isFinite(gainPerOrder) && gainPerOrder > 0) {
+        const count = Math.max(1, Math.ceil(delay / (gainPerOrder * orders)));
+        note = isDouble
+          ? (count === 1 ? "あと1回（2件）で復帰目安" : `あと${count}回で復帰目安`)
+          : `あと${count}件で復帰目安`;
+      }
+      return `<span class="lim recovery">${bikeIcon(orders)}<span class="recoveryCopy"><strong>${title}</strong><small> ${note}</small></span></span>`;
+    };
+    return `<div class="limits">${recoveryLimit(1)}${recoveryLimit(2)}</div>`;
+  }
   return `<div class="limits"><span class="lim">${bikeIcon(1)}${limitText(targetPace + margin, "s")}</span><span class="lim">${bikeIcon(2)}${limitText(targetPace * 2 + margin, "d")}</span></div>`;
 }
 
