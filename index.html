@@ -447,23 +447,8 @@ function calc() {
   const safe = Number.isFinite(actualPace) && actualPace > 0 ? done + Math.floor(effectiveRemain / actualPace) : NaN;
   const projection = Number.isFinite(actualPace) && actualPace > 0 ? (used + effectiveRemain) / actualPace : NaN;
   const etaCap = active.over ? currentRemain : effectiveRemain;
-  let etaText = "計測待ち";
-  let etaNote = "実績ペース計測待ち";
-  if (left === 0) {
-    etaText = "達成済み";
-    etaNote = "目標達成済み";
-  } else if (Number.isFinite(finish)) {
-    if (active.over) {
-      etaText = "上限超過";
-      etaNote = `${active.endLabel}上限 / 目標まで${formatMinutes(finish)}`;
-    } else if (finish > etaCap) {
-      etaText = "未達見込み";
-      etaNote = `${active.label}時点で約${safe}件 / 目標まであと${formatMinutes(finish - etaCap)}`;
-    } else {
-      etaText = `${eta(finish)}予測`;
-      etaNote = "現ペース継続";
-    }
-  }
+  const etaText = left === 0 ? "達成済み" : !Number.isFinite(finish) ? "計測待ち" : `${eta(Math.min(finish, etaCap))}予測`;
+  const etaNote = left === 0 ? "目標達成済み" : active.over ? `${active.endLabel}を超過 / 稼働延長が必要` : !Number.isFinite(finish) ? "実績ペース計測待ち" : finish > etaCap ? "上限到達見込み" : "現ペース継続";
 
   setTone(margin, targetPace, left);
   $("constraintTag").textContent = constraintTag(active);
