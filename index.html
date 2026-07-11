@@ -405,13 +405,12 @@ function limits(targetPace, margin) {
     const gainPerOrder = targetPace - RECOVERY_PACE_MINUTES;
     const recoveryLimit = orders => {
       const isDouble = orders === 2;
-      const title = `${isDouble ? "ダブル" : "シングル"} ${RECOVERY_PACE_MINUTES * orders}分以内`;
+      let title = `${isDouble ? "ダブル" : "シングル"} ${RECOVERY_PACE_MINUTES * orders}分`;
       let note = "10分/件では回復不可";
       if (Number.isFinite(gainPerOrder) && gainPerOrder > 0) {
         const count = Math.max(1, Math.ceil(delay / (gainPerOrder * orders)));
-        note = isDouble
-          ? (count === 1 ? "あと1回（2件）で復帰目安" : `あと${count}回で復帰目安`)
-          : `あと${count}件で復帰目安`;
+        title += ` × ${count}${isDouble ? "組" : "件"}`;
+        note = isDouble ? `計${count * 2}件・復帰目安` : "復帰目安";
       }
       return `<span class="lim recovery">${bikeIcon(orders)}<span class="recoveryCopy"><strong>${title}</strong><small> ${note}</small></span></span>`;
     };
