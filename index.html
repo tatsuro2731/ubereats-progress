@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
@@ -44,7 +44,7 @@
     html{min-height:100%;background:#01060d}
     body{min-height:100%;background:radial-gradient(circle at 12% -8%,rgba(15,126,176,.18),transparent 35%),radial-gradient(circle at 104% 34%,rgba(0,202,214,.07),transparent 34%),linear-gradient(180deg,#020a13 0%,#010711 58%,#020812 100%);background-attachment:fixed;padding:max(14px,env(safe-area-inset-top)) 12px max(18px,env(safe-area-inset-bottom));letter-spacing:.005em;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
     .wrap{max-width:780px;padding-bottom:calc(112px + env(safe-area-inset-bottom))}
-    .header{margin:3px 2px 14px}.header h1{font-size:24px;letter-spacing:-.025em;text-shadow:0 2px 18px rgba(255,255,255,.08)}
+    .header{position:sticky;top:max(0px,env(safe-area-inset-top));z-index:35;margin:0 -2px 12px;padding:4px 2px;background:linear-gradient(180deg,rgba(2,10,19,.96),rgba(2,10,19,.84) 72%,rgba(2,10,19,0));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}.header h1{font-size:24px;letter-spacing:-.025em;text-shadow:0 2px 18px rgba(255,255,255,.08)}.headerActions{display:flex;min-width:0;align-items:center;gap:8px}.settingsOpen{display:grid;flex:0 0 auto;width:44px;height:44px;padding:0;place-items:center;border:1px solid #435a70;border-radius:15px;background:linear-gradient(155deg,rgba(13,37,55,.94),rgba(5,21,35,.94));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 22px rgba(0,0,0,.24);color:#e9f2fa}.settingsOpen svg{width:23px;height:23px}.settingsOpen:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}
     .tag{padding:7px 12px;color:#e3eaf3;border-color:#435a70;background:rgba(5,17,28,.66);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.24);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
     .hero{--tone-rgb:255,211,79;position:relative;overflow:hidden;border-color:rgba(var(--tone-rgb),.66);border-radius:26px;padding:20px 16px;background:radial-gradient(circle at 50% -24%,rgba(var(--tone-rgb),.16),transparent 48%),linear-gradient(180deg,rgba(11,29,40,.92),rgba(3,18,28,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 -18px 42px rgba(var(--tone-rgb),.035),0 0 0 1px rgba(var(--tone-rgb),.06),0 14px 34px rgba(0,0,0,.30),0 0 24px rgba(var(--tone-rgb),.08);margin:0 0 12px}
     .hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,rgba(255,255,255,.045),transparent 28%,transparent 72%,rgba(var(--tone-rgb),.025))}
@@ -69,7 +69,7 @@
     .metric[data-card-id="constraint"]{--metric-accent:#8aa5c0;--metric-rgb:138,165,192;--metric-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203%205%206v5c0%205%203%208%207%2010%204-2%207-5%207-10V6l-7-3Z%22%2F%3E%3Cpath%20d%3D%22M9%2012h6%22%2F%3E%3C%2Fsvg%3E")}
     .metric[data-card-id="project12"] .k{white-space:nowrap}.progressCurrent{font-size:1em}.progressGoal,.paceSuffix{display:inline-block;color:#cbd7e3;font-size:.72em;font-weight:800;letter-spacing:-.015em;vertical-align:.08em}.progressGoal{margin-left:.08em}.paceSuffix{margin-left:.04em}
     .metric.paceToggle{transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}.metric.paceToggle:active{transform:scale(.985);border-color:rgba(var(--metric-rgb),.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 22px rgba(var(--metric-rgb),.13)}.metric.paceToggle:focus-visible{outline:2px solid var(--metric-accent);outline-offset:2px}
-    .cardOrderToolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 9px;padding:9px 10px 9px 12px;border:1px solid rgba(88,166,255,.42);border-radius:17px;background:linear-gradient(155deg,rgba(10,40,66,.96),rgba(5,24,42,.96));box-shadow:0 10px 24px rgba(0,0,0,.22),0 0 18px rgba(61,149,255,.07)}.cardOrderToolbar[hidden]{display:none}.cardOrderMessage{display:flex;min-width:0;flex-direction:column}.cardOrderMessage strong{color:#dcebff;font-size:13px}.cardOrderMessage small{color:#9fb3c8;font-size:10px}.cardOrderDone{flex:0 0 auto;padding:8px 14px;border:1px solid #3d95ff;border-radius:13px;background:linear-gradient(180deg,#1769c4,#0b468d);font-size:13px}.cardOrderSetting{margin-top:12px}.cardOrderToggle{width:100%;padding:13px 14px;border:1px solid #345a78;border-radius:16px;background:linear-gradient(180deg,#153754,#0a253d);font-size:15px}.cardOrderToggle.active{border-color:#3d95ff;background:linear-gradient(180deg,#1769c4,#0b468d)}.cardOrderHelp{margin:7px 2px 0;color:#91a5ba;font-size:11px;line-height:1.45}.metrics.reorderMode .metric{overflow:visible;min-height:112px;padding-bottom:48px;cursor:default;user-select:none;-webkit-user-select:none;transition:transform .16s ease,opacity .16s ease,border-color .16s ease,box-shadow .16s ease}.metrics.reorderMode .metric .note{display:none}.metrics.reorderMode .metric:after{content:"";position:absolute;inset:0;border:1px dashed rgba(var(--metric-rgb),.55);border-radius:inherit;pointer-events:none;opacity:.55}.dragHandle{position:absolute;z-index:3;left:8px;right:8px;bottom:8px;width:auto;height:32px;padding:0;border:1px solid rgba(145,181,214,.48);border-radius:11px;background:rgba(4,17,29,.88);color:#d8e8f6;font-size:22px;font-weight:800;line-height:1;touch-action:none;cursor:grab;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 5px 14px rgba(0,0,0,.20)}.dragHandle:focus-visible{outline:2px solid var(--metric-accent);outline-offset:2px}.dragHandle.pressing{border-color:var(--metric-accent);color:var(--metric-accent)}.metric.dragging{z-index:12;pointer-events:none;opacity:.94;cursor:grabbing;transition:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 20px 42px rgba(0,0,0,.46),0 0 25px rgba(var(--metric-rgb),.22)}.metric.dropTarget:not(.dragging){border-color:var(--metric-accent);box-shadow:inset 0 0 0 2px rgba(var(--metric-rgb),.32),0 0 24px rgba(var(--metric-rgb),.15)}.metric.dropTarget:not(.dragging):after{border-style:solid;opacity:1}.cardOrderLive{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .cardOrderToolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 9px;padding:9px 10px 9px 12px;border:1px solid rgba(88,166,255,.42);border-radius:17px;background:linear-gradient(155deg,rgba(10,40,66,.96),rgba(5,24,42,.96));box-shadow:0 10px 24px rgba(0,0,0,.22),0 0 18px rgba(61,149,255,.07)}.cardOrderToolbar[hidden]{display:none}.cardOrderMessage{display:flex;min-width:0;flex-direction:column}.cardOrderMessage strong{color:#dcebff;font-size:13px}.cardOrderMessage small{color:#9fb3c8;font-size:10px}.cardOrderDone{flex:0 0 auto;padding:8px 14px;border:1px solid #3d95ff;border-radius:13px;background:linear-gradient(180deg,#1769c4,#0b468d);font-size:13px}.cardOrderSetting{margin-top:12px}.cardOrderToggle{width:100%;padding:13px 14px;border:1px solid #345a78;border-radius:16px;background:linear-gradient(180deg,#153754,#0a253d);font-size:15px}.cardOrderToggle.active{border-color:#3d95ff;background:linear-gradient(180deg,#1769c4,#0b468d)}.cardOrderHelp{margin:7px 2px 0;color:#91a5ba;font-size:11px;line-height:1.45}.metrics.reorderMode .metric{overflow:visible;min-height:124px;padding-bottom:60px;cursor:default;user-select:none;-webkit-user-select:none;transition:transform .16s ease,opacity .16s ease,border-color .16s ease,box-shadow .16s ease}.metrics.reorderMode .metric .note{display:none}.metrics.reorderMode .metric:after{content:"";position:absolute;inset:0;border:1px dashed rgba(var(--metric-rgb),.55);border-radius:inherit;pointer-events:none;opacity:.55}.dragHandle{position:absolute;z-index:3;left:8px;right:8px;bottom:8px;width:auto;height:44px;padding:0;border:1px solid rgba(145,181,214,.48);border-radius:12px;background:rgba(4,17,29,.88);color:#d8e8f6;font-size:22px;font-weight:800;line-height:1;touch-action:none;cursor:grab;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 5px 14px rgba(0,0,0,.20)}.dragHandle:focus-visible{outline:2px solid var(--metric-accent);outline-offset:2px}.dragHandle.pressing{border-color:var(--metric-accent);color:var(--metric-accent)}.metric.dragging{z-index:12;pointer-events:none;opacity:.94;cursor:grabbing;transition:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 20px 42px rgba(0,0,0,.46),0 0 25px rgba(var(--metric-rgb),.22)}.metric.dropTarget:not(.dragging){border-color:var(--metric-accent);box-shadow:inset 0 0 0 2px rgba(var(--metric-rgb),.32),0 0 24px rgba(var(--metric-rgb),.15)}.metric.dropTarget:not(.dragging):after{border-style:solid;opacity:1}.cardOrderLive{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     .card{border-radius:24px;padding:17px;margin:12px 0}.countTitle{font-size:19px;letter-spacing:.01em}.countEndClock{margin-left:auto;padding:5px 9px;border:1px solid #31536d;border-radius:999px;background:rgba(8,27,42,.78);color:#aebdcb;font-size:11px;font-weight:800;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}.countEndClock.run{border-color:rgba(52,230,123,.42);background:rgba(13,79,53,.24);color:#68ef9b}.help{width:29px;height:29px;color:#f3f7fb;background:rgba(19,40,59,.82);border-color:#45607a;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
     .countPanel{border-color:#214962;border-radius:22px;padding:17px;background:radial-gradient(circle at 14% 0,rgba(45,155,210,.07),transparent 40%),linear-gradient(180deg,rgba(6,25,36,.94),rgba(3,18,29,.92));box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 12px 28px rgba(0,0,0,.20)}.countPanel.run{border-color:rgba(52,230,123,.52);background:radial-gradient(circle at 14% 0,rgba(52,230,123,.13),transparent 42%),linear-gradient(180deg,rgba(6,34,34,.95),rgba(3,23,29,.92));box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 23px rgba(52,230,123,.07)}
     .status{color:#5df096}.status:has(.dot.stop){color:#ff7a84}.dot{width:17px;height:17px;background:var(--good);box-shadow:0 0 0 5px rgba(52,230,123,.14),0 0 14px rgba(52,230,123,.25)}.dot.stop{background:#ff6672;box-shadow:0 0 0 5px rgba(255,102,114,.12),0 0 12px rgba(255,102,114,.18)}.remainBig{letter-spacing:-.025em}.desc{color:#d7e1eb}.toggleBtn{border-radius:20px;background:linear-gradient(180deg,#20ca61,#079641);border-color:rgba(90,255,155,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 8px 22px rgba(5,160,69,.18);text-shadow:0 1px 2px rgba(0,0,0,.22)}.toggleBtn.off{background:linear-gradient(180deg,#f03a42,#ba101b);border-color:rgba(255,112,120,.65);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 8px 22px rgba(212,23,35,.18)}.hint{line-height:1.5}.helpText{border-color:#284a65;background:rgba(9,30,46,.94)}
@@ -77,41 +77,34 @@
     .actionsCard{border-radius:0;border-top-color:#1b3b5b;background:rgba(2,11,22,.88);box-shadow:0 -12px 32px rgba(0,0,0,.48),inset 0 1px 0 rgba(90,162,255,.08);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding:12px max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}.actionsCard .actions{max-width:780px}.actions{grid-template-columns:1fr 1fr;gap:14px}.minus,.plus{min-height:72px;padding:18px 12px;border:1px solid #1870ff;border-radius:22px;background:radial-gradient(circle at 50% 0,rgba(33,130,255,.19),transparent 62%),linear-gradient(180deg,#0c356b,#08234c);box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 0 22px rgba(16,104,255,.12);font-size:30px;text-shadow:0 1px 4px rgba(0,0,0,.32)}.plus{background:radial-gradient(circle at 50% 0,rgba(41,139,255,.24),transparent 64%),linear-gradient(180deg,#10427e,#09285a);border-color:#287cff}.minus:active,.plus:active{box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 28px rgba(26,115,255,.19)}
     label{color:#cbd6e2;font-weight:650}.controls{gap:15px}.row2{gap:10px}select,input[type=time]{border-color:#29445e;background:linear-gradient(180deg,#071725,#05111d);box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 5px 14px rgba(0,0,0,.13);outline:none}select:focus,input[type=time]:focus{border-color:#3d95ff;box-shadow:0 0 0 3px rgba(61,149,255,.12)}.clearEnd,.reset{border-color:#34506b;background:linear-gradient(180deg,#142b40,#0c1e30)}
     details{border-radius:20px;background:linear-gradient(155deg,rgba(7,22,35,.95),rgba(4,15,26,.94))}summary{color:#e8eef5}summary:before{color:#5fa9ff}.detail{border-color:#23435e;background:rgba(8,27,42,.88)}.detail .k{color:#9eb0c3}.settings{border-top-color:#234057}.foot{color:#8295aa}
-    @media(max-width:560px){.controls,.detailGrid,.settingsGrid{grid-template-columns:1fr}.header h1{font-size:22px}.lim:first-child{gap:4px;white-space:nowrap;font-size:clamp(11.5px,3vw,12.5px);letter-spacing:-.035em}.metric{min-height:112px}.metric[data-card-id="project12"] .k{font-size:10.5px;letter-spacing:-.035em}.actionsCard{padding-top:9px;padding-bottom:max(10px,env(safe-area-inset-bottom))}.minus,.plus{min-height:64px;padding:13px 10px;font-size:29px}.toggleBtn{padding:15px 12px}.cardOrderToolbar{position:sticky;top:max(8px,env(safe-area-inset-top));z-index:20}}
+    .settingsLayer{position:fixed;z-index:70;inset:0;display:grid;align-items:end;justify-items:center}.settingsLayer[hidden]{display:none}.settingsBackdrop{position:absolute;inset:0;background:rgba(0,5,12,.72);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}.settingsSheet{position:relative;display:flex;width:min(100%,680px);max-height:min(90dvh,820px);flex-direction:column;overflow:hidden;border:1px solid #274a65;border-bottom:none;border-radius:28px 28px 0 0;background:linear-gradient(180deg,rgba(8,27,42,.99),rgba(2,13,23,.99));box-shadow:0 -20px 56px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.06);outline:none}.settingsSheetHeader{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px 13px;border-bottom:1px solid #1d3a51}.settingsSheetTitle{margin:0;font-size:20px;letter-spacing:-.02em}.settingsClose{display:grid;width:44px;height:44px;padding:0;place-items:center;border:1px solid #34536d;border-radius:14px;background:rgba(12,36,53,.92);color:#dce8f2;font-size:25px;line-height:1}.settingsScroll{overflow:auto;padding:4px 16px 20px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.settingsSection{margin-top:14px;padding:15px;border:1px solid #21435c;border-radius:21px;background:linear-gradient(155deg,rgba(10,31,46,.94),rgba(4,20,32,.93));box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}.settingsSectionTitle{margin:0 0 12px;color:#edf5fb;font-size:16px}.settingsControls{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settingsControls .wide{grid-column:1/-1}.settingsSheet label{margin-bottom:6px;font-size:12px}.settingsSheet select,.settingsSheet input[type=time]{padding:11px 12px;border-radius:15px;font-size:18px}.settingsSheet .settingsGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.settingsSheet .selBox select{font-size:14px}.settingsSheet .cardOrderSetting{margin:14px 0 0;padding:14px;border:1px solid #214b6a;border-radius:19px;background:rgba(7,29,45,.9)}.settingsSheet .cardOrderToggle{min-height:48px}.settingsSheet .cardOrderHelp{margin-bottom:0}.settingsFooter{flex:0 0 auto;padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:1px solid #1d3a51;background:rgba(2,13,23,.97)}.settingsDone{width:100%;min-height:50px;padding:12px;border:1px solid #287cff;border-radius:17px;background:linear-gradient(180deg,#1769c4,#0b468d);font-size:16px}.settingsModalOpen{overflow:hidden}
+    @media(max-width:560px){.controls,.detailGrid,.settingsGrid{grid-template-columns:1fr}.header h1{font-size:22px}.lim:first-child{gap:4px;white-space:nowrap;font-size:clamp(11.5px,3vw,12.5px);letter-spacing:-.035em}.metric{min-height:112px}.metric[data-card-id="project12"] .k{font-size:10.5px;letter-spacing:-.035em}.actionsCard{padding-top:9px;padding-bottom:max(10px,env(safe-area-inset-bottom))}.minus,.plus{min-height:64px;padding:13px 10px;font-size:29px}.toggleBtn{padding:15px 12px}.cardOrderToolbar{position:sticky;top:calc(max(0px,env(safe-area-inset-top)) + 54px);z-index:20}.settingsSheet .settingsGrid,.settingsControls{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:560px) and (min-height:861px) and (max-height:980px){.header{margin-bottom:10px}.hero{padding:16px 12px;margin-bottom:9px}.limits{margin-top:9px;gap:8px}.lim{min-height:48px;padding:8px 7px}.mini{margin-top:9px}.baselinePace{margin-top:8px}.metrics{gap:8px;margin-bottom:9px}.metric{min-height:104px;padding:11px 10px}.metric:before{top:12px;left:11px;width:20px;height:20px}.metric .k{min-height:21px;padding-left:27px;font-size:11.5px}.metric .v{margin-top:6px}.metric .note{margin-top:6px}.metrics[data-card-count="6"] .metric{padding-left:8px;padding-right:8px}.metrics[data-card-count="6"] .metric .note{font-size:9.5px;line-height:1.3}.countCard{padding:14px;margin:9px 0}.countPanel{padding:14px}.toggleBtn{margin-top:11px;padding:14px 12px}}
-    @media(max-height:860px){body{padding:max(10px,env(safe-area-inset-top)) 10px max(12px,env(safe-area-inset-bottom))}.header{margin-bottom:9px}.header h1{font-size:21px}.tag{padding:6px 10px}.hero{padding:14px 11px;margin-bottom:8px}.main{font-size:clamp(34px,9.5vw,52px)}.sub{font-size:18px}.mini{font-size:13px;margin-top:8px}.baselinePace{margin-top:7px;padding:4px 9px}.limits{gap:7px;margin-top:9px}.lim{min-height:44px;padding:7px 6px;font-size:12.5px}.metrics{gap:7px;margin-bottom:8px}.metric{min-height:88px;padding:9px 8px;border-radius:18px}.metric:before{top:10px;left:9px;width:18px;height:18px}.metric .k{min-height:19px;padding-left:25px;font-size:10.5px}.metric .v{margin-top:5px;font-size:clamp(15px,4.05vw,21px)}.metric .note{margin-top:5px;font-size:9.5px}.card{padding:12px;margin:8px 0}.countPanel{padding:12px}.toggleBtn{padding:14px;font-size:24px}.minus,.plus{min-height:62px;padding:14px 8px;font-size:27px}}
+    @media(max-height:860px){body{padding:max(10px,env(safe-area-inset-top)) 10px max(12px,env(safe-area-inset-bottom))}.header{margin-bottom:7px}.header h1{font-size:21px}.tag{padding:6px 10px}.hero{padding:14px 11px;margin-bottom:8px}.main{font-size:clamp(34px,9.5vw,52px)}.sub{font-size:18px}.mini{font-size:13px;margin-top:8px}.baselinePace{margin-top:7px;padding:4px 9px}.limits{gap:7px;margin-top:9px}.lim{min-height:44px;padding:7px 6px;font-size:12.5px}.metrics{gap:7px;margin-bottom:8px}.metric{min-height:88px;padding:9px 8px;border-radius:18px}.metric:before{top:10px;left:9px;width:18px;height:18px}.metric .k{min-height:19px;padding-left:25px;font-size:10.5px}.metric .v{margin-top:5px;font-size:clamp(15px,4.05vw,21px)}.metric .note{margin-top:5px;font-size:9.5px}.card{padding:12px;margin:8px 0}.countPanel{padding:12px}.toggleBtn{padding:14px;font-size:24px}.minus,.plus{min-height:62px;padding:14px 8px;font-size:27px}}
     @media(max-height:760px){.hero{padding:11px 9px}.main{font-size:clamp(30px,8.8vw,45px)}.limits{margin-top:7px}.lim{min-height:38px}.metric{min-height:74px;padding:7px}.metric:before{top:8px;left:8px;width:16px;height:16px}.metric .k{padding-left:22px}.metric .v{font-size:clamp(14px,3.7vw,18px)}.note{display:block}.countPanel{padding:10px}.toggleBtn{padding:12px;font-size:22px}.hint{display:block}.minus,.plus{min-height:56px}}
-    @media(max-width:390px){body{padding-left:8px;padding-right:8px}.header{margin-left:2px;margin-right:2px}.tag{font-size:10.5px}.limits{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.lim{font-size:11.5px}.bike{width:20px;height:16px}.metric{padding:8px 6px}.metric:before{left:7px}.metric .k{padding-left:22px;font-size:9.8px}.metric .v{font-size:clamp(14px,4.1vw,18px)}.metric .note{font-size:9px}.countEndClock{padding:4px 7px;font-size:10px}.countTop{display:block}.remainBig{margin-top:7px}.actions{gap:9px}.minus,.plus{font-size:25px;border-radius:19px}}
+    @media(max-width:390px){body{padding-left:8px;padding-right:8px}.header{margin-left:0;margin-right:0}.header h1{font-size:20px}.headerActions{gap:6px}.tag{padding-left:8px;padding-right:8px;font-size:10px}.limits{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.lim{font-size:11.5px}.bike{width:20px;height:16px}.metric{padding:8px 6px}.metric:before{left:7px}.metric .k{padding-left:22px;font-size:9.8px}.metric .v{font-size:clamp(14px,4.1vw,18px)}.metric .note{font-size:9px}.countEndClock{padding:4px 7px;font-size:10px}.countTop{display:block}.remainBig{margin-top:7px}.actions{gap:9px}.minus,.plus{font-size:25px;border-radius:19px}.settingsScroll{padding-left:10px;padding-right:10px}.settingsSection{padding:12px}.settingsSheet select,.settingsSheet input[type=time]{font-size:16px}}
     @media(prefers-reduced-motion:reduce){button,.metric.paceToggle,.metrics.reorderMode .metric{transition:none}}
   </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="header"><h1>Uber配達進捗</h1><div id="constraintTag" class="tag">12時間制限基準</div></div>
+<div id="appRoot" class="wrap">
+  <div class="header"><h1>Uber配達進捗</h1><div class="headerActions"><div id="constraintTag" class="tag">12時間制限基準</div><button id="settingsOpen" class="settingsOpen" type="button" aria-label="設定を開く" aria-haspopup="dialog" aria-controls="settingsDialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.61.7 1.03 1.33 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg></button></div></div>
   <div id="hero" class="hero"><div class="caption">現在の進捗</div><div id="mainValue" class="main">-</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div><button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button></div>
   <div id="cardOrderToolbar" class="cardOrderToolbar" hidden><div class="cardOrderMessage"><strong>小カードを並び替え中</strong><small>カード下部の≡を長押しして移動</small></div><button id="cardOrderDone" class="cardOrderDone" type="button">完了</button></div>
   <div id="metrics" class="metrics"></div>
   <div id="cardOrderLive" class="cardOrderLive" aria-live="polite"></div>
-  <div class="card actionsCard"><div class="actions"><button id="minus" class="minus">−1件</button><button id="plus" class="plus">＋1件</button></div></div>
+  <div class="card actionsCard"><div class="actions"><button id="minus" class="minus" type="button">−1件</button><button id="plus" class="plus" type="button">＋1件</button></div></div>
   <div class="card countCard">
     <div class="countHead"><div class="countTitle">残り時間カウント</div><div id="countEndClock" class="countEndClock" title="連続してカウントした場合に残り時間が0になる時刻">使い切り -</div><button id="helpBtn" class="help" type="button" aria-expanded="false" aria-controls="helpText">?</button></div>
     <div id="countPanel" class="countPanel">
       <div class="countTop"><div class="status"><span id="countDot" class="dot stop"></span><span id="countStatus">停止中</span></div><div id="countRemain" class="remainBig">残り 0時間00分</div></div>
       <div class="desc">ON中は残り時間を自動で減らします</div>
-      <button id="countToggle" class="toggleBtn">時間ON<span id="countSub" class="toggleSub">進める</span></button>
+      <button id="countToggle" class="toggleBtn" type="button">時間ON<span id="countSub" class="toggleSub">進める</span></button>
       <div class="hint">案件中・走行中はON、停止して鳴り待ちはOFF。残り時間を手で直すと、その値を基準に再計算します。</div>
       <div id="helpText" class="helpText" hidden>案件中・走行中はON。鳴り待ち・休憩中はOFF。ON中は残り稼働時間が自動で減ります。手動で残り時間を変更すると、その値を基準に再計算します。</div>
     </div>
   </div>
-  <div class="card">
-    <div class="controls">
-      <div><label>目標件数</label><select id="target"></select></div>
-      <div><label>完了件数</label><select id="done"></select></div>
-      <div><label>残り稼働時間</label><div class="row2"><select id="remainH"></select><select id="remainM"></select></div></div>
-      <div><label>終了上限 <span id="endText">なし</span></label><div class="endRow"><input id="endLimit" type="time"><button id="clearEnd" class="clearEnd" type="button">クリア</button></div></div>
-      <div><label>操作</label><button id="reset" class="reset">リセット</button></div>
-    </div>
-    <details>
+  <details>
       <summary>詳細を見る</summary>
       <div class="detailGrid">
         <div class="detail"><div class="k">実績ペース</div><div id="actualPace" class="v">-</div></div>
@@ -121,15 +114,33 @@
         <div class="detail"><div class="k">完了率</div><div id="completionRate" class="v">-</div></div>
         <div class="detail"><div class="k">現在時刻</div><div id="nowClock" class="v">-</div></div>
       </div>
-      <div class="settings">
-        <div class="settingsTitle">小カード表示</div>
+  </details>
+  <div class="foot">終了予測はスマホの現在時刻を使った目安です。</div>
+</div>
+<div id="settingsLayer" class="settingsLayer" hidden>
+  <div id="settingsBackdrop" class="settingsBackdrop"></div>
+  <section id="settingsDialog" class="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" tabindex="-1">
+    <div class="settingsSheetHeader"><h2 id="settingsTitle" class="settingsSheetTitle">設定</h2><button id="settingsClose" class="settingsClose" type="button" aria-label="設定を閉じる">×</button></div>
+    <div class="settingsScroll">
+      <div class="cardOrderSetting"><button id="cardOrderToggle" class="cardOrderToggle" type="button" aria-pressed="false">カードを並び替える</button><div class="cardOrderHelp">編集モード中だけドラッグできます。並び順はこの端末に自動保存されます。</div></div>
+      <section class="settingsSection" aria-labelledby="progressSettingsTitle">
+        <h3 id="progressSettingsTitle" class="settingsSectionTitle">進捗設定</h3>
+        <div class="controls settingsControls">
+          <div><label>目標件数</label><select id="target"></select></div>
+          <div><label>完了件数</label><select id="done"></select></div>
+          <div class="wide"><label>残り稼働時間</label><div class="row2"><select id="remainH"></select><select id="remainM"></select></div></div>
+          <div class="wide"><label>終了上限 <span id="endText">なし</span></label><div class="endRow"><input id="endLimit" type="time"><button id="clearEnd" class="clearEnd" type="button">クリア</button></div></div>
+          <div class="wide"><label>操作</label><button id="reset" class="reset" type="button">リセット</button></div>
+        </div>
+      </section>
+      <section class="settingsSection" aria-labelledby="cardSettingsTitle">
+        <h3 id="cardSettingsTitle" class="settingsSectionTitle">小カード表示</h3>
         <div class="settingsGrid"><div class="selBox"><label>表示枚数</label><select id="cardCount"><option value="3">3枚</option><option value="4">4枚（2×2）</option><option value="6">6枚（3×2）</option></select></div></div>
         <div id="cardSelectors" class="settingsGrid"></div>
-        <div class="cardOrderSetting"><button id="cardOrderToggle" class="cardOrderToggle" type="button" aria-pressed="false">カードを並び替える</button><div class="cardOrderHelp">編集モード中だけドラッグできます。並び順はこの端末に自動保存されます。</div></div>
-      </div>
-    </details>
-  </div>
-  <div class="foot">終了予測はスマホの現在時刻を使った目安です。</div>
+      </section>
+    </div>
+    <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">設定を閉じる</button></div>
+  </section>
 </div>
 <script>
 const WORK_LIMIT_MINUTES = 720;
@@ -156,6 +167,47 @@ let cardCount = 6;
 let cards = [...DEFAULT_CARDS];
 let cardOrderMode = false;
 let cardDrag = null;
+let settingsReturnFocus = null;
+
+function setSettingsOpen(open, restoreFocus = true) {
+  const layer = $("settingsLayer");
+  if (open) {
+    settingsReturnFocus = document.activeElement;
+    layer.hidden = false;
+    $("appRoot").inert = true;
+    document.body.classList.add("settingsModalOpen");
+    $("settingsOpen").setAttribute("aria-expanded", "true");
+    $("settingsDialog").focus({ preventScroll: true });
+    return;
+  }
+  layer.hidden = true;
+  $("appRoot").inert = false;
+  document.body.classList.remove("settingsModalOpen");
+  $("settingsOpen").setAttribute("aria-expanded", "false");
+  if (restoreFocus && settingsReturnFocus && settingsReturnFocus.isConnected) settingsReturnFocus.focus({ preventScroll: true });
+  settingsReturnFocus = null;
+}
+
+function handleSettingsKey(event) {
+  if ($("settingsLayer").hidden) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setSettingsOpen(false);
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = [...$("settingsDialog").querySelectorAll("button:not([disabled]),select:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex='-1'])")].filter(element => element.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 function addOptions(element, start, end, suffix = "", step = 1, pad = false) {
   for (let value = start; value <= end; value += step) {
@@ -752,7 +804,16 @@ function setup() {
     calc();
   };
   $("baselinePace").onclick = () => togglePaceDisplayMode("targetPace");
-  $("cardOrderToggle").onclick = () => setCardOrderMode(!cardOrderMode, !cardOrderMode);
+  $("settingsOpen").onclick = () => setSettingsOpen(true);
+  $("settingsClose").onclick = () => setSettingsOpen(false);
+  $("settingsDone").onclick = () => setSettingsOpen(false);
+  $("settingsBackdrop").onclick = () => setSettingsOpen(false);
+  document.addEventListener("keydown", handleSettingsKey);
+  $("cardOrderToggle").onclick = () => {
+    const next = !cardOrderMode;
+    setSettingsOpen(false, false);
+    setCardOrderMode(next, next);
+  };
   $("cardOrderDone").onclick = () => setCardOrderMode(false);
   $("metrics").addEventListener("pointerdown", startCardDrag);
   $("metrics").addEventListener("pointermove", continueCardDrag);
