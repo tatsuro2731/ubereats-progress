@@ -1,0 +1,25 @@
+name: Validate app
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check app-enhancements.js
+          node --check app-enhancements-fix.js
+          node --check sw.js
+      - name: Verify required files and injection
+        run: |
+          test -f index.html
+          test -f app-enhancements.js
+          test -f app-enhancements-fix.js
+          grep -q 'app-enhancements.js' sw.js
+          grep -q 'app-enhancements-fix.js' sw.js
