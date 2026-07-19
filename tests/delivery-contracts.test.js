@@ -71,5 +71,45 @@ test("timer UI includes the 440px iPhone breakpoint and start-time editor hooks"
     /@media\s*\(\s*max-width\s*:\s*(?:4[4-9]\d|5\d\d)px\s*\)[\s\S]{0,1800}\.remainSync/,
     "the responsive timer fix must cover a 440px-wide iPhone"
   );
-  assert.match(source, /@media\s*\(\s*max-width\s*:\s*350px\s*\)/);
+  assert.match(source, /@media\s*\(\s*max-width\s*:\s*370px\s*\)/);
+});
+
+test("the maximum remaining-time label stays legible and fits from 320px through 440px", () => {
+  const source = read("app-session-ui-fix.js");
+  const baseColumns = source.match(/\.remainSync\s*\{[^}]*grid-template-columns\s*:\s*([^;]+);[^}]*gap\s*:\s*([^;}]+)/);
+  const baseLabel = source.match(/\.remainSync \.remainBig\s*\{[^}]*font-size\s*:\s*([^;]+);[^}]*letter-spacing\s*:\s*([^;}]+)/);
+  const wideBlock = source.match(/@media\s*\(\s*max-width\s*:\s*440px\s*\)\s*\{([\s\S]*?)\n\s*\}\s*\n\s*@media\s*\(\s*max-width\s*:\s*370px/);
+  const narrowBlock = source.match(/@media\s*\(\s*max-width\s*:\s*370px\s*\)\s*\{([\s\S]*?)\n\s*\}\s*\n\s*`/);
+  assert.ok(baseColumns, "the timer columns and gap must remain explicit");
+  assert.ok(baseLabel, "the timer label size must remain explicit");
+  assert.ok(wideBlock, "the 371–440px timer rules must remain explicit");
+  assert.ok(narrowBlock, "the 320–370px two-row timer rules must remain explicit");
+  assert.match(baseColumns[1], /clamp\(44px,11\.5vw,50px\)\s+minmax\(0,1fr\)\s+clamp\(44px,11\.5vw,50px\)/);
+  assert.match(baseColumns[2], /clamp\(4px,1\.2vw,5px\)/);
+  assert.match(baseLabel[1], /clamp\(19px,5\.35vw,23px\)/);
+  assert.match(baseLabel[2], /-\.06em/);
+  assert.match(wideBlock[1], /padding-left\s*:\s*0\s*;\s*padding-right\s*:\s*0/);
+  assert.match(narrowBlock[1], /grid-template-columns\s*:\s*1fr\s+1fr/);
+  assert.match(narrowBlock[1], /font-size\s*:\s*22px/);
+
+  const clamp = (minimum, preferred, maximum) => Math.max(minimum, Math.min(preferred, maximum));
+  const cases = [320, 351, 370, 371, 375, 390, 430, 440];
+  const conservativeLabelWidthEm = 9.5;
+  for (const viewport of cases) {
+    const twoRows = viewport <= 370;
+    const bodyPadding = viewport <= 390 ? 8 : 12;
+    const contentWidth = viewport - bodyPadding * 2 - 36 - 26;
+    const buttonWidth = clamp(44, viewport * 0.115, 50);
+    const gap = clamp(4, viewport * 0.012, 5);
+    const textSlot = contentWidth - (twoRows ? 0 : buttonWidth * 2 + gap * 2);
+    const fontSize = twoRows
+      ? 22
+      : clamp(19, viewport * 0.0535, 23);
+    const maximumLabelWidth = fontSize * conservativeLabelWidthEm;
+    assert.ok(
+      maximumLabelWidth <= textSlot,
+      `残り 12時間59分59秒 must fit at ${viewport}px (${maximumLabelWidth.toFixed(1)}px <= ${textSlot}px)`
+    );
+    assert.ok(twoRows ? fontSize >= 22 : fontSize >= 19, `the label must stay legible at ${viewport}px`);
+  }
 });
