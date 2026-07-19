@@ -4,16 +4,23 @@
   const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
   const HISTORY_KEY = "ubereatsProgressWorkHistoryV1";
   const MOVING_SPEED_MPS = 0.8;
+  const GPS_SPEED_ONLY_MPS = 1.5;
   const STOP_SPEED_MPS = 0.35;
   const MIN_MOVE_DISTANCE_M = 7;
-  const MOVEMENT_HOLD_MS = 15000;
+  const MOVEMENT_HOLD_MS = 4000;
+  const STOP_CONFIRM_SAMPLES = 2;
+  const MAX_POSITION_AGE_MS = 10000;
+  const FUTURE_POSITION_TOLERANCE_MS = 3000;
   const MAX_LOCATION_ACCURACY_M = 80;
   const SAVE_INTERVAL_MS = 5000;
+  const BACKFILL_NOTICE_MS = 60000;
 
   const legacyRemain = typeof remain === "function" ? remain() : manualRemain();
   let geoWatchId = null;
+  let geoWatchGeneration = 0;
   let lastPosition = null;
   let movementEvidenceUntil = 0;
+  let stopEvidenceCount = 0;
   let lastSavedAt = 0;
   let locationState = "idle";
   let locationMessage = "";
@@ -36,7 +43,50 @@
       breakOn: false,
       breakStartedAt: null,
       breakMs: 0,
+      breakSegments: [],
+      legacyBreakMs: 0,
+      backgroundGap: null,
+      lastBackfillMs: 0,
+      lastBackfillAt: null,
       updatedAt: now
+    };
+  }
+
+  function normalizeBreakSegments(value, breakOn, breakStartedAt, now) {
+    if (!Array.isArray(value)) return [];
+    const segments = value.map(segment => {
+      const startAt = finite(segment && segment.startAt, NaN);
+      const rawEnd = segment && segment.endAt;
+      const endAt = rawEnd === null || rawEnd === undefined ? null : finite(rawEnd, NaN);
+      if (!Number.isFinite(startAt) || startAt <= 0) return null;
+      if (endAt !== null && (!Number.isFinite(endAt) || endAt < startAt)) return null;
+      return { startAt, endAt };
+    }).filter(Boolean).sort((a, b) => a.startAt - b.startAt).slice(-200);
+
+    let keptOpen = false;
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      if (segments[index].endAt !== null) continue;
+      if (breakOn && !keptOpen) keptOpen = true;
+      else segments[index].endAt = now;
+    }
+    if (breakOn && !keptOpen) {
+      segments.push({ startAt: finite(breakStartedAt, now), endAt: null });
+    }
+    return segments;
+  }
+
+  function normalizeBackgroundGap(value, now) {
+    if (!value || typeof value !== "object") return null;
+    const hiddenAt = finite(value.hiddenAt, NaN);
+    const activeMsAtHidden = finite(value.activeMsAtHidden, NaN);
+    const resumeAt = value.resumeAt === null || value.resumeAt === undefined ? null : finite(value.resumeAt, NaN);
+    if (!Number.isFinite(hiddenAt) || hiddenAt <= 0 || hiddenAt > now + FUTURE_POSITION_TOLERANCE_MS) return null;
+    if (!Number.isFinite(activeMsAtHidden) || activeMsAtHidden < 0) return null;
+    return {
+      hiddenAt,
+      movingBefore: Boolean(value.movingBefore),
+      activeMsAtHidden,
+      resumeAt: Number.isFinite(resumeAt) && resumeAt >= hiddenAt ? resumeAt : null
     };
   }
 
@@ -44,6 +94,9 @@
     const fallback = defaultEnhancedState();
     const now = nowMs();
     const remainingMs = finite(data && data.remainingMs, fallback.remainingMs);
+    const breakOn = Boolean(data && data.breakOn);
+    const breakStartedAt = breakOn ? finite(data && data.breakStartedAt, now) : null;
+    const hasBreakSegments = Boolean(data && Array.isArray(data.breakSegments));
     return {
       on: Boolean(data && data.on),
       remainingMs: clamp(remainingMs, 0, MAX_REMAIN_INPUT_MINUTES * 60000),
@@ -53,9 +106,14 @@
       moving: false,
       activeMs: Math.max(0, finite(data && data.activeMs, 0)),
       sessionStartAt: data && data.sessionStartAt ? finite(data.sessionStartAt, now) : null,
-      breakOn: Boolean(data && data.breakOn),
-      breakStartedAt: data && data.breakOn ? finite(data.breakStartedAt, now) : null,
+      breakOn,
+      breakStartedAt,
       breakMs: Math.max(0, finite(data && data.breakMs, 0)),
+      breakSegments: normalizeBreakSegments(data && data.breakSegments, breakOn, breakStartedAt, now),
+      legacyBreakMs: hasBreakSegments ? Math.max(0, finite(data && data.legacyBreakMs, 0)) : Math.max(0, finite(data && data.breakMs, 0)),
+      backgroundGap: data && data.on && !breakOn ? normalizeBackgroundGap(data.backgroundGap, now) : null,
+      lastBackfillMs: Math.max(0, finite(data && data.lastBackfillMs, 0)),
+      lastBackfillAt: data && data.lastBackfillAt ? finite(data.lastBackfillAt, null) : null,
       updatedAt: now
     };
   }
@@ -68,6 +126,10 @@
       clockState = defaultEnhancedState();
     }
     if (clockState.breakOn && !clockState.breakStartedAt) clockState.breakStartedAt = nowMs();
+    if (clockState.breakOn && Array.isArray(clockState.breakSegments)) {
+      const openSegment = [...clockState.breakSegments].reverse().find(segment => segment.endAt === null);
+      if (openSegment) clockState.breakStartedAt = openSegment.startAt;
+    }
   }
 
   function serializableState() {
@@ -79,6 +141,19 @@
       breakOn: clockState.breakOn,
       breakStartedAt: clockState.breakStartedAt,
       breakMs: clockState.breakMs,
+      breakSegments: Array.isArray(clockState.breakSegments) ? clockState.breakSegments.map(segment => ({
+        startAt: segment.startAt,
+        endAt: segment.endAt === null ? null : segment.endAt
+      })) : [],
+      legacyBreakMs: Math.max(0, finite(clockState.legacyBreakMs, 0)),
+      backgroundGap: clockState.backgroundGap ? {
+        hiddenAt: clockState.backgroundGap.hiddenAt,
+        movingBefore: Boolean(clockState.backgroundGap.movingBefore),
+        activeMsAtHidden: clockState.backgroundGap.activeMsAtHidden,
+        resumeAt: clockState.backgroundGap.resumeAt
+      } : null,
+      lastBackfillMs: Math.max(0, finite(clockState.lastBackfillMs, 0)),
+      lastBackfillAt: clockState.lastBackfillAt || null,
       updatedAt: nowMs()
     };
   }
@@ -95,21 +170,26 @@
       baseRemain: clockState.remainingMs / 60000,
       baseAt: now
     }));
+    if (typeof setRemain === "function") setRemain(clockState.remainingMs / 60000);
+    if (typeof save === "function") save();
   }
 
   function tickClock(at = nowMs()) {
-    const previous = finite(clockState.lastTickAt, at);
-    const delta = Math.max(0, at - previous);
-    clockState.lastTickAt = at;
+    const requestedAt = finite(at, nowMs());
+    const previous = finite(clockState.lastTickAt, requestedAt);
+    const effectiveAt = Math.max(previous, requestedAt);
+    const delta = effectiveAt - previous;
+    clockState.lastTickAt = effectiveAt;
     const movingForDelta = clockState.on && !clockState.breakOn && previous < movementEvidenceUntil;
     if (movingForDelta && delta > 0) {
       const activeDelta = Math.min(delta, Math.max(0, movementEvidenceUntil - previous));
-      clockState.remainingMs = Math.max(0, clockState.remainingMs - activeDelta);
-      clockState.activeMs += activeDelta;
+      const consumed = Math.min(activeDelta, Math.max(0, clockState.remainingMs));
+      clockState.remainingMs -= consumed;
+      clockState.activeMs += consumed;
     }
-    clockState.moving = clockState.on && !clockState.breakOn && at < movementEvidenceUntil;
+    clockState.moving = clockState.on && !clockState.breakOn && effectiveAt < movementEvidenceUntil;
     clockState.baseRemain = clockState.remainingMs / 60000;
-    clockState.baseAt = at;
+    clockState.baseAt = effectiveAt;
     if (clockState.remainingMs <= 0 && clockState.on) {
       clockState.on = false;
       clockState.moving = false;
@@ -130,9 +210,79 @@
     return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
   }
 
-  function handlePosition(position) {
-    const at = finite(position.timestamp, nowMs());
-    const coords = position.coords;
+  function applyBackgroundBackfill(at = nowMs()) {
+    const gap = clockState.backgroundGap;
+    if (!gap) return 0;
+    clockState.backgroundGap = null;
+    if (!gap.movingBefore || !clockState.on || clockState.breakOn) return 0;
+    const gapEnd = Math.max(gap.hiddenAt, finite(gap.resumeAt, at));
+    const expectedActive = Math.max(0, gapEnd - gap.hiddenAt);
+    const alreadyCounted = Math.max(0, clockState.activeMs - gap.activeMsAtHidden);
+    const missing = Math.max(0, expectedActive - alreadyCounted);
+    const consumed = Math.min(missing, Math.max(0, clockState.remainingMs));
+    if (consumed <= 0) return 0;
+    clockState.remainingMs -= consumed;
+    clockState.activeMs += consumed;
+    clockState.lastBackfillMs = consumed;
+    clockState.lastBackfillAt = at;
+    if (clockState.remainingMs <= 0) {
+      clockState.on = false;
+      clockState.moving = false;
+      stopLocationWatch();
+    }
+    persistEnhancedClock(true);
+    return consumed;
+  }
+
+  function beginBackgroundGap() {
+    const at = nowMs();
+    tickClock(at);
+    if (clockState.backgroundGap && clockState.backgroundGap.resumeAt === null) {
+      stopLocationWatch();
+      persistEnhancedClock(true);
+      return;
+    }
+    if (clockState.on && !clockState.breakOn) {
+      clockState.backgroundGap = {
+        hiddenAt: at,
+        movingBefore: Boolean(clockState.moving || at < movementEvidenceUntil),
+        activeMsAtHidden: clockState.activeMs,
+        resumeAt: null
+      };
+    } else {
+      clockState.backgroundGap = null;
+    }
+    stopLocationWatch();
+    persistEnhancedClock(true);
+  }
+
+  function resumeBackgroundGap() {
+    const at = nowMs();
+    tickClock(at);
+    if (clockState.backgroundGap && clockState.backgroundGap.resumeAt === null) clockState.backgroundGap.resumeAt = at;
+    if (clockState.on && !clockState.breakOn) startLocationWatch();
+    else clockState.backgroundGap = null;
+    persistEnhancedClock(true);
+  }
+
+  function handlePosition(position, generation = geoWatchGeneration) {
+    if (generation !== geoWatchGeneration || !clockState.on || clockState.breakOn) return;
+    const receivedAt = nowMs();
+    const at = finite(position && position.timestamp, receivedAt);
+    const coords = position && position.coords;
+    if (!coords || !Number.isFinite(Number(coords.latitude)) || !Number.isFinite(Number(coords.longitude))) return;
+    if (at > receivedAt + FUTURE_POSITION_TOLERANCE_MS || receivedAt - at > MAX_POSITION_AGE_MS || (lastPosition && at <= lastPosition.at)) {
+      locationState = "stale";
+      locationMessage = "古い位置情報を除外しました";
+      renderEnhancedClock();
+      return;
+    }
+
+    tickClock(receivedAt);
+    if (!clockState.on || clockState.breakOn) {
+      renderEnhancedClock();
+      return;
+    }
     const accuracy = finite(coords.accuracy, 9999);
     if (accuracy > MAX_LOCATION_ACCURACY_M) {
       locationState = "weak";
@@ -143,32 +293,65 @@
 
     let inferredSpeed = 0;
     let distance = 0;
+    let effectiveDistance = 0;
+    let requiredDistance = MIN_MOVE_DISTANCE_M;
     if (lastPosition) {
       const elapsedSeconds = Math.max((at - lastPosition.at) / 1000, 0.1);
       distance = distanceMeters(lastPosition.coords, coords);
-      inferredSpeed = distance / elapsedSeconds;
+      const uncertainty = Math.min(25, Math.max(accuracy, lastPosition.accuracy) * 0.65);
+      effectiveDistance = Math.max(0, distance - uncertainty);
+      requiredDistance = Math.max(MIN_MOVE_DISTANCE_M, Math.min(25, Math.max(accuracy, lastPosition.accuracy)));
+      inferredSpeed = effectiveDistance / elapsedSeconds;
     }
     const gpsSpeed = Number.isFinite(coords.speed) && coords.speed >= 0 ? coords.speed : null;
-    const speed = gpsSpeed === null ? inferredSpeed : Math.max(gpsSpeed, inferredSpeed);
-    const reliableMove = speed >= MOVING_SPEED_MPS || (distance >= MIN_MOVE_DISTANCE_M && inferredSpeed >= MOVING_SPEED_MPS);
-    const reliableStop = speed <= STOP_SPEED_MPS && distance < MIN_MOVE_DISTANCE_M;
+    const distanceSupportsMove = Boolean(lastPosition && distance >= requiredDistance && inferredSpeed >= MOVING_SPEED_MPS);
+    const speedSupportsMove = gpsSpeed !== null && gpsSpeed >= GPS_SPEED_ONLY_MPS;
+    const reliableMove = speedSupportsMove || distanceSupportsMove;
+    const reliableStop = gpsSpeed !== null
+      ? gpsSpeed <= STOP_SPEED_MPS
+      : Boolean(lastPosition && effectiveDistance < 1 && inferredSpeed <= STOP_SPEED_MPS);
 
-    tickClock(at);
-    if (reliableMove) movementEvidenceUntil = at + MOVEMENT_HOLD_MS;
-    else if (reliableStop && at >= movementEvidenceUntil) movementEvidenceUntil = 0;
+    let backfilled = 0;
+    if (reliableMove) {
+      stopEvidenceCount = 0;
+      backfilled = applyBackgroundBackfill(receivedAt);
+      if (!clockState.on || clockState.breakOn) {
+        renderEnhancedClock();
+        return;
+      }
+      if (clockState.on && !clockState.breakOn) movementEvidenceUntil = receivedAt + MOVEMENT_HOLD_MS;
+    } else if (reliableStop) {
+      stopEvidenceCount += 1;
+      if (stopEvidenceCount >= STOP_CONFIRM_SAMPLES) {
+        movementEvidenceUntil = 0;
+        clockState.backgroundGap = null;
+      }
+    } else {
+      stopEvidenceCount = 0;
+      if (clockState.backgroundGap && !clockState.backgroundGap.movingBefore) clockState.backgroundGap = null;
+    }
 
-    lastPosition = { coords: { latitude: coords.latitude, longitude: coords.longitude }, at };
-    locationState = reliableMove || at < movementEvidenceUntil ? "moving" : "stationary";
+    lastPosition = {
+      coords: { latitude: Number(coords.latitude), longitude: Number(coords.longitude) },
+      accuracy,
+      at
+    };
+    clockState.moving = clockState.on && !clockState.breakOn && receivedAt < movementEvidenceUntil;
+    locationState = clockState.moving ? "moving" : "stationary";
     locationMessage = gpsSpeed === null ? "位置変化から判定" : `速度 ${Math.max(0, gpsSpeed * 3.6).toFixed(1)}km/h`;
-    tickClock(nowMs());
+    if (!backfilled) persistEnhancedClock(false);
     renderEnhancedClock();
   }
 
-  function handleLocationError(error) {
+  function handleLocationError(error, generation = geoWatchGeneration) {
+    if (generation !== geoWatchGeneration || !clockState.on || clockState.breakOn) return;
     locationState = error && error.code === 1 ? "denied" : "error";
     locationMessage = error && error.code === 1 ? "位置情報が許可されていません" : "位置情報を取得できません";
     movementEvidenceUntil = 0;
+    stopEvidenceCount = 0;
+    clockState.backgroundGap = null;
     clockState.moving = false;
+    persistEnhancedClock(true);
     renderEnhancedClock();
   }
 
@@ -177,23 +360,34 @@
     if (!("geolocation" in navigator)) {
       locationState = "unsupported";
       locationMessage = "この端末では位置情報を利用できません";
+      clockState.backgroundGap = null;
+      persistEnhancedClock(true);
       renderEnhancedClock();
       return;
     }
     locationState = "requesting";
     locationMessage = "位置情報を確認中";
-    geoWatchId = navigator.geolocation.watchPosition(handlePosition, handleLocationError, {
-      enableHighAccuracy: true,
-      maximumAge: 2000,
-      timeout: 15000
-    });
+    const generation = ++geoWatchGeneration;
+    try {
+      geoWatchId = navigator.geolocation.watchPosition(
+        position => handlePosition(position, generation),
+        error => handleLocationError(error, generation),
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+      );
+    } catch (error) {
+      geoWatchId = null;
+      handleLocationError(error, generation);
+    }
   }
 
   function stopLocationWatch() {
-    if (geoWatchId !== null && "geolocation" in navigator) navigator.geolocation.clearWatch(geoWatchId);
+    const watchId = geoWatchId;
     geoWatchId = null;
+    geoWatchGeneration += 1;
+    if (watchId !== null && "geolocation" in navigator) navigator.geolocation.clearWatch(watchId);
     lastPosition = null;
     movementEvidenceUntil = 0;
+    stopEvidenceCount = 0;
     clockState.moving = false;
     if (!clockState.on) {
       locationState = "idle";
@@ -219,7 +413,30 @@
   }
 
   function sessionBreakMs(at = nowMs()) {
-    return clockState.breakMs + (clockState.breakOn && clockState.breakStartedAt ? Math.max(0, at - clockState.breakStartedAt) : 0);
+    const sessionStart = clockState.sessionStartAt ? finite(clockState.sessionStartAt, at) : at;
+    const intervals = (Array.isArray(clockState.breakSegments) ? clockState.breakSegments : []).map(segment => {
+      const startAt = Math.max(sessionStart, finite(segment && segment.startAt, at));
+      const rawEnd = segment && segment.endAt;
+      const endAt = Math.min(at, rawEnd === null || rawEnd === undefined ? at : finite(rawEnd, at));
+      return endAt > startAt ? [startAt, endAt] : null;
+    }).filter(Boolean).sort((a, b) => a[0] - b[0]);
+    let segmentMs = 0;
+    let rangeStart = null;
+    let rangeEnd = null;
+    intervals.forEach(([startAt, endAt]) => {
+      if (rangeStart === null) {
+        rangeStart = startAt;
+        rangeEnd = endAt;
+      } else if (startAt <= rangeEnd) {
+        rangeEnd = Math.max(rangeEnd, endAt);
+      } else {
+        segmentMs += rangeEnd - rangeStart;
+        rangeStart = startAt;
+        rangeEnd = endAt;
+      }
+    });
+    if (rangeStart !== null) segmentMs += rangeEnd - rangeStart;
+    return Math.max(0, finite(clockState.legacyBreakMs, 0)) + segmentMs;
   }
 
   function sessionElapsedMs(at = nowMs()) {
@@ -258,18 +475,22 @@
     dot.classList.toggle("stop", !clockState.on || !clockState.moving);
     panel.classList.toggle("run", clockState.on && clockState.moving);
     const detail = $("movementDetail");
-    if (detail) detail.textContent = locationMessage || (clockState.on ? "移動を検知すると自動でカウントします" : "OFF中は移動しても反応しません");
+    const backfillNotice = clockState.lastBackfillAt && nowMs() - clockState.lastBackfillAt < BACKFILL_NOTICE_MS
+      ? `バックグラウンド中の移動 ${durationText(clockState.lastBackfillMs, true)}を補完しました`
+      : "";
+    if (detail) detail.textContent = backfillNotice || locationMessage || (clockState.on ? "移動を検知すると自動でカウントします" : "OFF中は移動しても反応しません");
     renderSessionPanel();
   }
 
   function enhancedToggleClock() {
     tickClock();
     clockState.on = !clockState.on;
-    clockState.lastTickAt = nowMs();
+    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), nowMs());
     if (clockState.on) {
       if (!clockState.sessionStartAt) clockState.sessionStartAt = nowMs();
-      startLocationWatch();
+      if (!document.hidden) startLocationWatch();
     } else {
+      clockState.backgroundGap = null;
       stopLocationWatch();
     }
     persistEnhancedClock(true);
@@ -277,28 +498,43 @@
     renderEnhancedClock();
   }
 
-  function setExactRemaining(minutes) {
+  function setExactRemainingMs(milliseconds) {
     tickClock();
-    clockState.remainingMs = clamp(minutes * 60000, 0, MAX_REMAIN_INPUT_MINUTES * 60000);
+    clockState.remainingMs = clamp(milliseconds, 0, MAX_REMAIN_INPUT_MINUTES * 60000);
     clockState.baseRemain = clockState.remainingMs / 60000;
-    clockState.lastTickAt = nowMs();
+    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), nowMs());
     persistEnhancedClock(true);
   }
 
+  function setExactRemaining(minutes) {
+    setExactRemainingMs(minutes * 60000);
+  }
+
   function toggleBreak() {
+    if (!clockState.sessionStartAt) {
+      alert("時間ONで計測を開始してから休憩を記録してください。");
+      return;
+    }
     tickClock();
     const now = nowMs();
+    if (!Array.isArray(clockState.breakSegments)) clockState.breakSegments = [];
     if (clockState.breakOn) {
-      clockState.breakMs += Math.max(0, now - finite(clockState.breakStartedAt, now));
+      const startedAt = finite(clockState.breakStartedAt, now);
+      const openSegment = [...clockState.breakSegments].reverse().find(segment => segment.endAt === null);
+      if (openSegment) openSegment.endAt = now;
+      else clockState.breakSegments.push({ startAt: startedAt, endAt: now });
+      clockState.breakMs += Math.max(0, now - startedAt);
       clockState.breakStartedAt = null;
       clockState.breakOn = false;
       if (clockState.on) startLocationWatch();
     } else {
       clockState.breakOn = true;
       clockState.breakStartedAt = now;
+      clockState.breakSegments.push({ startAt: now, endAt: null });
+      clockState.backgroundGap = null;
       stopLocationWatch();
     }
-    clockState.lastTickAt = now;
+    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
     persistEnhancedClock(true);
     renderEnhancedClock();
   }
@@ -364,6 +600,8 @@
     $("workBreakTime").textContent = durationText(sessionBreakMs(at));
     $("breakToggle").textContent = clockState.breakOn ? "休憩終了" : "休憩開始";
     $("breakToggle").classList.toggle("active", clockState.breakOn);
+    $("breakToggle").disabled = !clockState.sessionStartAt;
+    $("breakToggle").setAttribute("aria-disabled", String(!clockState.sessionStartAt));
   }
 
   function injectUi() {
@@ -433,44 +671,56 @@
   injectUi();
   $("countToggle").onclick = enhancedToggleClock;
 
-  const originalAdjustRemain = adjustRemain;
   adjustRemain = function(delta) {
     tickClock();
-    const roundedMinutes = Math.round(clockState.remainingMs / 60000);
-    setExactRemaining(clamp(roundedMinutes + delta, 0, MAX_REMAIN_INPUT_MINUTES));
+    clockState.remainingMs = clamp(clockState.remainingMs + finite(delta, 0) * 60000, 0, MAX_REMAIN_INPUT_MINUTES * 60000);
+    clockState.baseRemain = clockState.remainingMs / 60000;
+    persistEnhancedClock(true);
     setRemain(clockState.remainingMs / 60000);
     save();
     calc();
     renderEnhancedClock();
   };
 
-  const originalReset = $("reset").onclick;
   $("reset").onclick = function() {
+    if (!confirm("完了件数・残り時間・終了上限・今日の稼働計測をリセットしますか？")) return;
     const hadSession = Boolean(clockState.sessionStartAt && (clockState.activeMs > 0 || n("done") > 0));
     if (hadSession && confirm("リセット前に今日の稼働記録を保存しますか？")) recordSession(false);
-    const before = n("done");
-    originalReset.call(this);
-    if (before === n("done") && before !== 0) return;
+    stopLocationWatch();
+    $("done").value = "0";
+    $("remainH").value = "12";
+    $("remainM").value = "0";
+    $("endLimit").value = "";
+    const now = nowMs();
     clockState = {
       on: false,
       remainingMs: 720 * 60000,
       baseRemain: 720,
-      baseAt: nowMs(),
-      lastTickAt: nowMs(),
+      baseAt: now,
+      lastTickAt: now,
       moving: false,
       activeMs: 0,
       sessionStartAt: null,
       breakOn: false,
       breakStartedAt: null,
       breakMs: 0,
-      updatedAt: nowMs()
+      breakSegments: [],
+      legacyBreakMs: 0,
+      backgroundGap: null,
+      lastBackfillMs: 0,
+      lastBackfillAt: null,
+      updatedAt: now
     };
-    stopLocationWatch();
     persistEnhancedClock(true);
+    save();
+    calc();
     renderEnhancedClock();
   };
 
-  if (clockState.on && !clockState.breakOn) startLocationWatch();
+  if (clockState.backgroundGap && !document.hidden) {
+    clockState.backgroundGap.resumeAt = clockState.backgroundGap.resumeAt || nowMs();
+  }
+  if (clockState.on && !clockState.breakOn && !document.hidden) startLocationWatch();
   renderHistory();
   calc();
   renderEnhancedClock();
@@ -482,9 +732,12 @@
   }, 1000);
 
   document.addEventListener("visibilitychange", () => {
-    tickClock();
-    if (!document.hidden && clockState.on && !clockState.breakOn) startLocationWatch();
+    if (document.hidden) beginBackgroundGap();
+    else resumeBackgroundGap();
     renderEnhancedClock();
   });
-  window.addEventListener("pagehide", () => persistEnhancedClock(true));
+  window.addEventListener("pagehide", () => {
+    if (!document.hidden) beginBackgroundGap();
+    else persistEnhancedClock(true);
+  });
 })();

@@ -961,8 +961,11 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=37").catch(() => {}));
 }
 </script>
+<script src="app-enhancements.js?v=2"></script>
+<script src="app-enhancements-fix.js?v=2"></script>
+<script src="app-session-ui-fix.js?v=2"></script>
 </body>
 </html>

@@ -2,6 +2,8 @@ name: Validate app
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   validate:
@@ -17,19 +19,13 @@ jobs:
           node --check app-enhancements-fix.js
           node --check app-session-ui-fix.js
           node --check sw.js
-      - name: Verify required files and injection
+      - name: Verify required files
         run: |
           test -f index.html
+          test -f compact.html
           test -f app-enhancements.js
           test -f app-enhancements-fix.js
           test -f app-session-ui-fix.js
-          grep -q 'app-enhancements.js' sw.js
-          grep -q 'app-enhancements-fix.js' sw.js
-          grep -q 'app-session-ui-fix.js' sw.js
-      - name: Verify responsive timer and start editor hooks
-        run: |
-          grep -q 'remainSync' app-session-ui-fix.js
-          grep -q 'max-width:430px' app-session-ui-fix.js
-          grep -q 'max-width:350px' app-session-ui-fix.js
-          grep -q 'datetime-local' app-session-ui-fix.js
-          grep -q 'sessionStartAt' app-session-ui-fix.js
+          test -f sw.js
+      - name: Run behavior and delivery tests
+        run: node --test tests/*.test.js

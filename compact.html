@@ -288,7 +288,10 @@
 
   <script>
     const LIMIT_MINUTES = 720;
+    const MAX_REMAIN_INPUT_MINUTES = LIMIT_MINUTES + 59;
     const STORAGE_KEY = "ubereatsProgressFixed12Data";
+    const LEGACY_CLOCK_KEY = "ubereatsProgressClockState";
+    const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
     const PACE_MODE_KEY_PREFIX = "ubereatsProgressPaceDisplayMode:";
     const $ = (id) => document.getElementById(id);
 
@@ -381,6 +384,52 @@
       } catch(e) { return false; }
     }
 
+    function readEnhancedClock() {
+      try {
+        const data = JSON.parse(localStorage.getItem(ENHANCED_CLOCK_KEY) || "null");
+        if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+        const remainingMs = Number(data.remainingMs);
+        if (!Number.isFinite(remainingMs) || remainingMs < 0) return null;
+        return { data, remainingMs };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function showEnhancedRemaining() {
+      const enhanced = readEnhancedClock();
+      if (!enhanced) return false;
+      const minutes = Math.max(0, Math.min(Math.round(enhanced.remainingMs / 60000), MAX_REMAIN_INPUT_MINUTES));
+      $("remainH").value = String(Math.floor(minutes / 60));
+      $("remainM").value = String(minutes % 60);
+      return true;
+    }
+
+    function syncEnhancedRemainingFromControls() {
+      const now = Date.now();
+      const remainingMs = Math.max(0, Math.min(n("remainH") * 60 + n("remainM"), MAX_REMAIN_INPUT_MINUTES)) * 60000;
+      const current = readEnhancedClock();
+      const previous = current ? current.data : {};
+      const on = typeof previous.on === "boolean" ? previous.on : false;
+      const state = {
+        ...previous,
+        on,
+        remainingMs,
+        activeMs: Math.max(0, Number(previous.activeMs) || 0),
+        sessionStartAt: previous.sessionStartAt || null,
+        breakOn: Boolean(previous.breakOn),
+        breakStartedAt: previous.breakOn ? (previous.breakStartedAt || now) : null,
+        breakMs: Math.max(0, Number(previous.breakMs) || 0),
+        updatedAt: now
+      };
+      localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
+      localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
+        on,
+        baseRemain: remainingMs / 60000,
+        baseAt: now
+      }));
+    }
+
     function setTone(slackMinutes, perOrder, remainingOrders) {
       const hero = $("hero");
       const main = $("slackMain");
@@ -451,8 +500,13 @@
     setupOptions();
     setDefaultValues();
     load();
+    showEnhancedRemaining();
 
-    ["target", "done", "remainH", "remainM"].forEach(id => $(id).addEventListener("change", calc));
+    ["target", "done"].forEach(id => $(id).addEventListener("change", calc));
+    ["remainH", "remainM"].forEach(id => $(id).addEventListener("change", () => {
+      syncEnhancedRemainingFromControls();
+      calc();
+    }));
 
     document.querySelectorAll("[data-pace-card]").forEach(card => {
       card.addEventListener("click", () => togglePaceDisplayMode(card.dataset.paceCard));
@@ -480,13 +534,19 @@
       $("done").value = "0";
       $("remainH").value = "12";
       $("remainM").value = "0";
+      syncEnhancedRemainingFromControls();
       calc();
     });
 
     calc();
 
+    window.addEventListener("storage", event => {
+      if (event.key !== ENHANCED_CLOCK_KEY || !showEnhancedRemaining()) return;
+      calc();
+    });
+
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=37").catch(() => {}));
     }
   </script>
 </body>
