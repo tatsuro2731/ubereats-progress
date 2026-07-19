@@ -1,5 +1,5 @@
-const CACHE="ubereats-progress-v34";
-const ASSETS=["./?v=34","index.html?v=34","app-enhancements.js?v=1","compact.html","manifest.webmanifest","apple-touch-icon.png","assets/favicon-32.png","assets/icon-192.png","assets/icon-512.png","assets/delivery-scooter.png"];
+const CACHE="ubereats-progress-v35";
+const ASSETS=["./?v=35","index.html?v=35","app-enhancements.js?v=1","app-enhancements-fix.js?v=1","compact.html","manifest.webmanifest","apple-touch-icon.png","assets/favicon-32.png","assets/icon-192.png","assets/icon-512.png","assets/delivery-scooter.png"];
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
@@ -18,7 +18,8 @@ async function injectEnhancement(response){
   if(!response||!response.ok)return response;
   const html=await response.text();
   if(html.includes("app-enhancements.js"))return new Response(html,{status:response.status,statusText:response.statusText,headers:response.headers});
-  const enhanced=html.replace("</body>",'<script src="app-enhancements.js?v=1"></script></body>');
+  const scripts='<script src="app-enhancements.js?v=1"></script><script src="app-enhancements-fix.js?v=1"></script>';
+  const enhanced=html.replace("</body>",scripts+"</body>");
   const headers=new Headers(response.headers);
   headers.set("content-type","text/html; charset=utf-8");
   headers.delete("content-length");
