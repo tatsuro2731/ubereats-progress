@@ -52,6 +52,9 @@ function instrumentedSource() {
     beginBackgroundGap,
     resumeBackgroundGap,
     applyBackgroundBackfill,
+    renderEnhancedClock,
+    remainingText,
+    durationText,
     getState: () => clockState,
     setState: value => { clockState = value; },
     getEvidenceUntil: () => movementEvidenceUntil,
@@ -136,7 +139,7 @@ function timerHarness(options = {}) {
     remain: () => Number(element("remainH").value || 0) * 60 + Number(element("remainM").value || 0),
     manualRemain: () => Number(element("remainH").value || 0) * 60 + Number(element("remainM").value || 0),
     setRemain(minutes) {
-      const rounded = Math.max(0, Math.round(minutes));
+      const rounded = Math.max(0, Math.ceil(minutes));
       element("remainH").value = String(Math.floor(rounded / 60));
       element("remainM").value = String(rounded % 60);
     },
@@ -210,6 +213,52 @@ test("±1 minute keeps the existing seconds exactly", () => {
   assert.equal(app.api.getState().remainingMs, 11 * 60000 + 30500);
   app.context.adjustRemain(-1);
   assert.equal(app.api.getState().remainingMs, 10 * 60000 + 30500);
+});
+
+test("remaining time is shown only to minutes while keeping millisecond precision", () => {
+  const initial = state({
+    on: false,
+    remainingMs: 10 * 60000 + 30500,
+    activeMs: 2 * 60000 + 45500,
+    sessionStartAt: null,
+    lastTickAt: 1_000_000
+  });
+  const app = timerHarness({ now: 1_000_000, enhanced: initial });
+
+  app.api.renderEnhancedClock();
+
+  assert.equal(app.element("countRemain").textContent, "残り 0時間11分");
+  assert.doesNotMatch(app.element("countRemain").textContent, /秒/);
+  assert.equal(app.api.remainingText(1), "0時間01分", "a non-zero remainder must not display as zero minutes");
+  assert.equal(app.api.getState().remainingMs, 10 * 60000 + 30500);
+  assert.equal(app.api.getState().activeMs, 2 * 60000 + 45500);
+});
+
+test("work-session durations are shown only to completed minutes without rounding engine data", () => {
+  const initial = state({
+    on: false,
+    remainingMs: 20 * 60000 + 12345,
+    activeMs: 2 * 60000 + 45500,
+    sessionStartAt: 640001,
+    lastTickAt: 1_000_000,
+    lastBackfillMs: 30500,
+    lastBackfillAt: 1_000_000
+  });
+  const app = timerHarness({ now: 1_000_000, enhanced: initial });
+
+  app.api.renderEnhancedClock();
+
+  assert.equal(app.element("workActiveTime").textContent, "0時間02分");
+  assert.equal(app.element("workElapsedTime").textContent, "0時間05分");
+  assert.equal(app.element("workBreakTime").textContent, "0時間00分");
+  for (const id of ["workActiveTime", "workElapsedTime", "workBreakTime"]) {
+    assert.doesNotMatch(app.element(id).textContent, /秒/, `${id} must not expose seconds`);
+  }
+  assert.match(app.element("movementDetail").textContent, /1分未満/);
+  assert.doesNotMatch(app.element("movementDetail").textContent, /秒/);
+  assert.equal(app.api.durationText(59999), "0時間00分");
+  assert.equal(app.api.getState().remainingMs, 20 * 60000 + 12345);
+  assert.equal(app.api.getState().activeMs, 2 * 60000 + 45500);
 });
 
 test("normal persistence mirrors enhanced remaining time into regular saved controls", () => {
