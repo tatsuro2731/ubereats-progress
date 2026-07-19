@@ -155,8 +155,8 @@
   function injectStyles() {
     const style = document.createElement("style");
     style.textContent = `
-      .remainSync{min-width:0;width:100%;max-width:none;grid-template-columns:clamp(46px,12vw,54px) minmax(0,1fr) clamp(46px,12vw,54px);gap:clamp(4px,1.4vw,7px)}
-      .remainSync .remainBig{min-width:0;margin:0;padding:0 2px;overflow:hidden;font-size:clamp(15px,4.25vw,20px);line-height:1.15;letter-spacing:-.055em;text-align:center;white-space:nowrap}
+      .remainSync{min-width:0;width:100%;max-width:none;grid-template-columns:clamp(44px,11.5vw,50px) minmax(0,1fr) clamp(44px,11.5vw,50px);gap:clamp(4px,1.2vw,5px)}
+      .remainSync .remainBig{min-width:0;margin:0;padding:0 2px;overflow:hidden;font-size:clamp(19px,5.35vw,23px);font-variant-numeric:tabular-nums;line-height:1.15;letter-spacing:-.06em;text-align:center;white-space:nowrap}
       .remainStep{width:100%;min-width:0;padding-left:2px;padding-right:2px}
       .workSessionStart{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:3px 7px;max-width:58%}
       .workSessionStart>span{grid-column:1/-1;color:#8fa6ba;font-size:11px}
@@ -178,14 +178,13 @@
       .workSessionStat strong{max-width:100%;font-size:clamp(12px,4vw,17px);letter-spacing:-.035em;white-space:normal;overflow-wrap:anywhere}
       @media(max-width:440px){
         .countPanel{padding-left:12px;padding-right:12px}
-        .remainSync{grid-template-columns:clamp(46px,12vw,52px) minmax(0,1fr) clamp(46px,12vw,52px);gap:clamp(4px,1.4vw,6px)}
-        .remainSync .remainBig{font-size:clamp(15px,4.25vw,18px)}
+        .remainSync .remainBig{padding-left:0;padding-right:0}
         .remainStep{min-height:46px;font-size:13px;border-radius:14px}
         .workSessionStart{max-width:64%}
       }
-      @media(max-width:350px){
+      @media(max-width:370px){
         .remainSync{grid-template-columns:1fr 1fr;gap:7px}
-        .remainSync .remainBig{grid-column:1/-1;grid-row:1;font-size:19px;white-space:nowrap}
+        .remainSync .remainBig{grid-column:1/-1;grid-row:1;font-size:22px;white-space:nowrap}
         .remainSync #remainMinus{grid-column:1;grid-row:2}
         .remainSync #remainPlus{grid-column:2;grid-row:2}
         .workSessionHead{align-items:stretch;flex-direction:column}
