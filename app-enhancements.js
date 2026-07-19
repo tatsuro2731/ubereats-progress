@@ -395,21 +395,22 @@
     }
   }
 
-  function exactRemainText(ms) {
-    const seconds = Math.max(0, Math.ceil(ms / 1000));
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours}時間${String(minutes).padStart(2, "0")}分${String(secs).padStart(2, "0")}秒`;
+  function remainingText(ms) {
+    const totalMinutes = Math.max(0, Math.ceil(ms / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}時間${String(minutes).padStart(2, "0")}分`;
   }
 
-  function durationText(ms, includeSeconds = false) {
-    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    if (includeSeconds) return `${hours}時間${String(minutes).padStart(2, "0")}分${String(seconds).padStart(2, "0")}秒`;
+  function durationText(ms) {
+    const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     return `${hours}時間${String(minutes).padStart(2, "0")}分`;
+  }
+
+  function durationNoticeText(ms) {
+    return ms > 0 && ms < 60000 ? "1分未満" : durationText(ms);
   }
 
   function sessionBreakMs(at = nowMs()) {
@@ -465,7 +466,7 @@
     const sub = $("countSub");
     const dot = $("countDot");
     const panel = $("countPanel");
-    $("countRemain").textContent = `残り ${exactRemainText(clockState.remainingMs)}`;
+    $("countRemain").textContent = `残り ${remainingText(clockState.remainingMs)}`;
     $("countStatus").textContent = status.text;
     $("countEndClock").textContent = clockState.on ? "移動時間に連動" : "停止中";
     $("countEndClock").classList.toggle("run", clockState.on && clockState.moving);
@@ -476,7 +477,7 @@
     panel.classList.toggle("run", clockState.on && clockState.moving);
     const detail = $("movementDetail");
     const backfillNotice = clockState.lastBackfillAt && nowMs() - clockState.lastBackfillAt < BACKFILL_NOTICE_MS
-      ? `バックグラウンド中の移動 ${durationText(clockState.lastBackfillMs, true)}を補完しました`
+      ? `バックグラウンド中の移動 ${durationNoticeText(clockState.lastBackfillMs)}を補完しました`
       : "";
     if (detail) detail.textContent = backfillNotice || locationMessage || (clockState.on ? "移動を検知すると自動でカウントします" : "OFF中は移動しても反応しません");
     renderSessionPanel();
@@ -594,8 +595,8 @@
     if (!panel) return;
     const at = nowMs();
     $("workStartTime").textContent = clockState.sessionStartAt ? formatDateTime(clockState.sessionStartAt) : "未開始";
-    $("workActiveTime").textContent = durationText(clockState.activeMs, true);
-    $("workElapsedTime").textContent = durationText(sessionElapsedMs(at), true);
+    $("workActiveTime").textContent = durationText(clockState.activeMs);
+    $("workElapsedTime").textContent = durationText(sessionElapsedMs(at));
     $("workRate").textContent = `${operationRate(at).toFixed(1)}%`;
     $("workBreakTime").textContent = durationText(sessionBreakMs(at));
     $("breakToggle").textContent = clockState.breakOn ? "休憩終了" : "休憩開始";
@@ -628,9 +629,9 @@
     panel.innerHTML = `
       <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">休憩時間を除いて実稼働率を計算</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
       <div class="workSessionGrid">
-        <div class="workSessionStat primary"><span>時計が減った時間</span><strong id="workActiveTime">0時間00分00秒</strong></div>
+        <div class="workSessionStat primary"><span>時計が減った時間</span><strong id="workActiveTime">0時間00分</strong></div>
         <div class="workSessionStat"><span>実稼働率</span><strong id="workRate">0.0%</strong></div>
-        <div class="workSessionStat"><span>経過時間（休憩除外）</span><strong id="workElapsedTime">0時間00分00秒</strong></div>
+        <div class="workSessionStat"><span>経過時間（休憩除外）</span><strong id="workElapsedTime">0時間00分</strong></div>
         <div class="workSessionStat"><span>休憩時間</span><strong id="workBreakTime">0時間00分</strong></div>
       </div>
       <div class="workSessionActions"><button id="breakToggle" class="breakToggle" type="button">休憩開始</button><button id="recordWork" class="recordWork" type="button">記録する</button></div>
@@ -641,9 +642,9 @@
 
     const desc = $("countPanel").querySelector(".desc");
     const hint = $("countPanel").querySelector(".hint");
-    if (desc) desc.textContent = "ON中は移動を検知した時だけ秒単位で減少し、停車すると自動停止します。";
+    if (desc) desc.textContent = "ON中は移動中だけ残り時間を減らします。内部では秒単位で計算し、画面には分単位で表示します。";
     if (hint) hint.textContent = "OFF中は移動しても反応しません。位置情報は移動判定だけに使い、座標は保存しません。";
-    $("helpText").textContent = "時間ONで位置情報を使った移動判定を開始します。移動中だけ残り時間が秒単位で減り、停車中は自動停止します。時間OFF中と休憩中は移動しても減りません。GPSの性質上、屋内・高層建物周辺・バックグラウンドでは判定が遅れる場合があります。";
+    $("helpText").textContent = "時間ONで位置情報を使った移動判定を開始します。残り時間は内部では秒単位で計算し、画面には分単位で表示します。停車中・時間OFF中・休憩中は減りません。GPSの性質上、屋内・高層建物周辺・バックグラウンドでは判定が遅れる場合があります。";
   }
 
   loadEnhancedClock();

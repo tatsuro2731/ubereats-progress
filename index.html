@@ -223,9 +223,9 @@ function manualRemain() {
 }
 
 function setRemain(minutes) {
-  const value = Math.max(0, Math.round(minutes));
-  $("remainH").value = String(Math.min(Math.floor(value / 60), 12));
-  $("remainM").value = String(Math.min(value % 60, 59));
+  const value = Math.min(MAX_REMAIN_INPUT_MINUTES, Math.max(0, Math.ceil(minutes)));
+  $("remainH").value = String(Math.floor(value / 60));
+  $("remainM").value = String(value % 60);
 }
 
 function remain() {
@@ -418,9 +418,17 @@ function formatMinutes(minutes) {
   return hours ? `${hours}時間${mins}分` : `${mins}分`;
 }
 
-function remainText(minutes) {
-  const value = Math.max(0, Math.round(minutes));
+function hourMinuteText(minutes) {
+  const value = Math.max(0, minutes);
   return `${Math.floor(value / 60)}時間${String(value % 60).padStart(2, "0")}分`;
+}
+
+function remainingText(minutes) {
+  return hourMinuteText(Math.ceil(minutes));
+}
+
+function elapsedText(minutes) {
+  return hourMinuteText(Math.floor(minutes));
 }
 
 function paceMode(cardId) {
@@ -563,7 +571,7 @@ function limits(targetPace, margin) {
 }
 
 function renderClock(remaining) {
-  $("countRemain").textContent = `残り ${remainText(remaining)}`;
+  $("countRemain").textContent = `残り ${remainingText(remaining)}`;
   $("countEndClock").textContent = countEndLabel(remaining);
   $("countEndClock").classList.toggle("run", clockState.on);
   const button = $("countToggle");
@@ -657,7 +665,7 @@ function renderTodaySummary(target, done, used, actualPace) {
   const over = Math.max(done - target, 0);
   $("todaySummaryLead").textContent = over ? `目標${target}件を${over}件上回って達成` : `目標${target}件を達成`;
   $("todaySummaryDone").textContent = `${done}件`;
-  $("todaySummaryWork").textContent = remainText(used);
+  $("todaySummaryWork").textContent = elapsedText(used);
   $("todaySummaryPace").textContent = Number.isFinite(actualPace) ? `${actualPace.toFixed(2)}分/件` : "計測なし";
   $("todaySummaryHourly").textContent = Number.isFinite(actualPace) && actualPace > 0 ? `${(60 / actualPace).toFixed(1)}件/時` : "計測なし";
 }
@@ -839,7 +847,7 @@ function calc() {
   } else {
     $("mainValue").textContent = `${formatMinutes(margin)}${margin >= 0 ? "余裕" : "遅れ"}`;
     $("subValue").innerHTML = limits(targetPace, margin);
-    $("miniValue").textContent = active.over ? `残り${left}件 / ${active.endLabel}を超過` : `残り${left}件 / ${active.label}まで${remainText(effectiveRemain)}`;
+    $("miniValue").textContent = active.over ? `残り${left}件 / ${active.endLabel}を超過` : `残り${left}件 / ${active.label}まで${remainingText(effectiveRemain)}`;
   }
 
   renderTodaySummary(target, done, used, actualPace);
@@ -961,10 +969,10 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=38").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=39").catch(() => {}));
 }
 </script>
-<script src="app-enhancements.js?v=2"></script>
+<script src="app-enhancements.js?v=3"></script>
 <script src="app-enhancements-fix.js?v=2"></script>
 <script src="app-session-ui-fix.js?v=3"></script>
 </body>

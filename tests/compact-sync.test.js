@@ -169,8 +169,20 @@ test("compact follows enhanced-clock storage updates without writing back a roun
   app.dispatchStorage(ENHANCED_KEY);
 
   assert.equal(app.element("remainH").value, "1");
-  assert.equal(app.element("remainM").value, "2");
+  assert.equal(app.element("remainM").value, "3");
   assert.equal(app.storage.getItem(ENHANCED_KEY), secondJson);
+});
+
+test("compact rounds the minute-only countdown up without changing exact remainingMs", () => {
+  const enhanced = { on: false, remainingMs: 10 * 60000 + 1000, activeMs: 12345, updatedAt: 1 };
+  const enhancedJson = JSON.stringify(enhanced);
+  const app = runCompact({ [ENHANCED_KEY]: enhancedJson });
+
+  assert.equal(app.element("remainH").value, "0");
+  assert.equal(app.element("remainM").value, "11");
+  assert.match(app.element("miniSummary").textContent, /残り0時間11分$/);
+  assert.equal(app.element("availableTime").textContent, "11分");
+  assert.equal(app.storage.getItem(ENHANCED_KEY), enhancedJson);
 });
 
 test("compact reset explicitly syncs 12 hours but does not silently toggle ON off", () => {
@@ -185,4 +197,3 @@ test("compact reset explicitly syncs 12 hours but does not silently toggle ON of
   assert.equal(saved.activeMs, 55);
   assert.equal(saved.sessionStartAt, 10);
 });
-

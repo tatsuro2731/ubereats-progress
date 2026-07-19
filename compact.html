@@ -399,7 +399,7 @@
     function showEnhancedRemaining() {
       const enhanced = readEnhancedClock();
       if (!enhanced) return false;
-      const minutes = Math.max(0, Math.min(Math.round(enhanced.remainingMs / 60000), MAX_REMAIN_INPUT_MINUTES));
+      const minutes = Math.max(0, Math.min(Math.ceil(enhanced.remainingMs / 60000), MAX_REMAIN_INPUT_MINUTES));
       $("remainH").value = String(Math.floor(minutes / 60));
       $("remainM").value = String(minutes % 60);
       return true;
@@ -546,7 +546,7 @@
     });
 
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=38").catch(() => {}));
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=39").catch(() => {}));
     }
   </script>
 </body>
