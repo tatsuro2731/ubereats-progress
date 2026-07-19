@@ -74,7 +74,7 @@ test("timer UI includes the 440px iPhone breakpoint and start-time editor hooks"
   assert.match(source, /@media\s*\(\s*max-width\s*:\s*370px\s*\)/);
 });
 
-test("the maximum remaining-time label stays legible and fits from 320px through 440px", () => {
+test("the maximum minute-only remaining-time label stays legible and fits from 320px through 440px", () => {
   const source = read("app-session-ui-fix.js");
   const baseColumns = source.match(/\.remainSync\s*\{[^}]*grid-template-columns\s*:\s*([^;]+);[^}]*gap\s*:\s*([^;}]+)/);
   const baseLabel = source.match(/\.remainSync \.remainBig\s*\{[^}]*font-size\s*:\s*([^;]+);[^}]*letter-spacing\s*:\s*([^;}]+)/);
@@ -108,8 +108,25 @@ test("the maximum remaining-time label stays legible and fits from 320px through
     const maximumLabelWidth = fontSize * conservativeLabelWidthEm;
     assert.ok(
       maximumLabelWidth <= textSlot,
-      `残り 12時間59分59秒 must fit at ${viewport}px (${maximumLabelWidth.toFixed(1)}px <= ${textSlot}px)`
+      `残り 12時間59分 must fit at ${viewport}px (${maximumLabelWidth.toFixed(1)}px <= ${textSlot}px)`
     );
     assert.ok(twoRows ? fontSize >= 22 : fontSize >= 19, `the label must stay legible at ${viewport}px`);
   }
+});
+
+test("remaining and work-session displays stop at minutes while calculations keep sub-minute precision", () => {
+  const index = read("index.html");
+  const compact = read("compact.html");
+  const enhancements = read("app-enhancements.js");
+  assert.match(index, /function\s+remainingText\s*\([^)]*\)\s*\{[\s\S]{0,180}Math\.ceil/);
+  assert.match(index, /function\s+elapsedText\s*\([^)]*\)\s*\{[\s\S]{0,180}Math\.floor/);
+  assert.match(index, /countRemain"\)\.textContent\s*=\s*`残り \$\{remainingText\(remaining\)\}`/);
+  assert.match(index, /todaySummaryWork"\)\.textContent\s*=\s*elapsedText\(used\)/);
+  assert.match(index, /active\.label}まで\$\{remainingText\(effectiveRemain\)\}/);
+  assert.match(compact, /Math\.ceil\(enhanced\.remainingMs\s*\/\s*60000\)/);
+  assert.match(enhancements, /id="workActiveTime">0時間00分<\/strong>/);
+  assert.match(enhancements, /id="workElapsedTime">0時間00分<\/strong>/);
+  assert.doesNotMatch(enhancements, /id="(?:workActiveTime|workElapsedTime)"[^>]*>[^<]*秒/);
+  assert.match(enhancements, /remainingMs/);
+  assert.match(enhancements, /activeMs/);
 });
