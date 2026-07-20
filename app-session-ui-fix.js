@@ -156,7 +156,7 @@
     const style = document.createElement("style");
     style.textContent = `
       .remainSync{min-width:0;width:100%;max-width:none;grid-template-columns:clamp(44px,11.5vw,50px) minmax(0,1fr) clamp(44px,11.5vw,50px);gap:clamp(4px,1.2vw,5px)}
-      .remainSync .remainBig{min-width:0;margin:0;padding:0 2px;overflow:hidden;font-size:clamp(19px,5.35vw,23px);font-variant-numeric:tabular-nums;line-height:1.15;letter-spacing:-.06em;text-align:center;white-space:nowrap}
+      .remainSync .remainBig{min-width:0;margin:0;padding:0 2px;overflow:hidden;font-size:clamp(24px,6.5vw,26px);font-variant-numeric:tabular-nums;line-height:1.15;letter-spacing:-.06em;text-align:center;white-space:nowrap}
       .remainStep{width:100%;min-width:0;padding-left:2px;padding-right:2px}
       .workSessionStart{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:3px 7px;max-width:58%}
       .workSessionStart>span{grid-column:1/-1;color:#8fa6ba;font-size:11px}
@@ -184,7 +184,7 @@
       }
       @media(max-width:370px){
         .remainSync{grid-template-columns:1fr 1fr;gap:7px}
-        .remainSync .remainBig{grid-column:1/-1;grid-row:1;font-size:22px;white-space:nowrap}
+        .remainSync .remainBig{grid-column:1/-1;grid-row:1;font-size:26px;white-space:nowrap}
         .remainSync #remainMinus{grid-column:1;grid-row:2}
         .remainSync #remainPlus{grid-column:2;grid-row:2}
         .workSessionHead{align-items:stretch;flex-direction:column}

@@ -86,15 +86,15 @@ test("the maximum minute-only remaining-time label stays legible and fits from 3
   assert.ok(narrowBlock, "the 320–370px two-row timer rules must remain explicit");
   assert.match(baseColumns[1], /clamp\(44px,11\.5vw,50px\)\s+minmax\(0,1fr\)\s+clamp\(44px,11\.5vw,50px\)/);
   assert.match(baseColumns[2], /clamp\(4px,1\.2vw,5px\)/);
-  assert.match(baseLabel[1], /clamp\(19px,5\.35vw,23px\)/);
+  assert.match(baseLabel[1], /clamp\(24px,6\.5vw,26px\)/);
   assert.match(baseLabel[2], /-\.06em/);
   assert.match(wideBlock[1], /padding-left\s*:\s*0\s*;\s*padding-right\s*:\s*0/);
   assert.match(narrowBlock[1], /grid-template-columns\s*:\s*1fr\s+1fr/);
-  assert.match(narrowBlock[1], /font-size\s*:\s*22px/);
+  assert.match(narrowBlock[1], /font-size\s*:\s*26px/);
 
   const clamp = (minimum, preferred, maximum) => Math.max(minimum, Math.min(preferred, maximum));
-  const cases = [320, 351, 370, 371, 375, 390, 430, 440];
-  const conservativeLabelWidthEm = 9.5;
+  const cases = [320, 350, 370, 371, 375, 390, 391, 393, 402, 430, 440];
+  const conservativeLabelWidthEm = 7.5;
   for (const viewport of cases) {
     const twoRows = viewport <= 370;
     const bodyPadding = viewport <= 390 ? 8 : 12;
@@ -103,14 +103,15 @@ test("the maximum minute-only remaining-time label stays legible and fits from 3
     const gap = clamp(4, viewport * 0.012, 5);
     const textSlot = contentWidth - (twoRows ? 0 : buttonWidth * 2 + gap * 2);
     const fontSize = twoRows
-      ? 22
-      : clamp(19, viewport * 0.0535, 23);
+      ? 26
+      : clamp(24, viewport * 0.065, 26);
     const maximumLabelWidth = fontSize * conservativeLabelWidthEm;
     assert.ok(
       maximumLabelWidth <= textSlot,
       `残り 12時間59分 must fit at ${viewport}px (${maximumLabelWidth.toFixed(1)}px <= ${textSlot}px)`
     );
-    assert.ok(twoRows ? fontSize >= 22 : fontSize >= 19, `the label must stay legible at ${viewport}px`);
+    assert.ok(twoRows ? fontSize >= 26 : fontSize >= 24, `the label must stay legible at ${viewport}px`);
+    if (viewport === 393) assert.ok(fontSize >= 25.5, "the 393px label must match the screenshot scale");
   }
 });
 
