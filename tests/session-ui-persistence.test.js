@@ -52,7 +52,7 @@ function harness(clockState, now = 500000) {
   };
 }
 
-test("saving an edited start time preserves all timer-engine state", () => {
+test("saving an edited start time preserves session state and clears legacy movement fields", () => {
   const state = {
     on: true,
     remainingMs: 12345678,
@@ -81,11 +81,12 @@ test("saving an edited start time preserves all timer-engine state", () => {
   app.api.saveEnhancedState();
   const saved = JSON.parse(app.values.get(ENHANCED_KEY));
   assert.equal(saved.sessionStartAt, 100000);
+  assert.equal(saved.countMode, "continuous-v1");
   assert.deepEqual(saved.breakSegments, state.breakSegments);
   assert.equal(saved.legacyBreakMs, 4000);
-  assert.deepEqual(saved.backgroundGap, state.backgroundGap);
-  assert.equal(saved.lastBackfillMs, 40000);
-  assert.equal(saved.lastBackfillAt, 490500);
+  assert.equal(saved.backgroundGap, null);
+  assert.equal(saved.lastBackfillMs, 0);
+  assert.equal(saved.lastBackfillAt, null);
   assert.equal(saved.remainingMs, state.remainingMs);
   assert.equal(saved.activeMs, state.activeMs);
   assert.equal(saved.updatedAt, 500000);
@@ -116,7 +117,7 @@ test("saving an edited start time never moves lastTickAt backward", () => {
 
   assert.equal(state.lastTickAt, futureTick);
   const saved = JSON.parse(app.values.get(ENHANCED_KEY));
-  assert.equal(saved.updatedAt, 500000);
+  assert.equal(saved.updatedAt, futureTick);
 });
 
 test("start-time validation computes the union of overlapping break segments", () => {

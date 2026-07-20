@@ -3,27 +3,12 @@
 
   const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
   const HISTORY_KEY = "ubereatsProgressWorkHistoryV1";
-  const MOVING_SPEED_MPS = 0.8;
-  const GPS_SPEED_ONLY_MPS = 1.5;
-  const STOP_SPEED_MPS = 0.35;
-  const MIN_MOVE_DISTANCE_M = 7;
-  const MOVEMENT_HOLD_MS = 4000;
-  const STOP_CONFIRM_SAMPLES = 2;
-  const MAX_POSITION_AGE_MS = 10000;
-  const FUTURE_POSITION_TOLERANCE_MS = 3000;
-  const MAX_LOCATION_ACCURACY_M = 80;
+  const COUNT_MODE = "continuous-v1";
+  const WORK_LIMIT_MS = 720 * 60000;
   const SAVE_INTERVAL_MS = 5000;
-  const BACKFILL_NOTICE_MS = 60000;
 
   const legacyRemain = typeof remain === "function" ? remain() : manualRemain();
-  let geoWatchId = null;
-  let geoWatchGeneration = 0;
-  let lastPosition = null;
-  let movementEvidenceUntil = 0;
-  let stopEvidenceCount = 0;
   let lastSavedAt = 0;
-  let locationState = "idle";
-  let locationMessage = "";
   let pendingConfirmAction = null;
   let confirmReturnFocus = null;
   let finalizingSession = false;
@@ -35,6 +20,7 @@
   function defaultEnhancedState() {
     const now = nowMs();
     return {
+      countMode: COUNT_MODE,
       on: Boolean(clockState && clockState.on),
       remainingMs: Math.max(0, legacyRemain * 60000),
       baseRemain: Math.max(0, legacyRemain),
@@ -79,21 +65,6 @@
     return segments;
   }
 
-  function normalizeBackgroundGap(value, now) {
-    if (!value || typeof value !== "object") return null;
-    const hiddenAt = finite(value.hiddenAt, NaN);
-    const activeMsAtHidden = finite(value.activeMsAtHidden, NaN);
-    const resumeAt = value.resumeAt === null || value.resumeAt === undefined ? null : finite(value.resumeAt, NaN);
-    if (!Number.isFinite(hiddenAt) || hiddenAt <= 0 || hiddenAt > now + FUTURE_POSITION_TOLERANCE_MS) return null;
-    if (!Number.isFinite(activeMsAtHidden) || activeMsAtHidden < 0) return null;
-    return {
-      hiddenAt,
-      movingBefore: Boolean(value.movingBefore),
-      activeMsAtHidden,
-      resumeAt: Number.isFinite(resumeAt) && resumeAt >= hiddenAt ? resumeAt : null
-    };
-  }
-
   function normalizeState(data) {
     const fallback = defaultEnhancedState();
     const now = nowMs();
@@ -107,12 +78,16 @@
     const breakOn = !sessionEndedAt && Boolean(data && data.breakOn);
     const breakStartedAt = breakOn ? finite(data && data.breakStartedAt, stateAt) : null;
     const hasBreakSegments = Boolean(data && Array.isArray(data.breakSegments));
+    const isContinuousState = Boolean(data && data.countMode === COUNT_MODE);
+    const rawUpdatedAt = finite(data && data.updatedAt, now);
+    const resumeAt = isContinuousState && rawUpdatedAt > 0 ? rawUpdatedAt : now;
     return {
+      countMode: COUNT_MODE,
       on: !sessionEndedAt && Boolean(data && data.on),
       remainingMs: clamp(remainingMs, 0, MAX_REMAIN_INPUT_MINUTES * 60000),
       baseRemain: remainingMs / 60000,
       baseAt: now,
-      lastTickAt: now,
+      lastTickAt: resumeAt,
       moving: false,
       activeMs: Math.max(0, finite(data && data.activeMs, 0)),
       sessionStartAt,
@@ -122,10 +97,10 @@
       breakMs: Math.max(0, finite(data && data.breakMs, 0)),
       breakSegments: normalizeBreakSegments(data && data.breakSegments, breakOn, breakStartedAt, stateAt),
       legacyBreakMs: hasBreakSegments ? Math.max(0, finite(data && data.legacyBreakMs, 0)) : Math.max(0, finite(data && data.breakMs, 0)),
-      backgroundGap: data && data.on && !breakOn && !sessionEndedAt ? normalizeBackgroundGap(data.backgroundGap, now) : null,
-      lastBackfillMs: Math.max(0, finite(data && data.lastBackfillMs, 0)),
-      lastBackfillAt: data && data.lastBackfillAt ? finite(data.lastBackfillAt, null) : null,
-      updatedAt: now
+      backgroundGap: null,
+      lastBackfillMs: 0,
+      lastBackfillAt: null,
+      updatedAt: resumeAt
     };
   }
 
@@ -143,8 +118,29 @@
     }
   }
 
+  function adoptStoredClock(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+    const externalAt = finite(data.updatedAt, NaN);
+    const localAt = finite(clockState && clockState.updatedAt, 0);
+    if (!Number.isFinite(externalAt) || externalAt <= 0 || externalAt < localAt) return false;
+    clockState = normalizeState(data);
+    clockState.backgroundGap = null;
+    lastSavedAt = nowMs();
+    return true;
+  }
+
+  function reconcileStoredClock() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(ENHANCED_CLOCK_KEY) || "null");
+      return adoptStoredClock(stored);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function serializableState() {
     return {
+      countMode: COUNT_MODE,
       on: clockState.on,
       remainingMs: clockState.remainingMs,
       activeMs: clockState.activeMs,
@@ -158,15 +154,10 @@
         endAt: segment.endAt === null ? null : segment.endAt
       })) : [],
       legacyBreakMs: Math.max(0, finite(clockState.legacyBreakMs, 0)),
-      backgroundGap: clockState.backgroundGap ? {
-        hiddenAt: clockState.backgroundGap.hiddenAt,
-        movingBefore: Boolean(clockState.backgroundGap.movingBefore),
-        activeMsAtHidden: clockState.backgroundGap.activeMsAtHidden,
-        resumeAt: clockState.backgroundGap.resumeAt
-      } : null,
-      lastBackfillMs: Math.max(0, finite(clockState.lastBackfillMs, 0)),
-      lastBackfillAt: clockState.lastBackfillAt || null,
-      updatedAt: nowMs()
+      backgroundGap: null,
+      lastBackfillMs: 0,
+      lastBackfillAt: null,
+      updatedAt: Math.max(0, finite(clockState.updatedAt, nowMs()))
     };
   }
 
@@ -174,8 +165,11 @@
     const now = nowMs();
     if (!force && now - lastSavedAt < SAVE_INTERVAL_MS) return;
     lastSavedAt = now;
+    const anchorAt = Math.max(now, finite(clockState.lastTickAt, now));
+    clockState.countMode = COUNT_MODE;
     clockState.baseRemain = clockState.remainingMs / 60000;
-    clockState.baseAt = now;
+    clockState.baseAt = anchorAt;
+    clockState.updatedAt = anchorAt;
     localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(serializableState()));
     localStorage.setItem(CLOCK_KEY, JSON.stringify({
       on: clockState.on,
@@ -192,219 +186,36 @@
     const effectiveAt = Math.max(previous, requestedAt);
     const delta = effectiveAt - previous;
     clockState.lastTickAt = effectiveAt;
-    const movingForDelta = clockState.on && !clockState.breakOn && previous < movementEvidenceUntil;
-    if (movingForDelta && delta > 0) {
-      const activeDelta = Math.min(delta, Math.max(0, movementEvidenceUntil - previous));
-      const consumed = Math.min(activeDelta, Math.max(0, clockState.remainingMs));
+    const counting = clockState.on && !clockState.breakOn && !clockState.sessionEndedAt;
+    if (counting && delta > 0) {
+      const consumed = Math.min(delta, Math.max(0, clockState.remainingMs));
       clockState.remainingMs -= consumed;
       clockState.activeMs += consumed;
     }
-    clockState.moving = clockState.on && !clockState.breakOn && effectiveAt < movementEvidenceUntil;
+    clockState.moving = false;
     clockState.baseRemain = clockState.remainingMs / 60000;
     clockState.baseAt = effectiveAt;
     if (clockState.remainingMs <= 0 && clockState.on) {
       clockState.on = false;
       clockState.moving = false;
-      stopLocationWatch();
       persistEnhancedClock(true);
     } else {
       persistEnhancedClock(false);
     }
   }
 
-  function distanceMeters(a, b) {
-    const rad = Math.PI / 180;
-    const lat1 = a.latitude * rad;
-    const lat2 = b.latitude * rad;
-    const dLat = (b.latitude - a.latitude) * rad;
-    const dLon = (b.longitude - a.longitude) * rad;
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-    return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-  }
-
-  function applyBackgroundBackfill(at = nowMs()) {
-    const gap = clockState.backgroundGap;
-    if (!gap) return 0;
-    clockState.backgroundGap = null;
-    if (!gap.movingBefore || !clockState.on || clockState.breakOn) return 0;
-    const gapEnd = Math.max(gap.hiddenAt, finite(gap.resumeAt, at));
-    const expectedActive = Math.max(0, gapEnd - gap.hiddenAt);
-    const alreadyCounted = Math.max(0, clockState.activeMs - gap.activeMsAtHidden);
-    const missing = Math.max(0, expectedActive - alreadyCounted);
-    const consumed = Math.min(missing, Math.max(0, clockState.remainingMs));
-    if (consumed <= 0) return 0;
-    clockState.remainingMs -= consumed;
-    clockState.activeMs += consumed;
-    clockState.lastBackfillMs = consumed;
-    clockState.lastBackfillAt = at;
-    if (clockState.remainingMs <= 0) {
-      clockState.on = false;
-      clockState.moving = false;
-      stopLocationWatch();
-    }
-    persistEnhancedClock(true);
-    return consumed;
-  }
-
   function beginBackgroundGap() {
     const at = nowMs();
     tickClock(at);
-    if (clockState.backgroundGap && clockState.backgroundGap.resumeAt === null) {
-      stopLocationWatch();
-      persistEnhancedClock(true);
-      return;
-    }
-    if (clockState.on && !clockState.breakOn) {
-      clockState.backgroundGap = {
-        hiddenAt: at,
-        movingBefore: Boolean(clockState.moving || at < movementEvidenceUntil),
-        activeMsAtHidden: clockState.activeMs,
-        resumeAt: null
-      };
-    } else {
-      clockState.backgroundGap = null;
-    }
-    stopLocationWatch();
+    clockState.backgroundGap = null;
     persistEnhancedClock(true);
   }
 
   function resumeBackgroundGap() {
     const at = nowMs();
     tickClock(at);
-    if (clockState.backgroundGap && clockState.backgroundGap.resumeAt === null) clockState.backgroundGap.resumeAt = at;
-    if (clockState.on && !clockState.breakOn) startLocationWatch();
-    else clockState.backgroundGap = null;
-    persistEnhancedClock(true);
-  }
-
-  function handlePosition(position, generation = geoWatchGeneration) {
-    if (generation !== geoWatchGeneration || !clockState.on || clockState.breakOn) return;
-    const receivedAt = nowMs();
-    const at = finite(position && position.timestamp, receivedAt);
-    const coords = position && position.coords;
-    if (!coords || !Number.isFinite(Number(coords.latitude)) || !Number.isFinite(Number(coords.longitude))) return;
-    if (at > receivedAt + FUTURE_POSITION_TOLERANCE_MS || receivedAt - at > MAX_POSITION_AGE_MS || (lastPosition && at <= lastPosition.at)) {
-      locationState = "stale";
-      locationMessage = "古い位置情報を除外しました";
-      renderEnhancedClock();
-      return;
-    }
-
-    tickClock(receivedAt);
-    if (!clockState.on || clockState.breakOn) {
-      renderEnhancedClock();
-      return;
-    }
-    const accuracy = finite(coords.accuracy, 9999);
-    if (accuracy > MAX_LOCATION_ACCURACY_M) {
-      locationState = "weak";
-      locationMessage = `GPS精度待ち（±${Math.round(accuracy)}m）`;
-      renderEnhancedClock();
-      return;
-    }
-
-    let inferredSpeed = 0;
-    let distance = 0;
-    let effectiveDistance = 0;
-    let requiredDistance = MIN_MOVE_DISTANCE_M;
-    if (lastPosition) {
-      const elapsedSeconds = Math.max((at - lastPosition.at) / 1000, 0.1);
-      distance = distanceMeters(lastPosition.coords, coords);
-      const uncertainty = Math.min(25, Math.max(accuracy, lastPosition.accuracy) * 0.65);
-      effectiveDistance = Math.max(0, distance - uncertainty);
-      requiredDistance = Math.max(MIN_MOVE_DISTANCE_M, Math.min(25, Math.max(accuracy, lastPosition.accuracy)));
-      inferredSpeed = effectiveDistance / elapsedSeconds;
-    }
-    const gpsSpeed = Number.isFinite(coords.speed) && coords.speed >= 0 ? coords.speed : null;
-    const distanceSupportsMove = Boolean(lastPosition && distance >= requiredDistance && inferredSpeed >= MOVING_SPEED_MPS);
-    const speedSupportsMove = gpsSpeed !== null && gpsSpeed >= GPS_SPEED_ONLY_MPS;
-    const reliableMove = speedSupportsMove || distanceSupportsMove;
-    const reliableStop = gpsSpeed !== null
-      ? gpsSpeed <= STOP_SPEED_MPS
-      : Boolean(lastPosition && effectiveDistance < 1 && inferredSpeed <= STOP_SPEED_MPS);
-
-    let backfilled = 0;
-    if (reliableMove) {
-      stopEvidenceCount = 0;
-      backfilled = applyBackgroundBackfill(receivedAt);
-      if (!clockState.on || clockState.breakOn) {
-        renderEnhancedClock();
-        return;
-      }
-      if (clockState.on && !clockState.breakOn) movementEvidenceUntil = receivedAt + MOVEMENT_HOLD_MS;
-    } else if (reliableStop) {
-      stopEvidenceCount += 1;
-      if (stopEvidenceCount >= STOP_CONFIRM_SAMPLES) {
-        movementEvidenceUntil = 0;
-        clockState.backgroundGap = null;
-      }
-    } else {
-      stopEvidenceCount = 0;
-      if (clockState.backgroundGap && !clockState.backgroundGap.movingBefore) clockState.backgroundGap = null;
-    }
-
-    lastPosition = {
-      coords: { latitude: Number(coords.latitude), longitude: Number(coords.longitude) },
-      accuracy,
-      at
-    };
-    clockState.moving = clockState.on && !clockState.breakOn && receivedAt < movementEvidenceUntil;
-    locationState = clockState.moving ? "moving" : "stationary";
-    locationMessage = gpsSpeed === null ? "位置変化から判定" : `速度 ${Math.max(0, gpsSpeed * 3.6).toFixed(1)}km/h`;
-    if (!backfilled) persistEnhancedClock(false);
-    renderEnhancedClock();
-  }
-
-  function handleLocationError(error, generation = geoWatchGeneration) {
-    if (generation !== geoWatchGeneration || !clockState.on || clockState.breakOn) return;
-    locationState = error && error.code === 1 ? "denied" : "error";
-    locationMessage = error && error.code === 1 ? "位置情報が許可されていません" : "位置情報を取得できません";
-    movementEvidenceUntil = 0;
-    stopEvidenceCount = 0;
     clockState.backgroundGap = null;
-    clockState.moving = false;
     persistEnhancedClock(true);
-    renderEnhancedClock();
-  }
-
-  function startLocationWatch() {
-    if (!clockState.on || clockState.breakOn || geoWatchId !== null) return;
-    if (!("geolocation" in navigator)) {
-      locationState = "unsupported";
-      locationMessage = "この端末では位置情報を利用できません";
-      clockState.backgroundGap = null;
-      persistEnhancedClock(true);
-      renderEnhancedClock();
-      return;
-    }
-    locationState = "requesting";
-    locationMessage = "位置情報を確認中";
-    const generation = ++geoWatchGeneration;
-    try {
-      geoWatchId = navigator.geolocation.watchPosition(
-        position => handlePosition(position, generation),
-        error => handleLocationError(error, generation),
-        { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
-      );
-    } catch (error) {
-      geoWatchId = null;
-      handleLocationError(error, generation);
-    }
-  }
-
-  function stopLocationWatch() {
-    const watchId = geoWatchId;
-    geoWatchId = null;
-    geoWatchGeneration += 1;
-    if (watchId !== null && "geolocation" in navigator) navigator.geolocation.clearWatch(watchId);
-    lastPosition = null;
-    movementEvidenceUntil = 0;
-    stopEvidenceCount = 0;
-    clockState.moving = false;
-    if (!clockState.on) {
-      locationState = "idle";
-      locationMessage = "";
-    }
   }
 
   function remainingText(ms) {
@@ -419,10 +230,6 @@
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     return `${hours}時間${String(minutes).padStart(2, "0")}分`;
-  }
-
-  function durationNoticeText(ms) {
-    return ms > 0 && ms < 60000 ? "1分未満" : durationText(ms);
   }
 
   function sessionMetricAt(at = nowMs()) {
@@ -474,10 +281,16 @@
     if (clockState.sessionEndedAt) return { text: "稼働終了", sub: "履歴に保存済み", mode: "ended" };
     if (!clockState.on) return { text: "停止中", sub: "開始する", mode: "off" };
     if (clockState.breakOn) return { text: "休憩中", sub: "休憩中", mode: "break" };
-    if (clockState.moving) return { text: "移動中・カウント中", sub: "移動中", mode: "moving" };
-    if (["requesting", "weak"].includes(locationState)) return { text: "位置確認中", sub: "GPS確認中", mode: "waiting" };
-    if (["denied", "error", "unsupported"].includes(locationState)) return { text: "位置情報待ち", sub: "位置情報が必要", mode: "error" };
-    return { text: "停車中・自動停止", sub: "停車で停止", mode: "stationary" };
+    return { text: "カウント中", sub: "止める", mode: "counting" };
+  }
+
+  function exhaustionText(at = nowMs()) {
+    if (clockState.sessionEndedAt) return "終了済み";
+    if (clockState.remainingMs <= 0) return "使い切り 到達";
+    const now = new Date(at);
+    const end = new Date(at + clockState.remainingMs);
+    const label = end.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `使い切り ${end.toDateString() !== now.toDateString() ? "翌" : ""}${label}`;
   }
 
   function renderEnhancedClock() {
@@ -488,22 +301,26 @@
     const dot = $("countDot");
     const panel = $("countPanel");
     const ended = Boolean(clockState.sessionEndedAt);
+    const counting = clockState.on && !clockState.breakOn && !ended;
     $("countRemain").textContent = `残り ${remainingText(clockState.remainingMs)}`;
     $("countStatus").textContent = status.text;
-    $("countEndClock").textContent = ended ? "終了済み" : clockState.on ? "移動時間に連動" : "停止中";
-    $("countEndClock").classList.toggle("run", clockState.on && clockState.moving);
+    $("countEndClock").textContent = exhaustionText();
+    $("countEndClock").classList.toggle("run", counting);
     button.classList.toggle("off", clockState.on);
     button.firstChild.nodeValue = ended ? "稼働終了済み" : clockState.on ? "時間OFF" : "時間ON";
     sub.textContent = ended ? "履歴に保存済み" : clockState.on ? status.sub : "開始する";
     button.disabled = ended;
     button.setAttribute("aria-disabled", String(ended));
-    dot.classList.toggle("stop", !clockState.on || !clockState.moving);
-    panel.classList.toggle("run", clockState.on && clockState.moving);
+    dot.classList.toggle("stop", !counting);
+    panel.classList.toggle("run", counting);
     const detail = $("movementDetail");
-    const backfillNotice = clockState.lastBackfillAt && nowMs() - clockState.lastBackfillAt < BACKFILL_NOTICE_MS
-      ? `バックグラウンド中の移動 ${durationNoticeText(clockState.lastBackfillMs)}を補完しました`
-      : "";
-    if (detail) detail.textContent = backfillNotice || locationMessage || (clockState.on ? "移動を検知すると自動でカウントします" : "OFF中は移動しても反応しません");
+    if (detail) detail.textContent = ended
+      ? "稼働終了・履歴に保存済み"
+      : clockState.breakOn
+        ? "休憩中は残り時間を止めています"
+        : clockState.on
+          ? "移動・停車にかかわらず連続でカウントします"
+          : "時間OFF中は残り時間を止めています";
     renderSessionPanel();
   }
 
@@ -514,11 +331,8 @@
     clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), nowMs());
     if (clockState.on) {
       if (!clockState.sessionStartAt) clockState.sessionStartAt = nowMs();
-      if (!document.hidden) startLocationWatch();
-    } else {
-      clockState.backgroundGap = null;
-      stopLocationWatch();
     }
+    clockState.backgroundGap = null;
     persistEnhancedClock(true);
     calc();
     renderEnhancedClock();
@@ -553,13 +367,11 @@
       clockState.breakMs += Math.max(0, now - startedAt);
       clockState.breakStartedAt = null;
       clockState.breakOn = false;
-      if (clockState.on) startLocationWatch();
     } else {
       clockState.breakOn = true;
       clockState.breakStartedAt = now;
       clockState.breakSegments.push({ startAt: now, endAt: null });
       clockState.backgroundGap = null;
-      stopLocationWatch();
     }
     clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
     persistEnhancedClock(true);
@@ -587,7 +399,7 @@
     const target = Math.max(1, finite(n("target"), 1));
     const done = Math.max(0, finite(n("done"), 0));
     const remainingMs = Math.max(0, finite(clockState.remainingMs, 0));
-    const usedMs = Math.max(0, WORK_LIMIT_MINUTES * 60000 - remainingMs);
+    const usedMs = Math.max(0, WORK_LIMIT_MS - remainingMs);
     const actualPaceMinutes = done > 0 && usedMs > 0 ? usedMs / 60000 / done : null;
     return {
       id: `${at}-${Math.random().toString(36).slice(2, 7)}`,
@@ -656,7 +468,6 @@
     clockState.sessionEndedAt = at;
     clockState.lastTickAt = at;
     clockState.baseAt = at;
-    stopLocationWatch();
     persistEnhancedClock(true);
     save();
     calc();
@@ -736,7 +547,7 @@
     tickClock(at);
     openWorkConfirm({
       title: "稼働を終了しますか？",
-      description: "現在の件数と稼働指標を履歴に保存し、時間計測と位置情報の確認を停止します。目標未達でも記録されます。",
+      description: "現在の件数と稼働指標を履歴に保存し、時間計測を停止します。目標未達でも記録されます。",
       rows: [
         { label: "完了件数", value: `${Math.max(0, n("done"))} / ${Math.max(1, n("target"))}件` },
         { label: "時計が減った時間", value: durationText(clockState.activeMs) },
@@ -921,9 +732,9 @@
 
     const desc = $("countPanel").querySelector(".desc");
     const hint = $("countPanel").querySelector(".hint");
-    if (desc) desc.textContent = "ON中は移動中だけ残り時間を減らします。内部では秒単位で計算し、画面には分単位で表示します。";
-    if (hint) hint.textContent = "OFF中は移動しても反応しません。位置情報は移動判定だけに使い、座標は保存しません。";
-    $("helpText").textContent = "時間ONで位置情報を使った移動判定を開始します。残り時間は内部では秒単位で計算し、画面には分単位で表示します。停車中・時間OFF中・休憩中は減りません。GPSの性質上、屋内・高層建物周辺・バックグラウンドでは判定が遅れる場合があります。";
+    if (desc) desc.textContent = "時間ON中は移動・停車にかかわらず連続で減少します。内部では秒単位で計算し、画面には分単位で表示します。";
+    if (hint) hint.textContent = "Uber側の残り時間が止まっている時は時間OFFにしてください。−／＋で1分ずつ補正できます。";
+    $("helpText").textContent = "時間ON中は残り稼働時間を連続で減らし、時間OFF中と休憩中は止めます。案件の有無や移動状態は自動判定しません。Uber側の時計に合わせてON／OFFと−1分・＋1分を使ってください。";
   }
 
   loadEnhancedClock();
@@ -940,13 +751,12 @@
   stopClock = function(remaining) {
     setExactRemaining(remaining);
     clockState.on = false;
-    stopLocationWatch();
     persistEnhancedClock(true);
     save();
   };
   toggleClock = enhancedToggleClock;
   renderClock = function() { renderEnhancedClock(); };
-  countEndLabel = function() { return clockState.sessionEndedAt ? "終了済み" : clockState.on ? "移動時間に連動" : "停止中"; };
+  countEndLabel = function() { return exhaustionText(); };
 
   injectUi();
   $("countToggle").onclick = enhancedToggleClock;
@@ -966,13 +776,13 @@
     if (!confirm("完了件数・残り時間・終了上限・今日の稼働計測をリセットしますか？")) return;
     const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (clockState.activeMs > 0 || n("done") > 0));
     if (hadSession && confirm("リセット前に今日の稼働記録を保存しますか？")) recordSession(false);
-    stopLocationWatch();
     $("done").value = "0";
     $("remainH").value = "12";
     $("remainM").value = "0";
     $("endLimit").value = "";
     const now = nowMs();
     clockState = {
+      countMode: COUNT_MODE,
       on: false,
       remainingMs: 720 * 60000,
       baseRemain: 720,
@@ -998,10 +808,7 @@
     renderEnhancedClock();
   };
 
-  if (clockState.backgroundGap && !document.hidden) {
-    clockState.backgroundGap.resumeAt = clockState.backgroundGap.resumeAt || nowMs();
-  }
-  if (clockState.on && !clockState.breakOn && !document.hidden) startLocationWatch();
+  clockState.backgroundGap = null;
   renderHistory();
   calc();
   renderEnhancedClock();
@@ -1014,11 +821,29 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) beginBackgroundGap();
-    else resumeBackgroundGap();
+    else {
+      reconcileStoredClock();
+      resumeBackgroundGap();
+    }
+    renderEnhancedClock();
+  });
+  window.addEventListener("storage", event => {
+    if (event.key !== ENHANCED_CLOCK_KEY || !event.newValue) return;
+    try {
+      if (localStorage.getItem(ENHANCED_CLOCK_KEY) !== event.newValue) return;
+      const external = JSON.parse(event.newValue);
+      if (!adoptStoredClock(external)) return;
+      calc();
+      renderEnhancedClock();
+    } catch (_) {}
+  });
+  window.addEventListener("pageshow", () => {
+    reconcileStoredClock();
+    resumeBackgroundGap();
+    calc();
     renderEnhancedClock();
   });
   window.addEventListener("pagehide", () => {
-    if (!document.hidden) beginBackgroundGap();
-    else persistEnhancedClock(true);
+    beginBackgroundGap();
   });
 })();

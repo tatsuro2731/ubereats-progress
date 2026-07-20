@@ -125,12 +125,22 @@ test("remaining and work-session displays stop at minutes while calculations kee
   assert.match(index, /countRemain"\)\.textContent\s*=\s*`残り \$\{remainingText\(remaining\)\}`/);
   assert.match(index, /todaySummaryWork"\)\.textContent\s*=\s*elapsedText\(used\)/);
   assert.match(index, /active\.label}まで\$\{remainingText\(effectiveRemain\)\}/);
-  assert.match(compact, /Math\.ceil\(enhanced\.remainingMs\s*\/\s*60000\)/);
+  assert.match(compact, /Math\.ceil\(effective\.remainingMs\s*\/\s*60000\)/);
   assert.match(enhancements, /id="workActiveTime">0時間00分<\/strong>/);
   assert.match(enhancements, /id="workElapsedTime">0時間00分<\/strong>/);
   assert.doesNotMatch(enhancements, /id="(?:workActiveTime|workElapsedTime)"[^>]*>[^<]*秒/);
   assert.match(enhancements, /remainingMs/);
   assert.match(enhancements, /activeMs/);
+});
+
+test("the enhanced timer is continuous while ON and never requests location", () => {
+  const enhancements = read("app-enhancements.js");
+  assert.match(enhancements, /const\s+COUNT_MODE\s*=\s*["']continuous-v1["']/);
+  assert.match(enhancements, /clockState\.on\s*&&\s*!clockState\.breakOn\s*&&\s*!clockState\.sessionEndedAt/);
+  assert.match(enhancements, /clockState\.remainingMs\s*-=?\s*consumed/);
+  assert.doesNotMatch(enhancements, /navigator\.geolocation|watchPosition|clearWatch/);
+  assert.doesNotMatch(enhancements, /GPS|位置情報/);
+  assert.match(enhancements, /案件の有無や移動状態は自動判定しません/);
 });
 
 test("the settings header is a dedicated swipe-to-close surface without taking over form scrolling", () => {

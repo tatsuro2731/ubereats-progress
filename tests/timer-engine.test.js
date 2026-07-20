@@ -8,6 +8,7 @@ const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const ENHANCED_KEY = "ubereatsProgressMovementClockV1";
+const HISTORY_KEY = "ubereatsProgressWorkHistoryV1";
 const DATA_KEY = "ubereatsProgressFixed12Data";
 
 class MemoryStorage {
@@ -43,24 +44,21 @@ function instrumentedSource() {
   const exports = `
   globalThis.__timerTestApi = {
     tickClock,
-    handlePosition,
     setExactRemaining,
+    enhancedToggleClock,
     toggleBreak,
+    finishSession,
     sessionBreakMs,
     sessionElapsedMs,
     persistEnhancedClock,
     beginBackgroundGap,
     resumeBackgroundGap,
-    applyBackgroundBackfill,
     renderEnhancedClock,
     remainingText,
     durationText,
+    exhaustionText,
     getState: () => clockState,
-    setState: value => { clockState = value; },
-    getEvidenceUntil: () => movementEvidenceUntil,
-    setEvidenceUntil: value => { movementEvidenceUntil = value; },
-    getLastPosition: () => lastPosition,
-    setLastPosition: value => { lastPosition = value; }
+    setState: value => { clockState = value; }
   };
 `;
   return source.slice(0, closeAt) + exports + source.slice(closeAt);
@@ -69,6 +67,7 @@ function instrumentedSource() {
 function timerHarness(options = {}) {
   let now = options.now || 1_000_000;
   const initialEnhanced = options.enhanced || {
+    countMode: "continuous-v1",
     on: false,
     remainingMs: 720 * 60000,
     activeMs: 0,
@@ -105,14 +104,18 @@ function timerHarness(options = {}) {
       documentListeners.set(type, list);
     }
   };
-  let nextWatchId = 1;
+  let geolocationRequests = 0;
   const confirmMessages = [];
   const navigator = {
     geolocation: {
-      watchPosition() { return nextWatchId++; },
+      watchPosition() {
+        geolocationRequests += 1;
+        throw new Error("continuous clock must not request geolocation");
+      },
       clearWatch() {}
     }
   };
+  const windowListeners = new Map();
   class FakeDate extends Date {
     constructor(...args) { super(...(args.length ? args : [now])); }
     static now() { return now; }
@@ -126,7 +129,13 @@ function timerHarness(options = {}) {
     localStorage: storage,
     document,
     navigator,
-    window: { addEventListener() {} },
+    window: {
+      addEventListener(type, listener) {
+        const list = windowListeners.get(type) || [];
+        list.push(listener);
+        windowListeners.set(type, list);
+      }
+    },
     alert() {},
     confirm(message) { confirmMessages.push(String(message)); return true; },
     setInterval: () => 1,
@@ -173,17 +182,22 @@ function timerHarness(options = {}) {
     context,
     storage,
     confirmMessages,
+    geolocationRequests: () => geolocationRequests,
     element,
     now: () => now,
     setNow(value) { now = value; },
     dispatchDocument(type) {
       for (const listener of documentListeners.get(type) || []) listener({ type });
+    },
+    dispatchWindow(type, extra = {}) {
+      for (const listener of windowListeners.get(type) || []) listener({ type, ...extra });
     }
   };
 }
 
 function state(overrides = {}) {
   return {
+    countMode: "continuous-v1",
     on: true,
     remainingMs: 600000,
     baseRemain: 10,
@@ -199,10 +213,6 @@ function state(overrides = {}) {
     updatedAt: 100000,
     ...overrides
   };
-}
-
-function position(at, latitude, longitude, speed = null, accuracy = 5) {
-  return { timestamp: at, coords: { latitude, longitude, speed, accuracy } };
 }
 
 test("±1 minute keeps the existing seconds exactly", () => {
@@ -254,7 +264,7 @@ test("work-session durations are shown only to completed minutes without roundin
   for (const id of ["workActiveTime", "workElapsedTime", "workBreakTime"]) {
     assert.doesNotMatch(app.element(id).textContent, /秒/, `${id} must not expose seconds`);
   }
-  assert.match(app.element("movementDetail").textContent, /1分未満/);
+  assert.match(app.element("movementDetail").textContent, /時間OFF中/);
   assert.doesNotMatch(app.element("movementDetail").textContent, /秒/);
   assert.equal(app.api.durationText(59999), "0時間00分");
   assert.equal(app.api.getState().remainingMs, 20 * 60000 + 12345);
@@ -274,7 +284,6 @@ test("normal persistence mirrors enhanced remaining time into regular saved cont
 test("active deltas are capped and timestamps never move backward", () => {
   const app = timerHarness({ now: 100000 });
   app.api.setState(state({ remainingMs: 2500 }));
-  app.api.setEvidenceUntil(104000);
   app.api.tickClock(400000);
   const afterGap = { ...app.api.getState() };
   assert.equal(afterGap.activeMs, 2500, "active time cannot exceed the time that was actually left");
@@ -283,55 +292,57 @@ test("active deltas are capped and timestamps never move backward", () => {
 
   app.api.tickClock(90000);
   const afterOldTime = app.api.getState();
-  assert.equal(afterOldTime.lastTickAt, 400000, "an old GPS timestamp must not rewind the clock cursor");
+  assert.equal(afterOldTime.lastTickAt, 400000, "an old timestamp must not rewind the clock cursor");
   assert.equal(afterOldTime.activeMs, afterGap.activeMs);
   assert.equal(afterOldTime.remainingMs, 0);
 });
 
-test("small GPS drift cannot start the movement clock", () => {
-  for (const reportedSpeed of [null, 1.0]) {
-    const app = timerHarness({ now: 100000 });
-    app.api.setState(state({ lastTickAt: 100000 }));
-    app.api.handlePosition(position(100000, 34.700000, 135.200000, 0));
-    app.setNow(101000);
-    app.api.handlePosition(position(101000, 34.700009, 135.200000, reportedSpeed));
+test("time ON continuously consumes elapsed seconds without requesting geolocation", () => {
+  const app = timerHarness({ now: 100000 });
+  app.api.setState(state({ lastTickAt: 100000 }));
 
-    assert.equal(app.api.getEvidenceUntil(), 0);
-    assert.equal(app.api.getState().moving, false);
-    assert.equal(app.api.getState().activeMs, 0);
-  }
+  app.api.tickClock(159999);
+  assert.equal(app.api.getState().remainingMs, 540001);
+  assert.equal(app.api.getState().activeMs, 59999);
+  app.api.tickClock(160000);
+  assert.equal(app.api.getState().remainingMs, 540000);
+  assert.equal(app.api.getState().activeMs, 60000);
+  assert.equal(app.geolocationRequests(), 0);
 });
 
-test("stale and out-of-order GPS fixes cannot rewind or consume the clock", () => {
-  const app = timerHarness({ now: 200000 });
-  app.api.setState(state({ lastTickAt: 200000 }));
-  app.api.handlePosition(position(180000, 34.7, 135.2, 10));
-  assert.equal(app.api.getLastPosition(), null);
-  assert.equal(app.api.getState().lastTickAt, 200000);
-  assert.equal(app.api.getState().remainingMs, 600000);
+test("time OFF and breaks pause the continuous countdown", () => {
+  const app = timerHarness({ now: 100000 });
 
-  app.api.handlePosition(position(200000, 34.7, 135.2, 0));
-  assert.ok(app.api.getLastPosition());
-  app.api.handlePosition(position(199999, 34.7002, 135.2, 10));
-  assert.equal(app.api.getLastPosition().at, 200000);
-  assert.equal(app.api.getState().lastTickAt, 200000);
+  app.api.setState(state({ on: false, lastTickAt: 100000 }));
+  app.api.tickClock(160000);
   assert.equal(app.api.getState().remainingMs, 600000);
+  assert.equal(app.api.getState().activeMs, 0);
+
+  app.api.setState(state({ breakOn: true, breakStartedAt: 100000, lastTickAt: 100000 }));
+  app.api.tickClock(220000);
+  assert.equal(app.api.getState().remainingMs, 600000);
+  assert.equal(app.api.getState().activeMs, 0);
+  assert.equal(app.geolocationRequests(), 0);
 });
 
-test("OFF and break states reject late movement callbacks", () => {
-  for (const mode of [
-    { on: false, breakOn: false },
-    { on: true, breakOn: true, breakStartedAt: 90000 }
-  ]) {
-    const app = timerHarness({ now: 100000 });
-    app.api.setState(state(mode));
-    app.api.handlePosition(position(100000, 34.7, 135.2, 0));
-    app.setNow(101000);
-    app.api.handlePosition(position(101000, 34.7002, 135.2, 10));
-    assert.equal(app.api.getEvidenceUntil(), 0);
-    assert.equal(app.api.getState().activeMs, 0);
-    assert.equal(app.api.getState().remainingMs, 600000);
-  }
+test("the first time ON starts one session and later toggles keep its start", () => {
+  const app = timerHarness({ now: 100000 });
+  app.api.setState(state({ on: false, sessionStartAt: null, lastTickAt: 100000 }));
+
+  app.setNow(200000);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().on, true);
+  assert.equal(app.api.getState().sessionStartAt, 200000);
+
+  app.setNow(260000);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().activeMs, 60000);
+
+  app.setNow(300000);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().sessionStartAt, 200000);
+  assert.equal(app.geolocationRequests(), 0);
 });
 
 test("a break cannot start before the work session has started", () => {
@@ -367,51 +378,211 @@ test("session elapsed time subtracts only breaks overlapping the edited start ti
   assert.equal(app.api.sessionElapsedMs(10000), 2000);
 });
 
-test("two stationary samples confirm a stop before the movement hold expires", () => {
+test("background time is consumed exactly once while the clock is ON", () => {
   const app = timerHarness({ now: 100000 });
   app.api.setState(state({ lastTickAt: 100000 }));
-  app.api.handlePosition(position(100000, 34.700000, 135.200000, 0));
-  app.setNow(101000);
-  app.api.handlePosition(position(101000, 34.700100, 135.200000, 5));
-  const evidenceAfterMove = app.api.getEvidenceUntil();
-  assert.ok(evidenceAfterMove > 101000);
-
-  app.setNow(102000);
-  app.api.handlePosition(position(102000, 34.700100, 135.200000, 0));
-  assert.equal(app.api.getEvidenceUntil(), evidenceAfterMove, "one sample is not enough to confirm a stop");
-
-  app.setNow(103000);
-  app.api.handlePosition(position(103000, 34.700100, 135.200000, 0));
-  assert.equal(app.api.getEvidenceUntil(), 0);
-  assert.equal(app.api.getState().moving, false);
-});
-
-test("background recovery backfills once only after movement is confirmed again", () => {
-  const app = timerHarness({ now: 100000 });
-  app.api.setState(state());
-  app.api.setEvidenceUntil(104000);
   app.context.document.hidden = true;
   app.dispatchDocument("visibilitychange");
-  assert.equal(app.api.getState().backgroundGap.movingBefore, true);
+
+  app.setNow(120000);
+  app.dispatchWindow("pagehide");
+  assert.equal(app.api.getState().activeMs, 20000);
+  assert.equal(app.api.getState().remainingMs, 580000);
 
   app.setNow(160000);
   app.context.document.hidden = false;
   app.dispatchDocument("visibilitychange");
-  assert.equal(app.api.getState().activeMs, 0, "resuming alone is not enough evidence to backfill");
+  assert.equal(app.api.getState().activeMs, 60000);
+  assert.equal(app.api.getState().remainingMs, 540000);
 
-  app.setNow(161000);
-  app.api.handlePosition(position(161000, 34.7, 135.2, 5));
-  const once = { ...app.api.getState() };
-  assert.equal(once.activeMs, 60000);
-  assert.equal(once.remainingMs, 540000);
-  assert.equal(once.lastBackfillMs, 60000);
-  assert.equal(once.backgroundGap, null);
+  app.dispatchDocument("visibilitychange");
+  assert.equal(app.api.getState().activeMs, 60000, "a repeated foreground event must not consume the gap twice");
+  assert.equal(app.api.getState().remainingMs, 540000);
+  assert.equal(app.geolocationRequests(), 0);
+});
 
-  app.setNow(162000);
-  app.api.handlePosition(position(162000, 34.7001, 135.2, 5));
-  assert.equal(app.api.getState().lastBackfillMs, 60000);
-  assert.equal(app.api.getState().activeMs, once.activeMs + 1000, "the second fix may count live movement but not the gap again");
-  assert.equal(app.api.getState().remainingMs, once.remainingMs - 1000);
+test("main view adopts an exact compact-clock edit from the storage event", () => {
+  const app = timerHarness({ now: 100000 });
+  const external = state({
+    on: false,
+    remainingMs: 321234,
+    activeMs: 98765,
+    sessionStartAt: 5000,
+    lastTickAt: undefined,
+    updatedAt: 160000
+  });
+  const externalJson = JSON.stringify(external);
+
+  app.setNow(160000);
+  app.storage.setItem(ENHANCED_KEY, externalJson);
+  app.dispatchWindow("storage", { key: ENHANCED_KEY, newValue: externalJson });
+
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().remainingMs, 321234);
+  assert.equal(app.api.getState().activeMs, 98765);
+  assert.equal(app.api.getState().sessionStartAt, 5000);
+  app.setNow(220000);
+  app.api.tickClock();
+  assert.equal(app.api.getState().remainingMs, 321234, "an imported OFF clock must stay paused");
+});
+
+test("main view ignores an older delayed clock update", () => {
+  const app = timerHarness({ now: 200000 });
+  app.api.setState(state({
+    on: false,
+    remainingMs: 500000,
+    activeMs: 100000,
+    lastTickAt: 200000,
+    updatedAt: 200000
+  }));
+  const stale = state({
+    on: true,
+    remainingMs: 590000,
+    activeMs: 10000,
+    lastTickAt: undefined,
+    updatedAt: 150000
+  });
+  const staleJson = JSON.stringify(stale);
+
+  app.storage.setItem(ENHANCED_KEY, staleJson);
+  app.dispatchWindow("storage", { key: ENHANCED_KEY, newValue: staleJson });
+
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().remainingMs, 500000);
+  assert.equal(app.api.getState().activeMs, 100000);
+});
+
+test("an explicit edit wins over a newer unpersisted display tick", () => {
+  const app = timerHarness({ now: 200000 });
+  app.api.setState(state({
+    on: true,
+    remainingMs: 500000,
+    activeMs: 100000,
+    lastTickAt: 200000,
+    updatedAt: 100000
+  }));
+  const external = state({
+    on: false,
+    remainingMs: 321000,
+    activeMs: 150000,
+    lastTickAt: undefined,
+    updatedAt: 150000
+  });
+  const externalJson = JSON.stringify(external);
+
+  app.storage.setItem(ENHANCED_KEY, externalJson);
+  app.dispatchWindow("storage", { key: ENHANCED_KEY, newValue: externalJson });
+
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().remainingMs, 321000);
+  assert.equal(app.api.getState().activeMs, 150000);
+});
+
+test("pageshow reloads a compact edit before resuming a BFCache-restored clock", () => {
+  const app = timerHarness({ now: 100000 });
+  const external = state({
+    on: true,
+    remainingMs: 300000,
+    activeMs: 40000,
+    sessionStartAt: 5000,
+    lastTickAt: undefined,
+    updatedAt: 150000
+  });
+
+  app.storage.setItem(ENHANCED_KEY, JSON.stringify(external));
+  app.setNow(200000);
+  app.dispatchWindow("pageshow");
+
+  assert.equal(app.api.getState().remainingMs, 250000);
+  assert.equal(app.api.getState().activeMs, 90000);
+  assert.equal(app.api.getState().sessionStartAt, 5000);
+  app.dispatchWindow("pageshow");
+  assert.equal(app.api.getState().remainingMs, 250000, "repeated pageshow at the same instant must not double-count");
+  assert.equal(app.api.getState().activeMs, 90000);
+});
+
+test("old movement state migrates without retroactively consuming its stored gap", () => {
+  const app = timerHarness({
+    now: 200000,
+    enhanced: {
+      on: true,
+      remainingMs: 600000,
+      activeMs: 12000,
+      sessionStartAt: 1000,
+      breakOn: false,
+      backgroundGap: { hiddenAt: 100000, movingBefore: true, activeMsAtHidden: 12000, resumeAt: null },
+      updatedAt: 100000
+    }
+  });
+
+  assert.equal(app.api.getState().remainingMs, 600000);
+  assert.equal(app.api.getState().activeMs, 12000);
+  assert.equal(app.api.getState().backgroundGap, null);
+  assert.equal(app.api.getState().countMode, "continuous-v1");
+  assert.equal(JSON.parse(app.storage.getItem(ENHANCED_KEY)).countMode, "continuous-v1");
+  assert.equal(app.geolocationRequests(), 0);
+});
+
+test("continuous state catches up once after a reload", () => {
+  const app = timerHarness({
+    now: 160000,
+    enhanced: state({ remainingMs: 600000, activeMs: 20000, lastTickAt: undefined, updatedAt: 100000 })
+  });
+
+  assert.equal(app.api.getState().remainingMs, 540000);
+  assert.equal(app.api.getState().activeMs, 80000);
+  app.api.tickClock(160000);
+  assert.equal(app.api.getState().remainingMs, 540000);
+  assert.equal(app.api.getState().activeMs, 80000);
+});
+
+test("a future monotonic anchor does not double-count after the device clock moves backward", () => {
+  const app = timerHarness({
+    now: 100000,
+    enhanced: state({ remainingMs: 600000, activeMs: 20000, lastTickAt: undefined, updatedAt: 200000 })
+  });
+
+  assert.equal(app.api.getState().remainingMs, 600000);
+  assert.equal(JSON.parse(app.storage.getItem(ENHANCED_KEY)).updatedAt, 200000);
+  app.setNow(150000);
+  app.api.tickClock();
+  assert.equal(app.api.getState().remainingMs, 600000);
+
+  app.setNow(250000);
+  app.api.tickClock();
+  assert.equal(app.api.getState().remainingMs, 550000);
+  assert.equal(app.api.getState().activeMs, 70000);
+});
+
+test("the use-up time stays fixed while counting and slides while paused", () => {
+  const app = timerHarness({ now: 100000 });
+  app.api.setState(state({ remainingMs: 600000, lastTickAt: 100000 }));
+  const runningEnd = app.api.exhaustionText(100000);
+  app.api.tickClock(160000);
+  assert.equal(app.api.exhaustionText(160000), runningEnd);
+
+  app.api.getState().on = false;
+  assert.notEqual(app.api.exhaustionText(220000), runningEnd);
+});
+
+test("ending a session records once and freezes the continuous clock", () => {
+  const app = timerHarness({ now: 200000 });
+  app.api.setState(state({ remainingMs: 600000, activeMs: 0, sessionStartAt: 100000, lastTickAt: 100000 }));
+
+  app.api.finishSession();
+  const finished = { ...app.api.getState() };
+  const history = JSON.parse(app.storage.getItem(HISTORY_KEY));
+  assert.equal(history.length, 1);
+  assert.equal(finished.on, false);
+  assert.equal(finished.sessionEndedAt, 200000);
+  assert.equal(finished.activeMs, 100000);
+
+  app.setNow(400000);
+  app.api.tickClock();
+  app.api.finishSession();
+  assert.equal(app.api.getState().remainingMs, finished.remainingMs);
+  assert.equal(app.api.getState().activeMs, finished.activeMs);
+  assert.equal(JSON.parse(app.storage.getItem(HISTORY_KEY)).length, 1);
 });
 
 test("reset clears every timer, break, and background field in memory and storage", () => {

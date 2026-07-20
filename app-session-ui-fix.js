@@ -2,6 +2,7 @@
   "use strict";
 
   const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
+  const COUNT_MODE = "continuous-v1";
   const $id = id => document.getElementById(id);
 
   function finite(value, fallback = 0) {
@@ -63,10 +64,13 @@
 
   function saveEnhancedState() {
     const now = Date.now();
-    clockState.baseAt = now;
-    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
-    clockState.updatedAt = now;
+    const anchorAt = Math.max(finite(clockState.lastTickAt, 0), now);
+    clockState.countMode = COUNT_MODE;
+    clockState.baseAt = anchorAt;
+    clockState.lastTickAt = anchorAt;
+    clockState.updatedAt = anchorAt;
     const state = {
+      countMode: COUNT_MODE,
       on: Boolean(clockState.on),
       remainingMs: Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000)),
       activeMs: Math.max(0, finite(clockState.activeMs, 0)),
@@ -80,15 +84,10 @@
         endAt: segment.endAt === null ? null : segment.endAt
       })) : undefined,
       legacyBreakMs: Math.max(0, finite(clockState.legacyBreakMs, 0)),
-      backgroundGap: clockState.backgroundGap && typeof clockState.backgroundGap === "object" ? {
-        hiddenAt: clockState.backgroundGap.hiddenAt,
-        movingBefore: Boolean(clockState.backgroundGap.movingBefore),
-        activeMsAtHidden: clockState.backgroundGap.activeMsAtHidden,
-        resumeAt: clockState.backgroundGap.resumeAt
-      } : null,
-      lastBackfillMs: Math.max(0, finite(clockState.lastBackfillMs, 0)),
-      lastBackfillAt: clockState.lastBackfillAt || null,
-      updatedAt: now
+      backgroundGap: null,
+      lastBackfillMs: 0,
+      lastBackfillAt: null,
+      updatedAt: anchorAt
     };
     localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
     localStorage.setItem(CLOCK_KEY, JSON.stringify({
@@ -146,6 +145,7 @@
       error.textContent = "開始時刻を現在より後には設定できません。";
       return;
     }
+    if (typeof remain === "function") remain();
     const activeMs = Math.max(0, finite(clockState.activeMs, 0));
     const elapsedMs = Math.max(0, now - timestamp - breakOverlapMs(timestamp, now));
     if (activeMs > elapsedMs) {

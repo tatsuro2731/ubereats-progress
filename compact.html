@@ -292,6 +292,7 @@
     const STORAGE_KEY = "ubereatsProgressFixed12Data";
     const LEGACY_CLOCK_KEY = "ubereatsProgressClockState";
     const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
+    const COUNT_MODE = "continuous-v1";
     const PACE_MODE_KEY_PREFIX = "ubereatsProgressPaceDisplayMode:";
     const $ = (id) => document.getElementById(id);
 
@@ -396,10 +397,53 @@
       }
     }
 
+    function effectiveEnhancedClock(enhanced, now = Date.now()) {
+      const data = enhanced.data;
+      const updatedAt = Number(data.updatedAt);
+      const counting = data.countMode === COUNT_MODE && data.on && !data.breakOn && !data.sessionEndedAt;
+      const elapsedMs = counting && Number.isFinite(updatedAt) && updatedAt > 0 && updatedAt <= now
+        ? Math.max(0, now - updatedAt)
+        : 0;
+      const consumedMs = Math.min(elapsedMs, enhanced.remainingMs);
+      return {
+        remainingMs: enhanced.remainingMs - consumedMs,
+        activeMs: Math.max(0, Number(data.activeMs) || 0) + consumedMs,
+        exhausted: Boolean(counting && consumedMs >= enhanced.remainingMs)
+      };
+    }
+
+    function migrateEnhancedClock(enhanced, now = Date.now()) {
+      if (enhanced.data.countMode === COUNT_MODE) return enhanced;
+      const ended = Boolean(enhanced.data.sessionEndedAt);
+      const state = {
+        ...enhanced.data,
+        countMode: COUNT_MODE,
+        on: !ended && Boolean(enhanced.data.on),
+        remainingMs: enhanced.remainingMs,
+        moving: false,
+        activeMs: Math.max(0, Number(enhanced.data.activeMs) || 0),
+        breakOn: !ended && Boolean(enhanced.data.breakOn),
+        breakStartedAt: !ended && enhanced.data.breakOn ? (enhanced.data.breakStartedAt || now) : null,
+        backgroundGap: null,
+        lastBackfillMs: 0,
+        lastBackfillAt: null,
+        updatedAt: now
+      };
+      localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
+      localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
+        on: state.on,
+        baseRemain: state.remainingMs / 60000,
+        baseAt: now
+      }));
+      return { data: state, remainingMs: state.remainingMs };
+    }
+
     function showEnhancedRemaining() {
-      const enhanced = readEnhancedClock();
+      const stored = readEnhancedClock();
+      const enhanced = stored ? migrateEnhancedClock(stored) : null;
       if (!enhanced) return false;
-      const minutes = Math.max(0, Math.min(Math.ceil(enhanced.remainingMs / 60000), MAX_REMAIN_INPUT_MINUTES));
+      const effective = effectiveEnhancedClock(enhanced);
+      const minutes = Math.max(0, Math.min(Math.ceil(effective.remainingMs / 60000), MAX_REMAIN_INPUT_MINUTES));
       $("remainH").value = String(Math.floor(minutes / 60));
       $("remainM").value = String(minutes % 60);
       return true;
@@ -410,23 +454,30 @@
       const remainingMs = Math.max(0, Math.min(n("remainH") * 60 + n("remainM"), MAX_REMAIN_INPUT_MINUTES)) * 60000;
       const current = readEnhancedClock();
       const previous = current ? current.data : {};
-      const on = typeof previous.on === "boolean" ? previous.on : false;
+      const effective = current ? effectiveEnhancedClock(current, now) : { activeMs: 0, exhausted: false };
+      const on = (typeof previous.on === "boolean" ? previous.on : false) && !effective.exhausted && !previous.sessionEndedAt;
+      const updatedAt = Math.max(now, Number(previous.updatedAt) || 0);
       const state = {
         ...previous,
+        countMode: COUNT_MODE,
         on,
         remainingMs,
-        activeMs: Math.max(0, Number(previous.activeMs) || 0),
+        moving: false,
+        activeMs: effective.activeMs,
         sessionStartAt: previous.sessionStartAt || null,
         breakOn: Boolean(previous.breakOn),
         breakStartedAt: previous.breakOn ? (previous.breakStartedAt || now) : null,
         breakMs: Math.max(0, Number(previous.breakMs) || 0),
-        updatedAt: now
+        backgroundGap: null,
+        lastBackfillMs: 0,
+        lastBackfillAt: null,
+        updatedAt
       };
       localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
       localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
         on,
         baseRemain: remainingMs / 60000,
-        baseAt: now
+        baseAt: updatedAt
       }));
     }
 
@@ -459,7 +510,7 @@
       }
     }
 
-    function calc() {
+    function calc(shouldSave = true) {
       const target = Math.max(n("target"), 1);
       const done = Math.max(n("done"), 0);
       const remainMinutes = Math.max(n("remainH") * 60 + n("remainM"), 0);
@@ -494,7 +545,7 @@
       $("scheduleDelta").textContent = signed(deltaVsSchedule, "件", 2);
       $("completionRate").textContent = `${completionRate.toFixed(1)}%`;
 
-      save();
+      if (shouldSave) save();
     }
 
     setupOptions();
@@ -541,12 +592,25 @@
     calc();
 
     window.addEventListener("storage", event => {
+      if (event.key === STORAGE_KEY) {
+        load();
+        showEnhancedRemaining();
+        calc(false);
+        return;
+      }
       if (event.key !== ENHANCED_CLOCK_KEY || !showEnhancedRemaining()) return;
-      calc();
+      calc(false);
     });
 
+    if (typeof window.setInterval === "function") {
+      window.setInterval(() => {
+        const before = `${$("remainH").value}:${$("remainM").value}`;
+        if (showEnhancedRemaining() && before !== `${$("remainH").value}:${$("remainM").value}`) calc(false);
+      }, 1000);
+    }
+
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=42").catch(() => {}));
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=45").catch(() => {}));
     }
   </script>
 </body>
