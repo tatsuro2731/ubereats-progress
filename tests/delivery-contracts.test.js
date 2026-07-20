@@ -144,6 +144,18 @@ test("the settings header is a dedicated swipe-to-close surface without taking o
   assert.doesNotMatch(html, /\$\("settingsScroll"\)\.addEventListener\("pointerdown"/);
 });
 
+test("settings swipe rendering stays on the compositor path without per-move layout reads", () => {
+  const html = read("index.html");
+  const move = html.match(/function\s+continueSettingsSwipe\s*\([^)]*\)\s*\{([\s\S]*?)\n\}/);
+  assert.ok(move, "the pointer move handler must remain inspectable");
+  assert.match(html, /function\s+scheduleSettingsSwipeRender[\s\S]{0,500}requestSettingsSwipeFrame/);
+  assert.match(move[1], /scheduleSettingsSwipeRender\(swipe\)/);
+  assert.doesNotMatch(move[1], /getBoundingClientRect|settingsSwipeSheetHeight|settingsSwipeCloseDistance/);
+  assert.doesNotMatch(move[1], /settingsBackdrop|opacity/);
+  assert.match(html, /const\s+sheetHeight\s*=\s*settingsSwipeSheetHeight\(\)[\s\S]{0,700}closeDistance:\s*settingsSwipeCloseDistance\(sheetHeight\)/);
+  assert.match(html, /style\.setProperty\("transform",\s*`translate3d/);
+});
+
 class FakeClassList {
   constructor() { this.values = new Set(); }
   add(...names) { names.forEach(name => this.values.add(name)); }
@@ -157,8 +169,15 @@ class FakeClassList {
 }
 
 class FakeStyle {
-  constructor() { this.values = new Map(); }
-  setProperty(name, value) { this.values.set(name, String(value)); }
+  constructor() {
+    this.values = new Map();
+    this.writes = [];
+  }
+  setProperty(name, value) {
+    const text = String(value);
+    this.values.set(name, text);
+    this.writes.push([name, text]);
+  }
   removeProperty(name) { this.values.delete(name); }
   getPropertyValue(name) { return this.values.get(name) || ""; }
 }
@@ -177,6 +196,7 @@ class FakeElement {
     this.attributes = new Map();
     this.capturedPointers = new Set();
     this.focusCount = 0;
+    this.rectReadCount = 0;
   }
   addEventListener(type, listener) {
     const listeners = this.listeners.get(type) || [];
@@ -204,7 +224,10 @@ class FakeElement {
   setPointerCapture(pointerId) { this.capturedPointers.add(pointerId); }
   hasPointerCapture(pointerId) { return this.capturedPointers.has(pointerId); }
   releasePointerCapture(pointerId) { this.capturedPointers.delete(pointerId); }
-  getBoundingClientRect() { return { height: this.offsetHeight }; }
+  getBoundingClientRect() {
+    this.rectReadCount += 1;
+    return { height: this.offsetHeight };
+  }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name); }
   focus() { this.focusCount += 1; }
@@ -237,7 +260,17 @@ function settingsHarness({ reducedMotion = false } = {}) {
   element("settingsDialog", 800);
   const openButton = element("settingsOpen");
   const timers = new Map();
+  const animationFrames = new Map();
   let nextTimer = 1;
+  let nextAnimationFrame = 1;
+  let animationFrameRequests = 0;
+  const requestAnimationFrame = callback => {
+    const id = nextAnimationFrame++;
+    animationFrameRequests += 1;
+    animationFrames.set(id, callback);
+    return id;
+  };
+  const cancelAnimationFrame = id => animationFrames.delete(id);
   const document = {
     activeElement: openButton,
     body: element("body"),
@@ -252,7 +285,13 @@ function settingsHarness({ reducedMotion = false } = {}) {
     Number,
     JSON,
     document,
-    window: { matchMedia: () => ({ matches: reducedMotion }) },
+    window: {
+      matchMedia: () => ({ matches: reducedMotion }),
+      requestAnimationFrame,
+      cancelAnimationFrame
+    },
+    requestAnimationFrame,
+    cancelAnimationFrame,
     setTimeout(callback) {
       const id = nextTimer++;
       timers.set(id, callback);
@@ -268,6 +307,13 @@ function settingsHarness({ reducedMotion = false } = {}) {
     api,
     element,
     area: element("settingsDragArea"),
+    pendingAnimationFrames: () => animationFrames.size,
+    animationFrameRequests: () => animationFrameRequests,
+    runAnimationFrame(time = 16) {
+      const callbacks = [...animationFrames.values()];
+      animationFrames.clear();
+      callbacks.forEach(callback => callback(time));
+    },
     runTimers() {
       while (timers.size) {
         const callbacks = [...timers.values()];
@@ -283,10 +329,16 @@ test("a downward swipe past the threshold closes settings and clears drag state"
   app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
   const move = app.area.dispatch("pointermove", { clientY: 210, timeStamp: 180 });
   assert.equal(move.defaultPrevented, true);
-  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "110px");
+  assert.equal(app.pendingAnimationFrames(), 1);
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
+  app.runAnimationFrame();
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "translate3d(0,110px,0)");
+  assert.equal(app.element("settingsDialog").rectReadCount, 1);
   assert.equal(app.area.hasPointerCapture(1), true);
 
   app.area.dispatch("pointerup", { clientY: 210, timeStamp: 200 });
+  assert.equal(app.pendingAnimationFrames(), 0);
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "translate3d(0,832px,0)");
   assert.equal(app.api.getSwipe(), null);
   assert.equal(app.element("settingsLayer").hidden, false, "the exit animation completes before hiding the modal");
   assert.equal(app.area.hasPointerCapture(1), false);
@@ -296,21 +348,89 @@ test("a downward swipe past the threshold closes settings and clears drag state"
   assert.equal(app.element("appRoot").inert, false);
   assert.equal(app.element("settingsOpen").getAttribute("aria-expanded"), "false");
   assert.equal(app.element("settingsOpen").focusCount, 1, "focus returns to the settings button");
-  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
   assert.equal(app.element("settingsBackdrop").style.getPropertyValue("opacity"), "");
+});
+
+test("multiple pointer moves render only the newest position once per animation frame", () => {
+  const app = settingsHarness();
+  const sheet = app.element("settingsDialog");
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  app.area.dispatch("pointermove", { clientY: 120, timeStamp: 20 });
+  app.area.dispatch("pointermove", { clientY: 155, timeStamp: 40 });
+  app.area.dispatch("pointermove", { clientY: 180, timeStamp: 60 });
+
+  assert.equal(app.animationFrameRequests(), 1);
+  assert.equal(app.pendingAnimationFrames(), 1);
+  assert.equal(sheet.style.getPropertyValue("transform"), "");
+  assert.equal(sheet.rectReadCount, 1);
+
+  app.runAnimationFrame();
+  assert.equal(sheet.style.getPropertyValue("transform"), "translate3d(0,80px,0)");
+  assert.equal(app.pendingAnimationFrames(), 0);
+  assert.equal(sheet.rectReadCount, 1, "drag rendering must not trigger another layout measurement");
+
+  app.area.dispatch("pointercancel", { clientY: 180, timeStamp: 70 });
+  app.runTimers();
+});
+
+test("swipe height and close distance stay cached from pointer down through settling", () => {
+  const app = settingsHarness();
+  const sheet = app.element("settingsDialog");
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  assert.equal(app.api.getSwipe().sheetHeight, 800);
+  assert.equal(app.api.getSwipe().closeDistance, 96);
+  assert.equal(sheet.rectReadCount, 1);
+
+  sheet.offsetHeight = 300;
+  app.area.dispatch("pointermove", { clientY: 180, timeStamp: 200 });
+  app.runAnimationFrame();
+  app.area.dispatch("pointerup", { clientY: 180, timeStamp: 400 });
+  assert.equal(sheet.rectReadCount, 1);
+  app.runTimers();
+  assert.equal(app.element("settingsLayer").hidden, false, "80px remains below the cached 96px threshold");
+
+  const closing = settingsHarness();
+  const closingSheet = closing.element("settingsDialog");
+  closing.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  closingSheet.offsetHeight = 300;
+  closing.area.dispatch("pointermove", { clientY: 197, timeStamp: 200 });
+  closing.runAnimationFrame();
+  closing.area.dispatch("pointerup", { clientY: 197, timeStamp: 400 });
+  assert.equal(closingSheet.rectReadCount, 1);
+  assert.equal(closingSheet.style.getPropertyValue("transform"), "translate3d(0,832px,0)");
+  closing.runTimers();
+  assert.equal(closing.element("settingsLayer").hidden, true);
+});
+
+test("pointer up cancels an unpainted frame before the exit transform is applied", () => {
+  const app = settingsHarness();
+  const sheet = app.element("settingsDialog");
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  app.area.dispatch("pointermove", { clientY: 140, timeStamp: 100 });
+  assert.equal(app.pendingAnimationFrames(), 1);
+
+  app.area.dispatch("pointerup", { clientY: 210, timeStamp: 200 });
+  assert.equal(app.pendingAnimationFrames(), 0);
+  assert.equal(sheet.style.getPropertyValue("transform"), "translate3d(0,832px,0)");
+  app.runAnimationFrame();
+  assert.equal(sheet.style.getPropertyValue("transform"), "translate3d(0,832px,0)");
+  app.runTimers();
+  assert.equal(app.element("settingsLayer").hidden, true);
 });
 
 test("a short slow drag snaps back without closing settings", () => {
   const app = settingsHarness();
   app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
   app.area.dispatch("pointermove", { clientY: 145, timeStamp: 300 });
+  app.runAnimationFrame();
   app.area.dispatch("pointerup", { clientY: 145, timeStamp: 330 });
   assert.equal(app.element("settingsLayer").hidden, false);
   app.runTimers();
 
   assert.equal(app.element("settingsLayer").hidden, false);
   assert.equal(app.api.getSwipe(), null);
-  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
   assert.equal(app.area.hasPointerCapture(1), false);
 });
 
@@ -327,7 +447,9 @@ test("a short flick followed by a pause does not reuse stale velocity", () => {
   const app = settingsHarness();
   app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
   app.area.dispatch("pointermove", { clientY: 135, timeStamp: 35 });
+  assert.equal(app.pendingAnimationFrames(), 1);
   app.area.dispatch("pointerup", { clientY: 135, timeStamp: 300 });
+  assert.equal(app.pendingAnimationFrames(), 0);
   app.runTimers();
   assert.equal(app.element("settingsLayer").hidden, false);
 });
@@ -340,7 +462,7 @@ test("reduced motion closes immediately and still clears swipe visuals", () => {
 
   assert.equal(app.element("settingsLayer").hidden, true);
   assert.equal(app.api.getSwipe(), null);
-  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
   assert.equal(app.element("settingsBackdrop").style.getPropertyValue("opacity"), "");
 });
 
@@ -355,7 +477,7 @@ test("cancelled, upward, and horizontal gestures never close settings", () => {
   app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 200, pointerId: 2 });
   app.area.dispatch("pointermove", { clientY: 70, timeStamp: 230, pointerId: 2 });
   assert.equal(app.api.getSwipe(), null);
-  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
 
   app.area.dispatch("pointerdown", { clientX: 100, clientY: 100, timeStamp: 300, pointerId: 3 });
   app.area.dispatch("pointermove", { clientX: 160, clientY: 115, timeStamp: 330, pointerId: 3 });
@@ -373,10 +495,14 @@ test("close controls are excluded and an external close cleans an active swipe",
   app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 10, pointerId: 4 });
   app.area.dispatch("pointermove", { clientY: 150, timeStamp: 60, pointerId: 4 });
   assert.ok(app.api.getSwipe());
+  assert.equal(app.pendingAnimationFrames(), 1);
   app.api.setSettingsOpen(false);
   assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.pendingAnimationFrames(), 0);
   assert.equal(app.area.hasPointerCapture(4), false);
-  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
+  app.runAnimationFrame();
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
 
   app.api.setSettingsOpen(true);
   app.area.dispatch("pointerup", { clientY: 250, timeStamp: 100, pointerId: 4 });
