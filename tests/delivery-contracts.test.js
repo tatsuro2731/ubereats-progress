@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -141,4 +142,244 @@ test("the settings header is a dedicated swipe-to-close surface without taking o
   assert.match(html, /event\.target\.closest\("button,a,input,select,textarea,\[role='button'\]"\)/);
   assert.match(html, /\.settingsScroll\{overflow:auto[^}]*overscroll-behavior:contain/);
   assert.doesNotMatch(html, /\$\("settingsScroll"\)\.addEventListener\("pointerdown"/);
+});
+
+class FakeClassList {
+  constructor() { this.values = new Set(); }
+  add(...names) { names.forEach(name => this.values.add(name)); }
+  remove(...names) { names.forEach(name => this.values.delete(name)); }
+  contains(name) { return this.values.has(name); }
+  toggle(name, force) {
+    const next = force === undefined ? !this.contains(name) : Boolean(force);
+    if (next) this.add(name); else this.remove(name);
+    return next;
+  }
+}
+
+class FakeStyle {
+  constructor() { this.values = new Map(); }
+  setProperty(name, value) { this.values.set(name, String(value)); }
+  removeProperty(name) { this.values.delete(name); }
+  getPropertyValue(name) { return this.values.get(name) || ""; }
+}
+
+class FakeElement {
+  constructor(id, height = 0) {
+    this.id = id;
+    this.hidden = false;
+    this.inert = false;
+    this.isConnected = true;
+    this.offsetHeight = height;
+    this.dataset = {};
+    this.style = new FakeStyle();
+    this.classList = new FakeClassList();
+    this.listeners = new Map();
+    this.attributes = new Map();
+    this.capturedPointers = new Set();
+    this.focusCount = 0;
+  }
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+  dispatch(type, extra = {}) {
+    const event = {
+      type,
+      pointerId: 1,
+      isPrimary: true,
+      pointerType: "touch",
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+      timeStamp: 0,
+      target: this,
+      defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; },
+      ...extra
+    };
+    for (const listener of this.listeners.get(type) || []) listener.call(this, event);
+    return event;
+  }
+  setPointerCapture(pointerId) { this.capturedPointers.add(pointerId); }
+  hasPointerCapture(pointerId) { return this.capturedPointers.has(pointerId); }
+  releasePointerCapture(pointerId) { this.capturedPointers.delete(pointerId); }
+  getBoundingClientRect() { return { height: this.offsetHeight }; }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  getAttribute(name) { return this.attributes.get(name); }
+  focus() { this.focusCount += 1; }
+  closest() { return null; }
+}
+
+function instrumentedIndexSource() {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+  assert.equal(scripts.length, 1, "index.html should keep one inline application script");
+  const source = scripts[0][1];
+  const setupAt = source.lastIndexOf("\nsetup();");
+  assert.ok(setupAt > 0, "the test harness must stop before application setup");
+  return `${source.slice(0, setupAt)}
+globalThis.__settingsSwipeTestApi = {
+  setupSettingsSwipe,
+  setSettingsOpen,
+  getSwipe: () => settingsSwipe,
+  closeDistance: settingsSwipeCloseDistance
+};`;
+}
+
+function settingsHarness({ reducedMotion = false } = {}) {
+  const elements = new Map();
+  const element = (id, height = 0) => {
+    if (!elements.has(id)) elements.set(id, new FakeElement(id, height));
+    return elements.get(id);
+  };
+  element("settingsLayer").hidden = true;
+  element("settingsDialog", 800);
+  const openButton = element("settingsOpen");
+  const timers = new Map();
+  let nextTimer = 1;
+  const document = {
+    activeElement: openButton,
+    body: element("body"),
+    documentElement: { clientHeight: 800 },
+    getElementById: id => element(id),
+    addEventListener() {}
+  };
+  const context = vm.createContext({
+    console,
+    Date,
+    Math,
+    Number,
+    JSON,
+    document,
+    window: { matchMedia: () => ({ matches: reducedMotion }) },
+    setTimeout(callback) {
+      const id = nextTimer++;
+      timers.set(id, callback);
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); }
+  });
+  vm.runInContext(instrumentedIndexSource(), context, { filename: "index.html" });
+  const api = context.__settingsSwipeTestApi;
+  api.setupSettingsSwipe();
+  api.setSettingsOpen(true);
+  return {
+    api,
+    element,
+    area: element("settingsDragArea"),
+    runTimers() {
+      while (timers.size) {
+        const callbacks = [...timers.values()];
+        timers.clear();
+        callbacks.forEach(callback => callback());
+      }
+    }
+  };
+}
+
+test("a downward swipe past the threshold closes settings and clears drag state", () => {
+  const app = settingsHarness();
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  const move = app.area.dispatch("pointermove", { clientY: 210, timeStamp: 180 });
+  assert.equal(move.defaultPrevented, true);
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "110px");
+  assert.equal(app.area.hasPointerCapture(1), true);
+
+  app.area.dispatch("pointerup", { clientY: 210, timeStamp: 200 });
+  assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.element("settingsLayer").hidden, false, "the exit animation completes before hiding the modal");
+  assert.equal(app.area.hasPointerCapture(1), false);
+  app.runTimers();
+
+  assert.equal(app.element("settingsLayer").hidden, true);
+  assert.equal(app.element("appRoot").inert, false);
+  assert.equal(app.element("settingsOpen").getAttribute("aria-expanded"), "false");
+  assert.equal(app.element("settingsOpen").focusCount, 1, "focus returns to the settings button");
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.element("settingsBackdrop").style.getPropertyValue("opacity"), "");
+});
+
+test("a short slow drag snaps back without closing settings", () => {
+  const app = settingsHarness();
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  app.area.dispatch("pointermove", { clientY: 145, timeStamp: 300 });
+  app.area.dispatch("pointerup", { clientY: 145, timeStamp: 330 });
+  assert.equal(app.element("settingsLayer").hidden, false);
+  app.runTimers();
+
+  assert.equal(app.element("settingsLayer").hidden, false);
+  assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.area.hasPointerCapture(1), false);
+});
+
+test("a short fast flick closes settings", () => {
+  const app = settingsHarness();
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  app.area.dispatch("pointermove", { clientY: 140, timeStamp: 40 });
+  app.area.dispatch("pointerup", { clientY: 140, timeStamp: 55 });
+  app.runTimers();
+  assert.equal(app.element("settingsLayer").hidden, true);
+});
+
+test("a short flick followed by a pause does not reuse stale velocity", () => {
+  const app = settingsHarness();
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  app.area.dispatch("pointermove", { clientY: 135, timeStamp: 35 });
+  app.area.dispatch("pointerup", { clientY: 135, timeStamp: 300 });
+  app.runTimers();
+  assert.equal(app.element("settingsLayer").hidden, false);
+});
+
+test("reduced motion closes immediately and still clears swipe visuals", () => {
+  const app = settingsHarness({ reducedMotion: true });
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  app.area.dispatch("pointermove", { clientY: 210, timeStamp: 180 });
+  app.area.dispatch("pointerup", { clientY: 210, timeStamp: 200 });
+
+  assert.equal(app.element("settingsLayer").hidden, true);
+  assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+  assert.equal(app.element("settingsBackdrop").style.getPropertyValue("opacity"), "");
+});
+
+test("cancelled, upward, and horizontal gestures never close settings", () => {
+  const app = settingsHarness();
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 0 });
+  app.area.dispatch("pointermove", { clientY: 220, timeStamp: 100 });
+  app.area.dispatch("pointercancel", { clientY: 220, timeStamp: 110 });
+  app.runTimers();
+  assert.equal(app.element("settingsLayer").hidden, false);
+
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 200, pointerId: 2 });
+  app.area.dispatch("pointermove", { clientY: 70, timeStamp: 230, pointerId: 2 });
+  assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+
+  app.area.dispatch("pointerdown", { clientX: 100, clientY: 100, timeStamp: 300, pointerId: 3 });
+  app.area.dispatch("pointermove", { clientX: 160, clientY: 115, timeStamp: 330, pointerId: 3 });
+  assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.element("settingsLayer").hidden, false);
+});
+
+test("close controls are excluded and an external close cleans an active swipe", () => {
+  const app = settingsHarness();
+  const closeTarget = { closest: selector => selector.includes("button") ? app.element("settingsClose") : null };
+  app.area.dispatch("pointerdown", { target: closeTarget, clientY: 100, timeStamp: 0 });
+  assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.area.hasPointerCapture(1), false);
+
+  app.area.dispatch("pointerdown", { clientY: 100, timeStamp: 10, pointerId: 4 });
+  app.area.dispatch("pointermove", { clientY: 150, timeStamp: 60, pointerId: 4 });
+  assert.ok(app.api.getSwipe());
+  app.api.setSettingsOpen(false);
+  assert.equal(app.api.getSwipe(), null);
+  assert.equal(app.area.hasPointerCapture(4), false);
+  assert.equal(app.element("settingsDialog").style.getPropertyValue("--settings-drag-y"), "");
+
+  app.api.setSettingsOpen(true);
+  app.area.dispatch("pointerup", { clientY: 250, timeStamp: 100, pointerId: 4 });
+  app.runTimers();
+  assert.equal(app.element("settingsLayer").hidden, false, "an old pointer cannot close a reopened sheet");
 });
