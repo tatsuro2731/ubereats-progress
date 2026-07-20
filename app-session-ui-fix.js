@@ -71,6 +71,7 @@
       remainingMs: Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000)),
       activeMs: Math.max(0, finite(clockState.activeMs, 0)),
       sessionStartAt: clockState.sessionStartAt || null,
+      sessionEndedAt: clockState.sessionEndedAt || null,
       breakOn: Boolean(clockState.breakOn),
       breakStartedAt: clockState.breakStartedAt || null,
       breakMs: Math.max(0, finite(clockState.breakMs, 0)),
@@ -116,7 +117,7 @@
     const layer = $id("startTimeEditorLayer");
     const input = $id("startTimeInput");
     const error = $id("startTimeError");
-    if (!layer || !input) return;
+    if (!layer || !input || !clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) return;
     const initial = clockState && clockState.sessionStartAt ? clockState.sessionStartAt : Date.now();
     input.value = toLocalInputValue(initial);
     input.max = toLocalInputValue(Date.now());
@@ -131,6 +132,10 @@
   function applyStartTime() {
     const input = $id("startTimeInput");
     const error = $id("startTimeError");
+    if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
+      closeEditor();
+      return;
+    }
     const timestamp = parseLocalInput(input.value);
     const now = Date.now();
     if (!Number.isFinite(timestamp)) {
@@ -211,6 +216,8 @@
     button.setAttribute("aria-haspopup", "dialog");
     button.setAttribute("aria-controls", "startTimeEditorDialog");
     button.setAttribute("aria-expanded", "false");
+    button.disabled = !clockState || !clockState.sessionStartAt || Boolean(clockState.sessionEndedAt);
+    button.setAttribute("aria-disabled", String(button.disabled));
     startBox.appendChild(button);
 
     const layer = document.createElement("div");
