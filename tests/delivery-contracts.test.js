@@ -131,3 +131,14 @@ test("remaining and work-session displays stop at minutes while calculations kee
   assert.match(enhancements, /remainingMs/);
   assert.match(enhancements, /activeMs/);
 });
+
+test("the settings header is a dedicated swipe-to-close surface without taking over form scrolling", () => {
+  const html = read("index.html");
+  assert.match(html, /id="settingsDragArea"\s+class="settingsDragArea"/);
+  assert.match(html, /\.settingsDragArea\{[^}]*touch-action:none[^}]*user-select:none/);
+  assert.match(html, /settingsDragArea[\s\S]{0,1000}settingsSheetHeader/);
+  assert.match(html, /function\s+setupSettingsSwipe\s*\([^)]*\)[\s\S]{0,900}pointerdown[\s\S]{0,900}pointercancel/);
+  assert.match(html, /event\.target\.closest\("button,a,input,select,textarea,\[role='button'\]"\)/);
+  assert.match(html, /\.settingsScroll\{overflow:auto[^}]*overscroll-behavior:contain/);
+  assert.doesNotMatch(html, /\$\("settingsScroll"\)\.addEventListener\("pointerdown"/);
+});
