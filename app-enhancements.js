@@ -4,6 +4,7 @@
   const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
   const HISTORY_KEY = "ubereatsProgressWorkHistoryV1";
   const COUNT_MODE = "continuous-v1";
+  const USAGE_MODE = "remaining-v1";
   const WORK_LIMIT_MS = 720 * 60000;
   const SAVE_INTERVAL_MS = 5000;
 
@@ -16,18 +17,29 @@
   function nowMs() { return Date.now(); }
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
   function finite(value, fallback = 0) { return Number.isFinite(Number(value)) ? Number(value) : fallback; }
+  function clockUsedMs(remainingMs = clockState.remainingMs) {
+    return clamp(WORK_LIMIT_MS - finite(remainingMs, WORK_LIMIT_MS), 0, WORK_LIMIT_MS);
+  }
+
+  function syncClockUsage() {
+    clockState.usageMode = USAGE_MODE;
+    clockState.activeMs = clockUsedMs(clockState.remainingMs);
+    return clockState.activeMs;
+  }
 
   function defaultEnhancedState() {
     const now = nowMs();
+    const remainingMs = Math.max(0, legacyRemain * 60000);
     return {
       countMode: COUNT_MODE,
+      usageMode: USAGE_MODE,
       on: Boolean(clockState && clockState.on),
-      remainingMs: Math.max(0, legacyRemain * 60000),
+      remainingMs,
       baseRemain: Math.max(0, legacyRemain),
       baseAt: now,
       lastTickAt: now,
       moving: false,
-      activeMs: 0,
+      activeMs: clockUsedMs(remainingMs),
       sessionStartAt: clockState && clockState.on ? now : null,
       sessionEndedAt: null,
       breakOn: false,
@@ -83,13 +95,14 @@
     const resumeAt = isContinuousState && rawUpdatedAt > 0 ? rawUpdatedAt : now;
     return {
       countMode: COUNT_MODE,
+      usageMode: USAGE_MODE,
       on: !sessionEndedAt && Boolean(data && data.on),
       remainingMs: clamp(remainingMs, 0, MAX_REMAIN_INPUT_MINUTES * 60000),
       baseRemain: remainingMs / 60000,
       baseAt: now,
       lastTickAt: resumeAt,
       moving: false,
-      activeMs: Math.max(0, finite(data && data.activeMs, 0)),
+      activeMs: clockUsedMs(remainingMs),
       sessionStartAt,
       sessionEndedAt,
       breakOn,
@@ -139,8 +152,10 @@
   }
 
   function serializableState() {
+    syncClockUsage();
     return {
       countMode: COUNT_MODE,
+      usageMode: USAGE_MODE,
       on: clockState.on,
       remainingMs: clockState.remainingMs,
       activeMs: clockState.activeMs,
@@ -167,6 +182,7 @@
     lastSavedAt = now;
     const anchorAt = Math.max(now, finite(clockState.lastTickAt, now));
     clockState.countMode = COUNT_MODE;
+    syncClockUsage();
     clockState.baseRemain = clockState.remainingMs / 60000;
     clockState.baseAt = anchorAt;
     clockState.updatedAt = anchorAt;
@@ -190,8 +206,8 @@
     if (counting && delta > 0) {
       const consumed = Math.min(delta, Math.max(0, clockState.remainingMs));
       clockState.remainingMs -= consumed;
-      clockState.activeMs += consumed;
     }
+    syncClockUsage();
     clockState.moving = false;
     clockState.baseRemain = clockState.remainingMs / 60000;
     clockState.baseAt = effectiveAt;
@@ -274,7 +290,7 @@
 
   function operationRate(at = nowMs()) {
     const elapsed = sessionElapsedMs(at);
-    return elapsed > 0 ? clamp(clockState.activeMs / elapsed * 100, 0, 100) : 0;
+    return elapsed > 0 ? clamp(clockUsedMs() / elapsed * 100, 0, 100) : 0;
   }
 
   function currentStatus() {
@@ -311,6 +327,12 @@
     sub.textContent = ended ? "履歴に保存済み" : clockState.on ? status.sub : "開始する";
     button.disabled = ended;
     button.setAttribute("aria-disabled", String(ended));
+    ["remainMinus", "remainPlus", "remainH", "remainM"].forEach(id => {
+      const control = $(id);
+      if (!control) return;
+      control.disabled = ended;
+      control.setAttribute("aria-disabled", String(ended));
+    });
     dot.classList.toggle("stop", !counting);
     panel.classList.toggle("run", counting);
     const detail = $("movementDetail");
@@ -339,15 +361,21 @@
   }
 
   function setExactRemainingMs(milliseconds) {
+    if (clockState.sessionEndedAt) {
+      if (typeof setRemain === "function") setRemain(clockState.remainingMs / 60000);
+      return false;
+    }
     tickClock();
     clockState.remainingMs = clamp(milliseconds, 0, MAX_REMAIN_INPUT_MINUTES * 60000);
+    syncClockUsage();
     clockState.baseRemain = clockState.remainingMs / 60000;
     clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), nowMs());
     persistEnhancedClock(true);
+    return true;
   }
 
   function setExactRemaining(minutes) {
-    setExactRemainingMs(minutes * 60000);
+    return setExactRemainingMs(minutes * 60000);
   }
 
   function toggleBreak() {
@@ -399,7 +427,7 @@
     const target = Math.max(1, finite(n("target"), 1));
     const done = Math.max(0, finite(n("done"), 0));
     const remainingMs = Math.max(0, finite(clockState.remainingMs, 0));
-    const usedMs = Math.max(0, WORK_LIMIT_MS - remainingMs);
+    const usedMs = clockUsedMs(remainingMs);
     const actualPaceMinutes = done > 0 && usedMs > 0 ? usedMs / 60000 / done : null;
     return {
       id: `${at}-${Math.random().toString(36).slice(2, 7)}`,
@@ -413,7 +441,8 @@
       progressRate: clamp(done / target * 100, 0, 999),
       remainingMs,
       usedMs,
-      activeMs: Math.max(0, finite(clockState.activeMs, 0)),
+      usageMode: USAGE_MODE,
+      activeMs: usedMs,
       elapsedMs: sessionElapsedMs(at),
       breakMs: sessionBreakMs(at),
       rate: operationRate(at),
@@ -490,15 +519,29 @@
     return `legacy:${finite(item && item.startedAt)}:${finite(item && item.recordedAt)}:${finite(item && item.done)}:${finite(item && item.target)}:${finite(item && item.activeMs)}:${index}`;
   }
 
+  function historyUsedMs(item) {
+    const storedUsed = finite(item && item.usedMs, NaN);
+    if (Number.isFinite(storedUsed) && storedUsed >= 0) return clamp(storedUsed, 0, WORK_LIMIT_MS);
+    const remainingMs = finite(item && item.remainingMs, NaN);
+    if (Number.isFinite(remainingMs) && remainingMs >= 0) return clockUsedMs(remainingMs);
+    return clamp(finite(item && item.activeMs, 0), 0, WORK_LIMIT_MS);
+  }
+
+  function historyRate(item) {
+    const elapsedMs = finite(item && item.elapsedMs, NaN);
+    if (Number.isFinite(elapsedMs) && elapsedMs > 0) {
+      return clamp(historyUsedMs(item) / elapsedMs * 100, 0, 100);
+    }
+    return clamp(finite(item && item.rate, 0), 0, 100);
+  }
+
   function historyPace(item) {
     const stored = finite(item && item.actualPaceMinutes, NaN);
     if (Number.isFinite(stored) && stored > 0) return stored;
     const done = Math.max(0, finite(item && item.done, 0));
     if (!done) return NaN;
-    const usedMs = finite(item && item.usedMs, NaN);
-    if (Number.isFinite(usedMs) && usedMs > 0) return usedMs / 60000 / done;
-    const activeMs = finite(item && item.activeMs, NaN);
-    return Number.isFinite(activeMs) && activeMs > 0 ? activeMs / 60000 / done : NaN;
+    const usedMs = historyUsedMs(item);
+    return usedMs > 0 ? usedMs / 60000 / done : NaN;
   }
 
   function closeWorkConfirm(restoreFocus = true) {
@@ -550,7 +593,7 @@
       description: "現在の件数と稼働指標を履歴に保存し、時間計測を停止します。目標未達でも記録されます。",
       rows: [
         { label: "完了件数", value: `${Math.max(0, n("done"))} / ${Math.max(1, n("target"))}件` },
-        { label: "時計が減った時間", value: durationText(clockState.activeMs) },
+        { label: "時計が減った時間", value: durationText(clockUsedMs()) },
         { label: "経過時間（休憩除外）", value: durationText(sessionElapsedMs(at)) },
         { label: "実稼働率", value: `${operationRate(at).toFixed(1)}%` }
       ],
@@ -573,7 +616,7 @@
       rows: [
         { label: "開始日時", value: formatDateTime(item.startedAt || item.date) },
         { label: "完了件数", value: target ? `${done} / ${target}件` : `${done}件` },
-        { label: "時計が減った時間", value: durationText(finite(item.activeMs, 0)) }
+        { label: "時計が減った時間", value: durationText(historyUsedMs(item)) }
       ],
       actionLabel: "1件削除",
       source,
@@ -600,11 +643,13 @@
       const target = Math.max(0, finite(item.target, 0));
       const progress = target ? `${Math.round(clamp(done / target * 100, 0, 999))}%達成` : "目標記録なし";
       const pace = historyPace(item);
+      const usedMs = historyUsedMs(item);
+      const rate = historyRate(item);
       const endedAt = item.endedAt || item.recordedAt;
       return `
         <div class="workHistoryItem" role="listitem">
-          <div class="workHistoryMain"><strong>${formatDateTime(item.startedAt || item.date)}〜${formatTime(endedAt)}</strong><small>${target ? `${done} / ${target}件` : `${done}件`} · ${progress}</small><div class="workHistoryMeta">経過 ${durationText(finite(item.elapsedMs, 0))} · 休憩 ${durationText(finite(item.breakMs, 0))}<br>実稼働率 ${finite(item.rate, 0).toFixed(1)}% · 平均 ${Number.isFinite(pace) ? `${pace.toFixed(2)}分/件` : "計測なし"}</div></div>
-          <div class="workHistoryDuration"><span>時計が減った時間</span><strong>${durationText(finite(item.activeMs, 0))}</strong></div>
+          <div class="workHistoryMain"><strong>${formatDateTime(item.startedAt || item.date)}〜${formatTime(endedAt)}</strong><small>${target ? `${done} / ${target}件` : `${done}件`} · ${progress}</small><div class="workHistoryMeta">経過 ${durationText(finite(item.elapsedMs, 0))} · 休憩 ${durationText(finite(item.breakMs, 0))}<br>実稼働率 ${rate.toFixed(1)}% · 平均 ${Number.isFinite(pace) ? `${pace.toFixed(2)}分/件` : "計測なし"}</div></div>
+          <div class="workHistoryDuration"><span>時計が減った時間</span><strong>${durationText(usedMs)}</strong></div>
           <button class="workHistoryDelete" type="button" data-history-index="${index}" aria-label="${formatDateTime(item.startedAt || item.date)}開始の履歴を削除">削除</button>
         </div>`;
     }).join("") : '<div class="workHistoryEmpty">保存した履歴はまだありません</div>';
@@ -616,7 +661,7 @@
     const at = nowMs();
     const ended = Boolean(clockState.sessionEndedAt);
     $("workStartTime").textContent = clockState.sessionStartAt ? formatDateTime(clockState.sessionStartAt) : "未開始";
-    $("workActiveTime").textContent = durationText(clockState.activeMs);
+    $("workActiveTime").textContent = durationText(clockUsedMs());
     $("workElapsedTime").textContent = durationText(sessionElapsedMs(at));
     $("workRate").textContent = `${operationRate(at).toFixed(1)}%`;
     $("workBreakTime").textContent = durationText(sessionBreakMs(at));
@@ -662,7 +707,7 @@
     panel.className = "workSessionPanel";
     panel.tabIndex = -1;
     panel.innerHTML = `
-      <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">休憩時間を除いて実稼働率を計算</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
+      <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">残り時間と連携し、休憩を除いて実稼働率を計算</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
       <div class="workSessionGrid">
         <div class="workSessionStat primary"><span>時計が減った時間</span><strong id="workActiveTime">0時間00分</strong></div>
         <div class="workSessionStat"><span>実稼働率</span><strong id="workRate">0.0%</strong></div>
@@ -762,8 +807,14 @@
   $("countToggle").onclick = enhancedToggleClock;
 
   adjustRemain = function(delta) {
+    if (clockState.sessionEndedAt) {
+      setRemain(clockState.remainingMs / 60000);
+      renderEnhancedClock();
+      return;
+    }
     tickClock();
     clockState.remainingMs = clamp(clockState.remainingMs + finite(delta, 0) * 60000, 0, MAX_REMAIN_INPUT_MINUTES * 60000);
+    syncClockUsage();
     clockState.baseRemain = clockState.remainingMs / 60000;
     persistEnhancedClock(true);
     setRemain(clockState.remainingMs / 60000);
@@ -774,7 +825,7 @@
 
   $("reset").onclick = function() {
     if (!confirm("完了件数・残り時間・終了上限・今日の稼働計測をリセットしますか？")) return;
-    const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (clockState.activeMs > 0 || n("done") > 0));
+    const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (clockUsedMs() > 0 || n("done") > 0));
     if (hadSession && confirm("リセット前に今日の稼働記録を保存しますか？")) recordSession(false);
     $("done").value = "0";
     $("remainH").value = "12";
@@ -783,6 +834,7 @@
     const now = nowMs();
     clockState = {
       countMode: COUNT_MODE,
+      usageMode: USAGE_MODE,
       on: false,
       remainingMs: 720 * 60000,
       baseRemain: 720,

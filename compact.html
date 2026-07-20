@@ -293,6 +293,8 @@
     const LEGACY_CLOCK_KEY = "ubereatsProgressClockState";
     const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
     const COUNT_MODE = "continuous-v1";
+    const USAGE_MODE = "remaining-v1";
+    const LIMIT_MS = LIMIT_MINUTES * 60000;
     const PACE_MODE_KEY_PREFIX = "ubereatsProgressPaceDisplayMode:";
     const $ = (id) => document.getElementById(id);
 
@@ -322,6 +324,12 @@
     function n(id) {
       const value = parseFloat($(id).value);
       return Number.isFinite(value) ? value : 0;
+    }
+
+    function usedMsFromRemaining(remainingMs) {
+      const value = Number(remainingMs);
+      const effectiveRemaining = Number.isFinite(value) ? Math.max(0, value) : LIMIT_MS;
+      return Math.max(0, Math.min(LIMIT_MS - effectiveRemaining, LIMIT_MS));
     }
 
     function fmtMinutes(mins) {
@@ -405,37 +413,49 @@
         ? Math.max(0, now - updatedAt)
         : 0;
       const consumedMs = Math.min(elapsedMs, enhanced.remainingMs);
+      const remainingMs = enhanced.remainingMs - consumedMs;
       return {
-        remainingMs: enhanced.remainingMs - consumedMs,
-        activeMs: Math.max(0, Number(data.activeMs) || 0) + consumedMs,
+        remainingMs,
+        activeMs: usedMsFromRemaining(remainingMs),
         exhausted: Boolean(counting && consumedMs >= enhanced.remainingMs)
       };
     }
 
     function migrateEnhancedClock(enhanced, now = Date.now()) {
-      if (enhanced.data.countMode === COUNT_MODE) return enhanced;
+      const wasContinuous = enhanced.data.countMode === COUNT_MODE;
+      if (wasContinuous && enhanced.data.usageMode === USAGE_MODE) return enhanced;
       const ended = Boolean(enhanced.data.sessionEndedAt);
+      const rawUpdatedAt = Number(enhanced.data.updatedAt);
+      const updatedAt = wasContinuous && Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0
+        ? rawUpdatedAt
+        : now;
       const state = {
         ...enhanced.data,
         countMode: COUNT_MODE,
+        usageMode: USAGE_MODE,
         on: !ended && Boolean(enhanced.data.on),
         remainingMs: enhanced.remainingMs,
         moving: false,
-        activeMs: Math.max(0, Number(enhanced.data.activeMs) || 0),
+        activeMs: usedMsFromRemaining(enhanced.remainingMs),
         breakOn: !ended && Boolean(enhanced.data.breakOn),
         breakStartedAt: !ended && enhanced.data.breakOn ? (enhanced.data.breakStartedAt || now) : null,
         backgroundGap: null,
         lastBackfillMs: 0,
         lastBackfillAt: null,
-        updatedAt: now
+        updatedAt
       };
       localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
       localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
         on: state.on,
         baseRemain: state.remainingMs / 60000,
-        baseAt: now
+        baseAt: updatedAt
       }));
       return { data: state, remainingMs: state.remainingMs };
+    }
+
+    function setRemainingEditDisabled(disabled) {
+      $("remainH").disabled = disabled;
+      $("remainM").disabled = disabled;
     }
 
     function showEnhancedRemaining() {
@@ -446,28 +466,37 @@
       const minutes = Math.max(0, Math.min(Math.ceil(effective.remainingMs / 60000), MAX_REMAIN_INPUT_MINUTES));
       $("remainH").value = String(Math.floor(minutes / 60));
       $("remainM").value = String(minutes % 60);
+      setRemainingEditDisabled(Boolean(enhanced.data.sessionEndedAt));
       return true;
     }
 
-    function syncEnhancedRemainingFromControls() {
+    function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
       const now = Date.now();
       const remainingMs = Math.max(0, Math.min(n("remainH") * 60 + n("remainM"), MAX_REMAIN_INPUT_MINUTES)) * 60000;
       const current = readEnhancedClock();
       const previous = current ? current.data : {};
+      if (previous.sessionEndedAt && !resetEnded) {
+        showEnhancedRemaining();
+        return false;
+      }
       const effective = current ? effectiveEnhancedClock(current, now) : { activeMs: 0, exhausted: false };
-      const on = (typeof previous.on === "boolean" ? previous.on : false) && !effective.exhausted && !previous.sessionEndedAt;
+      const on = !resetEnded && (typeof previous.on === "boolean" ? previous.on : false) && !effective.exhausted;
       const updatedAt = Math.max(now, Number(previous.updatedAt) || 0);
       const state = {
         ...previous,
         countMode: COUNT_MODE,
+        usageMode: USAGE_MODE,
         on,
         remainingMs,
         moving: false,
-        activeMs: effective.activeMs,
-        sessionStartAt: previous.sessionStartAt || null,
-        breakOn: Boolean(previous.breakOn),
-        breakStartedAt: previous.breakOn ? (previous.breakStartedAt || now) : null,
-        breakMs: Math.max(0, Number(previous.breakMs) || 0),
+        activeMs: usedMsFromRemaining(remainingMs),
+        sessionStartAt: resetEnded ? null : (previous.sessionStartAt || null),
+        sessionEndedAt: resetEnded ? null : (previous.sessionEndedAt || null),
+        breakOn: resetEnded ? false : Boolean(previous.breakOn),
+        breakStartedAt: resetEnded ? null : (previous.breakOn ? (previous.breakStartedAt || now) : null),
+        breakMs: resetEnded ? 0 : Math.max(0, Number(previous.breakMs) || 0),
+        breakSegments: resetEnded ? [] : previous.breakSegments,
+        legacyBreakMs: resetEnded ? 0 : Math.max(0, Number(previous.legacyBreakMs) || 0),
         backgroundGap: null,
         lastBackfillMs: 0,
         lastBackfillAt: null,
@@ -479,6 +508,8 @@
         baseRemain: remainingMs / 60000,
         baseAt: updatedAt
       }));
+      setRemainingEditDisabled(false);
+      return true;
     }
 
     function setTone(slackMinutes, perOrder, remainingOrders) {
@@ -555,7 +586,10 @@
 
     ["target", "done"].forEach(id => $(id).addEventListener("change", calc));
     ["remainH", "remainM"].forEach(id => $(id).addEventListener("change", () => {
-      syncEnhancedRemainingFromControls();
+      if (!syncEnhancedRemainingFromControls()) {
+        calc(false);
+        return;
+      }
       calc();
     }));
 
@@ -585,7 +619,8 @@
       $("done").value = "0";
       $("remainH").value = "12";
       $("remainM").value = "0";
-      syncEnhancedRemainingFromControls();
+      const current = readEnhancedClock();
+      syncEnhancedRemainingFromControls({ resetEnded: Boolean(current && current.data.sessionEndedAt) });
       calc();
     });
 
@@ -610,7 +645,7 @@
     }
 
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=45").catch(() => {}));
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=46").catch(() => {}));
     }
   </script>
 </body>

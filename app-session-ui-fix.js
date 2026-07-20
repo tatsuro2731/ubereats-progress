@@ -3,10 +3,16 @@
 
   const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
   const COUNT_MODE = "continuous-v1";
+  const USAGE_MODE = "remaining-v1";
+  const WORK_LIMIT_MS = 720 * 60000;
   const $id = id => document.getElementById(id);
 
   function finite(value, fallback = 0) {
     return Number.isFinite(Number(value)) ? Number(value) : fallback;
+  }
+
+  function clockUsedMs(remainingMs) {
+    return Math.max(0, Math.min(WORK_LIMIT_MS - finite(remainingMs, WORK_LIMIT_MS), WORK_LIMIT_MS));
   }
 
   function breakOverlapMs(startAt, endAt = Date.now()) {
@@ -65,15 +71,19 @@
   function saveEnhancedState() {
     const now = Date.now();
     const anchorAt = Math.max(finite(clockState.lastTickAt, 0), now);
+    const remainingMs = Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000));
     clockState.countMode = COUNT_MODE;
+    clockState.usageMode = USAGE_MODE;
+    clockState.activeMs = clockUsedMs(remainingMs);
     clockState.baseAt = anchorAt;
     clockState.lastTickAt = anchorAt;
     clockState.updatedAt = anchorAt;
     const state = {
       countMode: COUNT_MODE,
+      usageMode: USAGE_MODE,
       on: Boolean(clockState.on),
-      remainingMs: Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000)),
-      activeMs: Math.max(0, finite(clockState.activeMs, 0)),
+      remainingMs,
+      activeMs: clockState.activeMs,
       sessionStartAt: clockState.sessionStartAt || null,
       sessionEndedAt: clockState.sessionEndedAt || null,
       breakOn: Boolean(clockState.breakOn),
@@ -146,7 +156,8 @@
       return;
     }
     if (typeof remain === "function") remain();
-    const activeMs = Math.max(0, finite(clockState.activeMs, 0));
+    const remainingMs = Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000));
+    const activeMs = clockUsedMs(remainingMs);
     const elapsedMs = Math.max(0, now - timestamp - breakOverlapMs(timestamp, now));
     if (activeMs > elapsedMs) {
       error.textContent = "開始時刻が遅すぎます。時計が減った時間より後には設定できません。";

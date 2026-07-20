@@ -10,6 +10,11 @@ const ROOT = path.resolve(__dirname, "..");
 const ENHANCED_KEY = "ubereatsProgressMovementClockV1";
 const HISTORY_KEY = "ubereatsProgressWorkHistoryV1";
 const DATA_KEY = "ubereatsProgressFixed12Data";
+const WORK_LIMIT_MS = 720 * 60000;
+
+function usedMs(remainingMs) {
+  return Math.max(0, Math.min(WORK_LIMIT_MS - remainingMs, WORK_LIMIT_MS));
+}
 
 class MemoryStorage {
   constructor(initial = {}) { this.values = new Map(Object.entries(initial)); }
@@ -57,6 +62,11 @@ function instrumentedSource() {
     remainingText,
     durationText,
     exhaustionText,
+    clockUsedMs,
+    operationRate,
+    sessionSnapshot,
+    historyUsedMs,
+    historyRate,
     getState: () => clockState,
     setState: value => { clockState = value; }
   };
@@ -68,6 +78,7 @@ function timerHarness(options = {}) {
   let now = options.now || 1_000_000;
   const initialEnhanced = options.enhanced || {
     countMode: "continuous-v1",
+    usageMode: "remaining-v1",
     on: false,
     remainingMs: 720 * 60000,
     activeMs: 0,
@@ -221,8 +232,10 @@ test("±1 minute keeps the existing seconds exactly", () => {
 
   app.context.adjustRemain(1);
   assert.equal(app.api.getState().remainingMs, 11 * 60000 + 30500);
+  assert.equal(app.api.getState().activeMs, usedMs(11 * 60000 + 30500));
   app.context.adjustRemain(-1);
   assert.equal(app.api.getState().remainingMs, 10 * 60000 + 30500);
+  assert.equal(app.api.getState().activeMs, usedMs(10 * 60000 + 30500));
 });
 
 test("remaining time is shown only to minutes while keeping millisecond precision", () => {
@@ -241,13 +254,13 @@ test("remaining time is shown only to minutes while keeping millisecond precisio
   assert.doesNotMatch(app.element("countRemain").textContent, /秒/);
   assert.equal(app.api.remainingText(1), "0時間01分", "a non-zero remainder must not display as zero minutes");
   assert.equal(app.api.getState().remainingMs, 10 * 60000 + 30500);
-  assert.equal(app.api.getState().activeMs, 2 * 60000 + 45500);
+  assert.equal(app.api.getState().activeMs, usedMs(10 * 60000 + 30500));
 });
 
 test("work-session durations are shown only to completed minutes without rounding engine data", () => {
   const initial = state({
     on: false,
-    remainingMs: 20 * 60000 + 12345,
+    remainingMs: WORK_LIMIT_MS - (2 * 60000 + 45500),
     activeMs: 2 * 60000 + 45500,
     sessionStartAt: 640001,
     lastTickAt: 1_000_000,
@@ -267,8 +280,78 @@ test("work-session durations are shown only to completed minutes without roundin
   assert.match(app.element("movementDetail").textContent, /時間OFF中/);
   assert.doesNotMatch(app.element("movementDetail").textContent, /秒/);
   assert.equal(app.api.durationText(59999), "0時間00分");
-  assert.equal(app.api.getState().remainingMs, 20 * 60000 + 12345);
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - (2 * 60000 + 45500));
   assert.equal(app.api.getState().activeMs, 2 * 60000 + 45500);
+});
+
+test("legacy GPS usage is relinked to the remaining clock and operation rate", () => {
+  const now = 10_000_000;
+  const remainingMs = 11 * 60 * 60000 + 25 * 60000;
+  const app = timerHarness({
+    now,
+    regular: { target: "25", done: "2", remainH: "11", remainM: "25" },
+    enhanced: {
+      countMode: "continuous-v1",
+      on: false,
+      remainingMs,
+      activeMs: 90 * 1000,
+      sessionStartAt: now - 88 * 60000,
+      breakOn: false,
+      breakMs: 0,
+      breakSegments: [],
+      updatedAt: now
+    }
+  });
+
+  assert.equal(app.api.getState().activeMs, 35 * 60000);
+  assert.equal(app.element("workActiveTime").textContent, "0時間35分");
+  assert.equal(app.element("workElapsedTime").textContent, "1時間28分");
+  assert.equal(app.element("workRate").textContent, "39.8%");
+  const snapshot = app.api.sessionSnapshot(now);
+  assert.equal(snapshot.usedMs, 35 * 60000);
+  assert.equal(snapshot.usageMode, "remaining-v1");
+  assert.equal(snapshot.activeMs, snapshot.usedMs);
+  assert.equal(snapshot.actualPaceMinutes, 17.5);
+  assert.ok(Math.abs(snapshot.rate - (35 / 88 * 100)) < 0.001);
+  const persisted = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(persisted.usageMode, "remaining-v1");
+  assert.equal(persisted.activeMs, 35 * 60000);
+});
+
+test("usage and rate stay at zero while remaining time is above 12 hours", () => {
+  const now = 5_000_000;
+  const app = timerHarness({
+    now,
+    enhanced: state({
+      on: false,
+      remainingMs: WORK_LIMIT_MS + 30 * 60000,
+      activeMs: 123000,
+      sessionStartAt: now - 60 * 60000,
+      lastTickAt: now,
+      updatedAt: now
+    })
+  });
+
+  assert.equal(app.api.getState().activeMs, 0);
+  assert.equal(app.element("workActiveTime").textContent, "0時間00分");
+  assert.equal(app.element("workRate").textContent, "0.0%");
+});
+
+test("history uses canonical consumed time while preserving legacy fallback records", () => {
+  const app = timerHarness({ now: 10_000_000 });
+  const linked = {
+    usedMs: 35 * 60000,
+    remainingMs: 11 * 60 * 60000 + 25 * 60000,
+    activeMs: 90 * 1000,
+    elapsedMs: 88 * 60000,
+    rate: 1.7
+  };
+  assert.equal(app.api.historyUsedMs(linked), 35 * 60000);
+  assert.ok(Math.abs(app.api.historyRate(linked) - (35 / 88 * 100)) < 0.001);
+
+  const legacy = { activeMs: 10 * 60000, elapsedMs: 20 * 60000, rate: 12.3 };
+  assert.equal(app.api.historyUsedMs(legacy), 10 * 60000);
+  assert.equal(app.api.historyRate(legacy), 50);
 });
 
 test("normal persistence mirrors enhanced remaining time into regular saved controls", () => {
@@ -281,12 +364,12 @@ test("normal persistence mirrors enhanced remaining time into regular saved cont
   assert.equal(regular.remainM, "11");
 });
 
-test("active deltas are capped and timestamps never move backward", () => {
+test("usage is capped at 12 hours and timestamps never move backward", () => {
   const app = timerHarness({ now: 100000 });
   app.api.setState(state({ remainingMs: 2500 }));
   app.api.tickClock(400000);
   const afterGap = { ...app.api.getState() };
-  assert.equal(afterGap.activeMs, 2500, "active time cannot exceed the time that was actually left");
+  assert.equal(afterGap.activeMs, WORK_LIMIT_MS, "the linked usage mirror must stop at the 12-hour limit");
   assert.equal(afterGap.remainingMs, 0);
   assert.equal(afterGap.on, false);
 
@@ -303,10 +386,10 @@ test("time ON continuously consumes elapsed seconds without requesting geolocati
 
   app.api.tickClock(159999);
   assert.equal(app.api.getState().remainingMs, 540001);
-  assert.equal(app.api.getState().activeMs, 59999);
+  assert.equal(app.api.getState().activeMs, usedMs(540001));
   app.api.tickClock(160000);
   assert.equal(app.api.getState().remainingMs, 540000);
-  assert.equal(app.api.getState().activeMs, 60000);
+  assert.equal(app.api.getState().activeMs, usedMs(540000));
   assert.equal(app.geolocationRequests(), 0);
 });
 
@@ -316,12 +399,12 @@ test("time OFF and breaks pause the continuous countdown", () => {
   app.api.setState(state({ on: false, lastTickAt: 100000 }));
   app.api.tickClock(160000);
   assert.equal(app.api.getState().remainingMs, 600000);
-  assert.equal(app.api.getState().activeMs, 0);
+  assert.equal(app.api.getState().activeMs, usedMs(600000));
 
   app.api.setState(state({ breakOn: true, breakStartedAt: 100000, lastTickAt: 100000 }));
   app.api.tickClock(220000);
   assert.equal(app.api.getState().remainingMs, 600000);
-  assert.equal(app.api.getState().activeMs, 0);
+  assert.equal(app.api.getState().activeMs, usedMs(600000));
   assert.equal(app.geolocationRequests(), 0);
 });
 
@@ -337,7 +420,7 @@ test("the first time ON starts one session and later toggles keep its start", ()
   app.setNow(260000);
   app.api.enhancedToggleClock();
   assert.equal(app.api.getState().on, false);
-  assert.equal(app.api.getState().activeMs, 60000);
+  assert.equal(app.api.getState().activeMs, usedMs(540000));
 
   app.setNow(300000);
   app.api.enhancedToggleClock();
@@ -386,17 +469,17 @@ test("background time is consumed exactly once while the clock is ON", () => {
 
   app.setNow(120000);
   app.dispatchWindow("pagehide");
-  assert.equal(app.api.getState().activeMs, 20000);
+  assert.equal(app.api.getState().activeMs, usedMs(580000));
   assert.equal(app.api.getState().remainingMs, 580000);
 
   app.setNow(160000);
   app.context.document.hidden = false;
   app.dispatchDocument("visibilitychange");
-  assert.equal(app.api.getState().activeMs, 60000);
+  assert.equal(app.api.getState().activeMs, usedMs(540000));
   assert.equal(app.api.getState().remainingMs, 540000);
 
   app.dispatchDocument("visibilitychange");
-  assert.equal(app.api.getState().activeMs, 60000, "a repeated foreground event must not consume the gap twice");
+  assert.equal(app.api.getState().activeMs, usedMs(540000), "a repeated foreground event must not consume the gap twice");
   assert.equal(app.api.getState().remainingMs, 540000);
   assert.equal(app.geolocationRequests(), 0);
 });
@@ -419,7 +502,7 @@ test("main view adopts an exact compact-clock edit from the storage event", () =
 
   assert.equal(app.api.getState().on, false);
   assert.equal(app.api.getState().remainingMs, 321234);
-  assert.equal(app.api.getState().activeMs, 98765);
+  assert.equal(app.api.getState().activeMs, usedMs(321234));
   assert.equal(app.api.getState().sessionStartAt, 5000);
   app.setNow(220000);
   app.api.tickClock();
@@ -431,7 +514,7 @@ test("main view ignores an older delayed clock update", () => {
   app.api.setState(state({
     on: false,
     remainingMs: 500000,
-    activeMs: 100000,
+    activeMs: usedMs(500000),
     lastTickAt: 200000,
     updatedAt: 200000
   }));
@@ -449,7 +532,7 @@ test("main view ignores an older delayed clock update", () => {
 
   assert.equal(app.api.getState().on, false);
   assert.equal(app.api.getState().remainingMs, 500000);
-  assert.equal(app.api.getState().activeMs, 100000);
+  assert.equal(app.api.getState().activeMs, usedMs(500000));
 });
 
 test("an explicit edit wins over a newer unpersisted display tick", () => {
@@ -475,7 +558,7 @@ test("an explicit edit wins over a newer unpersisted display tick", () => {
 
   assert.equal(app.api.getState().on, false);
   assert.equal(app.api.getState().remainingMs, 321000);
-  assert.equal(app.api.getState().activeMs, 150000);
+  assert.equal(app.api.getState().activeMs, usedMs(321000));
 });
 
 test("pageshow reloads a compact edit before resuming a BFCache-restored clock", () => {
@@ -494,11 +577,11 @@ test("pageshow reloads a compact edit before resuming a BFCache-restored clock",
   app.dispatchWindow("pageshow");
 
   assert.equal(app.api.getState().remainingMs, 250000);
-  assert.equal(app.api.getState().activeMs, 90000);
+  assert.equal(app.api.getState().activeMs, usedMs(250000));
   assert.equal(app.api.getState().sessionStartAt, 5000);
   app.dispatchWindow("pageshow");
   assert.equal(app.api.getState().remainingMs, 250000, "repeated pageshow at the same instant must not double-count");
-  assert.equal(app.api.getState().activeMs, 90000);
+  assert.equal(app.api.getState().activeMs, usedMs(250000));
 });
 
 test("old movement state migrates without retroactively consuming its stored gap", () => {
@@ -516,10 +599,12 @@ test("old movement state migrates without retroactively consuming its stored gap
   });
 
   assert.equal(app.api.getState().remainingMs, 600000);
-  assert.equal(app.api.getState().activeMs, 12000);
+  assert.equal(app.api.getState().activeMs, usedMs(600000));
   assert.equal(app.api.getState().backgroundGap, null);
   assert.equal(app.api.getState().countMode, "continuous-v1");
+  assert.equal(app.api.getState().usageMode, "remaining-v1");
   assert.equal(JSON.parse(app.storage.getItem(ENHANCED_KEY)).countMode, "continuous-v1");
+  assert.equal(JSON.parse(app.storage.getItem(ENHANCED_KEY)).usageMode, "remaining-v1");
   assert.equal(app.geolocationRequests(), 0);
 });
 
@@ -530,10 +615,10 @@ test("continuous state catches up once after a reload", () => {
   });
 
   assert.equal(app.api.getState().remainingMs, 540000);
-  assert.equal(app.api.getState().activeMs, 80000);
+  assert.equal(app.api.getState().activeMs, usedMs(540000));
   app.api.tickClock(160000);
   assert.equal(app.api.getState().remainingMs, 540000);
-  assert.equal(app.api.getState().activeMs, 80000);
+  assert.equal(app.api.getState().activeMs, usedMs(540000));
 });
 
 test("a future monotonic anchor does not double-count after the device clock moves backward", () => {
@@ -551,7 +636,7 @@ test("a future monotonic anchor does not double-count after the device clock mov
   app.setNow(250000);
   app.api.tickClock();
   assert.equal(app.api.getState().remainingMs, 550000);
-  assert.equal(app.api.getState().activeMs, 70000);
+  assert.equal(app.api.getState().activeMs, usedMs(550000));
 });
 
 test("the use-up time stays fixed while counting and slides while paused", () => {
@@ -575,7 +660,8 @@ test("ending a session records once and freezes the continuous clock", () => {
   assert.equal(history.length, 1);
   assert.equal(finished.on, false);
   assert.equal(finished.sessionEndedAt, 200000);
-  assert.equal(finished.activeMs, 100000);
+  assert.equal(finished.activeMs, usedMs(finished.remainingMs));
+  assert.equal(history[0].activeMs, history[0].usedMs);
 
   app.setNow(400000);
   app.api.tickClock();
@@ -583,6 +669,78 @@ test("ending a session records once and freezes the continuous clock", () => {
   assert.equal(app.api.getState().remainingMs, finished.remainingMs);
   assert.equal(app.api.getState().activeMs, finished.activeMs);
   assert.equal(JSON.parse(app.storage.getItem(HISTORY_KEY)).length, 1);
+});
+
+test("manual correction, open break, finish, and history keep one linked usage metric", () => {
+  const minute = 60000;
+  const base = 1_000_000;
+  const app = timerHarness({
+    now: base + 120 * minute,
+    regular: { target: "25", done: "10", remainH: "10", remainM: "0" }
+  });
+  app.api.setState(state({
+    on: true,
+    remainingMs: 600 * minute,
+    activeMs: 120 * minute,
+    sessionStartAt: base,
+    lastTickAt: base + 120 * minute,
+    updatedAt: base + 120 * minute
+  }));
+
+  app.setNow(base + 140 * minute);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().remainingMs, 580 * minute);
+
+  app.setNow(base + 150 * minute);
+  app.context.adjustRemain(-10);
+  assert.equal(app.api.getState().remainingMs, 570 * minute);
+  assert.equal(app.api.getState().activeMs, 150 * minute);
+  app.api.toggleBreak();
+  assert.equal(app.api.getState().breakOn, true);
+
+  app.setNow(base + 180 * minute);
+  app.api.finishSession();
+  const finished = app.api.getState();
+  const history = JSON.parse(app.storage.getItem(HISTORY_KEY));
+  assert.equal(finished.on, false);
+  assert.equal(finished.breakOn, false);
+  assert.equal(finished.sessionEndedAt, base + 180 * minute);
+  assert.equal(finished.remainingMs, 570 * minute);
+  assert.equal(finished.activeMs, 150 * minute);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].remainingMs, 570 * minute);
+  assert.equal(history[0].usedMs, 150 * minute);
+  assert.equal(history[0].usageMode, "remaining-v1");
+  assert.equal(history[0].activeMs, 150 * minute);
+  assert.equal(history[0].elapsedMs, 150 * minute);
+  assert.equal(history[0].breakMs, 30 * minute);
+  assert.equal(history[0].rate, 100);
+  assert.equal(history[0].actualPaceMinutes, 15);
+  assert.equal(history[0].hourlyRate, 4);
+});
+
+test("an ended session rejects remaining-time corrections until reset", () => {
+  const app = timerHarness({ now: 300000 });
+  const remainingMs = WORK_LIMIT_MS - 35 * 60000;
+  app.api.setState(state({
+    on: false,
+    remainingMs,
+    activeMs: 35 * 60000,
+    sessionStartAt: 100000,
+    sessionEndedAt: 250000,
+    lastTickAt: 250000,
+    updatedAt: 250000
+  }));
+
+  app.context.adjustRemain(-1);
+  assert.equal(app.api.getState().remainingMs, remainingMs);
+  assert.equal(app.api.setExactRemaining(600), false);
+  assert.equal(app.api.getState().remainingMs, remainingMs);
+  app.api.renderEnhancedClock();
+  for (const id of ["remainMinus", "remainPlus", "remainH", "remainM"]) {
+    assert.equal(app.element(id).disabled, true, `${id} must stay disabled for the immutable ended session`);
+  }
 });
 
 test("reset clears every timer, break, and background field in memory and storage", () => {

@@ -135,9 +135,15 @@ test("remaining and work-session displays stop at minutes while calculations kee
 
 test("the enhanced timer is continuous while ON and never requests location", () => {
   const enhancements = read("app-enhancements.js");
+  const compact = read("compact.html");
   assert.match(enhancements, /const\s+COUNT_MODE\s*=\s*["']continuous-v1["']/);
+  assert.match(enhancements, /const\s+USAGE_MODE\s*=\s*["']remaining-v1["']/);
+  assert.match(compact, /const\s+USAGE_MODE\s*=\s*["']remaining-v1["']/);
   assert.match(enhancements, /clockState\.on\s*&&\s*!clockState\.breakOn\s*&&\s*!clockState\.sessionEndedAt/);
   assert.match(enhancements, /clockState\.remainingMs\s*-=?\s*consumed/);
+  assert.match(enhancements, /WORK_LIMIT_MS\s*-\s*finite\(remainingMs/);
+  assert.match(enhancements, /clockUsedMs\(\)\s*\/\s*elapsed\s*\*\s*100/);
+  assert.match(compact, /activeMs:\s*usedMsFromRemaining\(remainingMs\)/);
   assert.doesNotMatch(enhancements, /navigator\.geolocation|watchPosition|clearWatch/);
   assert.doesNotMatch(enhancements, /GPS|位置情報/);
   assert.match(enhancements, /案件の有無や移動状態は自動判定しません/);
