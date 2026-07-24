@@ -1,0 +1,64 @@
+name: Finalize other-company delivery contract
+
+on:
+  push:
+    branches:
+      - agent/other-company-work
+
+permissions:
+  contents: write
+
+jobs:
+  update-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/other-company-work
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Update delivery contract
+        run: python scripts/update_other_company_contract.py
+
+      - name: Run full validation
+        id: validate
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          {
+            node --check app-enhancements.js
+            node --check app-enhancements-fix.js
+            node --check app-session-ui-fix.js
+            node --check sw.js
+            node --test tests/*.test.js
+            git diff --check
+          } 2>&1 | tee contract-test-output.txt
+
+      - name: Save failure diagnostic
+        if: steps.validate.outcome == 'failure'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Record other-company contract test diagnostic" || true
+          git push origin HEAD:agent/other-company-work
+          exit 1
+
+      - name: Commit validated contract
+        if: steps.validate.outcome == 'success'
+        run: |
+          rm -f contract-test-output.txt
+          rm -f scripts/update_other_company_contract.py
+          rm -f .github/workflows/finalize-delivery-contract.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "他社稼働の配信契約テストを更新"
+          git push origin HEAD:agent/other-company-work
