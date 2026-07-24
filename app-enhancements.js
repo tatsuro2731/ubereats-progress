@@ -563,7 +563,7 @@
     at = finite(at, nowMs());
     tickClock(at);
     if (!clockState.sessionStartAt) {
-      if (showMessage) alert("開始時刻がまだありません。時間ONで計測を開始してください。");
+      if (showMessage) alert("開始時刻がまだありません。時間ONまたは他社稼働ONで計測を開始してください。");
       return false;
     }
     const item = sessionSnapshot(at);
@@ -972,7 +972,7 @@
 
   $("reset").onclick = function() {
     if (!confirm("完了件数・残り時間・終了上限・今日の稼働計測をリセットしますか？")) return;
-    const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (clockUsedMs() > 0 || n("done") > 0));
+    const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (totalActiveMs() > 0 || n("done") > 0));
     if (hadSession && confirm("リセット前に今日の稼働記録を保存しますか？")) recordSession(false);
     $("done").value = "0";
     $("remainH").value = "12";

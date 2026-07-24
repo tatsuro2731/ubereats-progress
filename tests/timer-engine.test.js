@@ -916,3 +916,33 @@ test("history snapshot separates Uber, other-company and total active time", () 
   assert.equal(snapshot.actualPaceMinutes, 15, "Uber pace must remain based on Uber time only");
   assert.ok(Math.abs(snapshot.rate - (40 / 60 * 100)) < 0.001);
 });
+
+
+test("reset offers to save an other-company-only session", () => {
+  const minute = 60000;
+  const now = 1_000_000;
+  const app = timerHarness({
+    now,
+    regular: { target: "10", done: "0", remainH: "12", remainM: "0" },
+    enhanced: state({
+      on: false,
+      remainingMs: WORK_LIMIT_MS,
+      activeMs: 0,
+      sessionStartAt: now - minute,
+      lastTickAt: now,
+      otherCompanyOn: false,
+      otherCompanyStartedAt: null,
+      otherCompanyMs: minute,
+      otherCompanySegments: [{ startAt: now - minute, endAt: now }]
+    })
+  });
+
+  app.element("reset").onclick();
+  assert.equal(app.confirmMessages.length, 2);
+  assert.match(app.confirmMessages[1], /保存/);
+  const items = JSON.parse(app.storage.getItem(HISTORY_KEY) || "[]");
+  assert.equal(items.length, 1);
+  assert.equal(items[0].usedMs, 0);
+  assert.equal(items[0].otherCompanyMs, minute);
+  assert.equal(items[0].totalActiveMs, minute);
+});
