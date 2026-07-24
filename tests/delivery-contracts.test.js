@@ -142,7 +142,9 @@ test("the enhanced timer is continuous while ON and never requests location", ()
   assert.match(enhancements, /clockState\.on\s*&&\s*!clockState\.breakOn\s*&&\s*!clockState\.sessionEndedAt/);
   assert.match(enhancements, /clockState\.remainingMs\s*-=?\s*consumed/);
   assert.match(enhancements, /WORK_LIMIT_MS\s*-\s*finite\(remainingMs/);
-  assert.match(enhancements, /clockUsedMs\(\)\s*\/\s*elapsed\s*\*\s*100/);
+  assert.match(enhancements, /clockUsedMs\(\)\s*\+\s*otherCompanyDurationMs\(at\)/);
+  assert.match(enhancements, /totalActiveMs\(at\)\s*\/\s*elapsed\s*\*\s*100/);
+  assert.match(enhancements, /sharedMode\s*=\s*clockState\.on\s*\?\s*["']break["']\s*:\s*["']otherCompany["']/);
   assert.match(compact, /activeMs:\s*usedMsFromRemaining\(remainingMs\)/);
   assert.doesNotMatch(enhancements, /navigator\.geolocation|watchPosition|clearWatch/);
   assert.doesNotMatch(enhancements, /GPS|位置情報/);
