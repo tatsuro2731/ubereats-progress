@@ -202,3 +202,41 @@ test("start-time validation uses linked remaining-clock usage instead of stale G
   assert.equal(rejectedState.sessionStartAt, base);
   assert.equal(rejected.values.has(ENHANCED_KEY), false);
 });
+
+
+test("start-time validation includes recorded other-company work", () => {
+  const minute = 60000;
+  const base = 1_700_000_040_000;
+  const now = base + 60 * minute;
+  const state = {
+    on: false,
+    remainingMs: WORK_LIMIT_MS - 30 * minute,
+    activeMs: 30 * minute,
+    sessionStartAt: base,
+    lastTickAt: now,
+    breakOn: false,
+    breakStartedAt: null,
+    breakMs: 0,
+    breakSegments: [],
+    legacyBreakMs: 0,
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 20 * minute,
+    otherCompanySegments: [{ startAt: base + 10 * minute, endAt: base + 30 * minute }]
+  };
+  const app = harness(state, now);
+
+  app.element("startTimeInput").value = localInput(base + 11 * minute);
+  app.api.applyStartTime();
+  assert.match(app.element("startTimeError").textContent, /総実稼働時間/);
+  assert.equal(state.sessionStartAt, base);
+
+  app.element("startTimeInput").value = localInput(base + 10 * minute);
+  app.api.applyStartTime();
+  assert.equal(app.element("startTimeError").textContent, "");
+  assert.equal(state.sessionStartAt, base + 10 * minute);
+  const saved = JSON.parse(app.values.get(ENHANCED_KEY));
+  assert.equal(saved.otherCompanyMs, 20 * minute);
+  assert.equal(saved.totalActiveMs, 50 * minute);
+  assert.deepEqual(saved.otherCompanySegments, state.otherCompanySegments);
+});

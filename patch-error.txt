@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/home/runner/work/ubereats-progress/ubereats-progress/scripts/apply_other_company.py", line 12, in <module>
-    raise RuntimeError(f"payload sha256 mismatch: {actual}")
-RuntimeError: payload sha256 mismatch: 52b587a7a8de514d1e09f100d7e963276ce190a9743c84c40c10b5d8d9410ed7
