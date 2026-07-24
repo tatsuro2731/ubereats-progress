@@ -47,6 +47,11 @@
       breakMs: 0,
       breakSegments: [],
       legacyBreakMs: 0,
+      otherCompanyOn: false,
+      otherCompanyStartedAt: null,
+      otherCompanyMs: 0,
+      otherCompanySegments: [],
+      legacyOtherCompanyMs: 0,
       backgroundGap: null,
       lastBackfillMs: 0,
       lastBackfillAt: null,
@@ -88,15 +93,19 @@
       : null;
     const stateAt = sessionEndedAt || now;
     const breakOn = !sessionEndedAt && Boolean(data && data.breakOn);
+    const clockOn = !sessionEndedAt && Boolean(data && data.on) && !breakOn;
     const breakStartedAt = breakOn ? finite(data && data.breakStartedAt, stateAt) : null;
     const hasBreakSegments = Boolean(data && Array.isArray(data.breakSegments));
+    const otherCompanyOn = clockOn && Boolean(data && data.otherCompanyOn);
+    const otherCompanyStartedAt = otherCompanyOn ? finite(data && data.otherCompanyStartedAt, stateAt) : null;
+    const hasOtherCompanySegments = Boolean(data && Array.isArray(data.otherCompanySegments));
     const isContinuousState = Boolean(data && data.countMode === COUNT_MODE);
     const rawUpdatedAt = finite(data && data.updatedAt, now);
     const resumeAt = isContinuousState && rawUpdatedAt > 0 ? rawUpdatedAt : now;
     return {
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
-      on: !sessionEndedAt && Boolean(data && data.on),
+      on: clockOn,
       remainingMs: clamp(remainingMs, 0, MAX_REMAIN_INPUT_MINUTES * 60000),
       baseRemain: remainingMs / 60000,
       baseAt: now,
@@ -110,6 +119,13 @@
       breakMs: Math.max(0, finite(data && data.breakMs, 0)),
       breakSegments: normalizeBreakSegments(data && data.breakSegments, breakOn, breakStartedAt, stateAt),
       legacyBreakMs: hasBreakSegments ? Math.max(0, finite(data && data.legacyBreakMs, 0)) : Math.max(0, finite(data && data.breakMs, 0)),
+      otherCompanyOn,
+      otherCompanyStartedAt,
+      otherCompanyMs: Math.max(0, finite(data && data.otherCompanyMs, 0)),
+      otherCompanySegments: normalizeBreakSegments(data && data.otherCompanySegments, otherCompanyOn, otherCompanyStartedAt, stateAt),
+      legacyOtherCompanyMs: hasOtherCompanySegments
+        ? Math.max(0, finite(data && data.legacyOtherCompanyMs, 0))
+        : Math.max(0, finite(data && data.otherCompanyMs, 0)),
       backgroundGap: null,
       lastBackfillMs: 0,
       lastBackfillAt: null,
@@ -128,6 +144,11 @@
     if (clockState.breakOn && Array.isArray(clockState.breakSegments)) {
       const openSegment = [...clockState.breakSegments].reverse().find(segment => segment.endAt === null);
       if (openSegment) clockState.breakStartedAt = openSegment.startAt;
+    }
+    if (clockState.otherCompanyOn && !clockState.otherCompanyStartedAt) clockState.otherCompanyStartedAt = nowMs();
+    if (clockState.otherCompanyOn && Array.isArray(clockState.otherCompanySegments)) {
+      const openSegment = [...clockState.otherCompanySegments].reverse().find(segment => segment.endAt === null);
+      if (openSegment) clockState.otherCompanyStartedAt = openSegment.startAt;
     }
   }
 
@@ -153,6 +174,7 @@
 
   function serializableState() {
     syncClockUsage();
+    clockState.otherCompanyMs = otherCompanyDurationMs();
     return {
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
@@ -169,6 +191,14 @@
         endAt: segment.endAt === null ? null : segment.endAt
       })) : [],
       legacyBreakMs: Math.max(0, finite(clockState.legacyBreakMs, 0)),
+      otherCompanyOn: Boolean(clockState.otherCompanyOn),
+      otherCompanyStartedAt: clockState.otherCompanyStartedAt || null,
+      otherCompanyMs: Math.max(0, finite(clockState.otherCompanyMs, 0)),
+      otherCompanySegments: Array.isArray(clockState.otherCompanySegments) ? clockState.otherCompanySegments.map(segment => ({
+        startAt: segment.startAt,
+        endAt: segment.endAt === null ? null : segment.endAt
+      })) : [],
+      legacyOtherCompanyMs: Math.max(0, finite(clockState.legacyOtherCompanyMs, 0)),
       backgroundGap: null,
       lastBackfillMs: 0,
       lastBackfillAt: null,
@@ -203,15 +233,18 @@
     const delta = effectiveAt - previous;
     clockState.lastTickAt = effectiveAt;
     const counting = clockState.on && !clockState.breakOn && !clockState.sessionEndedAt;
+    let countedUntil = effectiveAt;
     if (counting && delta > 0) {
       const consumed = Math.min(delta, Math.max(0, clockState.remainingMs));
       clockState.remainingMs -= consumed;
+      countedUntil = previous + consumed;
     }
     syncClockUsage();
     clockState.moving = false;
     clockState.baseRemain = clockState.remainingMs / 60000;
     clockState.baseAt = effectiveAt;
     if (clockState.remainingMs <= 0 && clockState.on) {
+      closeActiveOtherCompany(countedUntil);
       clockState.on = false;
       clockState.moving = false;
       persistEnhancedClock(true);
@@ -282,6 +315,48 @@
     return Math.max(0, finite(clockState.legacyBreakMs, 0)) + segmentMs;
   }
 
+  function segmentDurationMs(segments, at = nowMs()) {
+    at = sessionMetricAt(at);
+    const sessionStart = clockState.sessionStartAt ? finite(clockState.sessionStartAt, at) : at;
+    const intervals = (Array.isArray(segments) ? segments : []).map(segment => {
+      const startAt = Math.max(sessionStart, finite(segment && segment.startAt, at));
+      const rawEnd = segment && segment.endAt;
+      const endAt = Math.min(at, rawEnd === null || rawEnd === undefined ? at : finite(rawEnd, at));
+      return endAt > startAt ? [startAt, endAt] : null;
+    }).filter(Boolean).sort((a, b) => a[0] - b[0]);
+    let total = 0;
+    let rangeStart = null;
+    let rangeEnd = null;
+    intervals.forEach(([startAt, endAt]) => {
+      if (rangeStart === null) {
+        rangeStart = startAt;
+        rangeEnd = endAt;
+      } else if (startAt <= rangeEnd) {
+        rangeEnd = Math.max(rangeEnd, endAt);
+      } else {
+        total += rangeEnd - rangeStart;
+        rangeStart = startAt;
+        rangeEnd = endAt;
+      }
+    });
+    if (rangeStart !== null) total += rangeEnd - rangeStart;
+    return Math.max(0, total);
+  }
+
+  function otherCompanyDurationMs(at = nowMs()) {
+    const segments = Array.isArray(clockState.otherCompanySegments) ? clockState.otherCompanySegments : [];
+    const segmentedMs = segmentDurationMs(segments, at);
+    return Math.max(0, finite(clockState.legacyOtherCompanyMs, 0)) + segmentedMs;
+  }
+
+  function otherCompanyUsedMs(at = nowMs(), totalUsedMs = clockUsedMs()) {
+    return clamp(otherCompanyDurationMs(at), 0, Math.max(0, totalUsedMs));
+  }
+
+  function uberUsedMs(at = nowMs(), totalUsedMs = clockUsedMs()) {
+    return Math.max(0, totalUsedMs - otherCompanyUsedMs(at, totalUsedMs));
+  }
+
   function sessionElapsedMs(at = nowMs()) {
     if (!clockState.sessionStartAt) return 0;
     at = sessionMetricAt(at);
@@ -295,8 +370,9 @@
 
   function currentStatus() {
     if (clockState.sessionEndedAt) return { text: "稼働終了", sub: "履歴に保存済み", mode: "ended" };
-    if (!clockState.on) return { text: "停止中", sub: "開始する", mode: "off" };
+    if (clockState.on && clockState.otherCompanyOn) return { text: "他社稼働中", sub: "残り時間も計測中", mode: "otherCompany" };
     if (clockState.breakOn) return { text: "休憩中", sub: "休憩中", mode: "break" };
+    if (!clockState.on) return { text: "停止中", sub: "開始する", mode: "off" };
     return { text: "カウント中", sub: "止める", mode: "counting" };
   }
 
@@ -338,22 +414,30 @@
     const detail = $("movementDetail");
     if (detail) detail.textContent = ended
       ? "稼働終了・履歴に保存済み"
-      : clockState.breakOn
-        ? "休憩中は残り時間を止めています"
+      : clockState.on && clockState.otherCompanyOn
+        ? "他社稼働中も残り時間をカウントしています"
         : clockState.on
           ? "移動・停車にかかわらず連続でカウントします"
-          : "時間OFF中は残り時間を止めています";
+          : clockState.breakOn
+            ? "休憩中は残り時間を止めています"
+            : "時間OFF中は残り時間を止めています";
     renderSessionPanel();
   }
 
   function enhancedToggleClock() {
     if (clockState.sessionEndedAt) return;
+    const wasOn = Boolean(clockState.on);
     tickClock();
-    clockState.on = !clockState.on;
-    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), nowMs());
-    if (clockState.on) {
-      if (!clockState.sessionStartAt) clockState.sessionStartAt = nowMs();
+    const now = nowMs();
+    if (wasOn) {
+      closeActiveOtherCompany(now);
+      clockState.on = false;
+    } else {
+      closeActiveBreak(now);
+      clockState.on = true;
+      if (!clockState.sessionStartAt) clockState.sessionStartAt = now;
     }
+    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
     clockState.backgroundGap = null;
     persistEnhancedClock(true);
     calc();
@@ -379,7 +463,7 @@
   }
 
   function toggleBreak() {
-    if (clockState.sessionEndedAt) return;
+    if (clockState.sessionEndedAt || clockState.on) return;
     if (!clockState.sessionStartAt) {
       alert("時間ONで計測を開始してから休憩を記録してください。");
       return;
@@ -388,13 +472,7 @@
     const now = nowMs();
     if (!Array.isArray(clockState.breakSegments)) clockState.breakSegments = [];
     if (clockState.breakOn) {
-      const startedAt = finite(clockState.breakStartedAt, now);
-      const openSegment = [...clockState.breakSegments].reverse().find(segment => segment.endAt === null);
-      if (openSegment) openSegment.endAt = now;
-      else clockState.breakSegments.push({ startAt: startedAt, endAt: now });
-      clockState.breakMs += Math.max(0, now - startedAt);
-      clockState.breakStartedAt = null;
-      clockState.breakOn = false;
+      closeActiveBreak(now);
     } else {
       clockState.breakOn = true;
       clockState.breakStartedAt = now;
@@ -404,6 +482,33 @@
     clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
     persistEnhancedClock(true);
     renderEnhancedClock();
+  }
+
+  function toggleOtherCompany() {
+    if (clockState.sessionEndedAt || !clockState.on) return;
+    tickClock();
+    const now = nowMs();
+    if (!clockState.sessionStartAt) clockState.sessionStartAt = now;
+    closeActiveBreak(now);
+    if (!Array.isArray(clockState.otherCompanySegments)) clockState.otherCompanySegments = [];
+    if (clockState.otherCompanyOn) {
+      closeActiveOtherCompany(now);
+    } else {
+      clockState.otherCompanyOn = true;
+      clockState.otherCompanyStartedAt = now;
+      clockState.otherCompanySegments.push({ startAt: now, endAt: null });
+      clockState.backgroundGap = null;
+    }
+    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
+    clockState.otherCompanyMs = otherCompanyDurationMs(now);
+    persistEnhancedClock(true);
+    renderEnhancedClock();
+  }
+
+  function handleSharedWorkToggle() {
+    const sharedMode = clockState.on ? "otherCompany" : "break";
+    if (sharedMode === "otherCompany") toggleOtherCompany();
+    else toggleBreak();
   }
 
   function history() {
@@ -428,7 +533,12 @@
     const done = Math.max(0, finite(n("done"), 0));
     const remainingMs = Math.max(0, finite(clockState.remainingMs, 0));
     const usedMs = clockUsedMs(remainingMs);
+    const otherUsedMs = otherCompanyUsedMs(at, usedMs);
+    const uberWorkMs = Math.max(0, usedMs - otherUsedMs);
     const actualPaceMinutes = done > 0 && usedMs > 0 ? usedMs / 60000 / done : null;
+    const workTypes = [];
+    if (uberWorkMs > 0) workTypes.push("uber");
+    if (otherUsedMs > 0) workTypes.push("otherCompany");
     return {
       id: `${at}-${Math.random().toString(36).slice(2, 7)}`,
       date: new Date(clockState.sessionStartAt).toISOString(),
@@ -441,6 +551,11 @@
       progressRate: clamp(done / target * 100, 0, 999),
       remainingMs,
       usedMs,
+      uberUsedMs: uberWorkMs,
+      otherCompanyMs: otherUsedMs,
+      totalActiveMs: usedMs,
+      workTypes,
+      endedFromState: currentStatus().mode,
       usageMode: USAGE_MODE,
       activeMs: usedMs,
       elapsedMs: sessionElapsedMs(at),
@@ -480,6 +595,18 @@
     clockState.breakOn = false;
   }
 
+  function closeActiveOtherCompany(at) {
+    if (!clockState.otherCompanyOn) return;
+    if (!Array.isArray(clockState.otherCompanySegments)) clockState.otherCompanySegments = [];
+    const startedAt = finite(clockState.otherCompanyStartedAt, at);
+    const openSegment = [...clockState.otherCompanySegments].reverse().find(segment => segment.endAt === null);
+    if (openSegment) openSegment.endAt = at;
+    else clockState.otherCompanySegments.push({ startAt: startedAt, endAt: at });
+    clockState.otherCompanyStartedAt = null;
+    clockState.otherCompanyOn = false;
+    clockState.otherCompanyMs = otherCompanyDurationMs(at);
+  }
+
   function finishSession() {
     if (finalizingSession || !clockState.sessionStartAt || clockState.sessionEndedAt) return;
     finalizingSession = true;
@@ -491,6 +618,7 @@
       return;
     }
     closeActiveBreak(at);
+    closeActiveOtherCompany(at);
     clockState.on = false;
     clockState.moving = false;
     clockState.backgroundGap = null;
@@ -525,6 +653,36 @@
     const remainingMs = finite(item && item.remainingMs, NaN);
     if (Number.isFinite(remainingMs) && remainingMs >= 0) return clockUsedMs(remainingMs);
     return clamp(finite(item && item.activeMs, 0), 0, WORK_LIMIT_MS);
+  }
+
+  function historyOtherCompanyMs(item) {
+    return clamp(finite(item && item.otherCompanyMs, 0), 0, historyUsedMs(item));
+  }
+
+  function historyUberUsedMs(item) {
+    const total = historyUsedMs(item);
+    const stored = finite(item && item.uberUsedMs, NaN);
+    if (Number.isFinite(stored) && stored >= 0) return clamp(stored, 0, total);
+    return Math.max(0, total - historyOtherCompanyMs(item));
+  }
+
+  function historyWorkTypeLabel(item) {
+    const uberMs = historyUberUsedMs(item);
+    const otherMs = historyOtherCompanyMs(item);
+    if (uberMs > 0 && otherMs > 0) return "Uber＋他社";
+    if (otherMs > 0) return "他社のみ";
+    if (uberMs > 0) return "Uber";
+    return "計測なし";
+  }
+
+  function historyEndStateLabel(item) {
+    const labels = {
+      counting: "時間ON",
+      otherCompany: "他社稼働中",
+      off: "時間OFF",
+      break: "休憩中"
+    };
+    return labels[item && item.endedFromState] || "";
   }
 
   function historyRate(item) {
@@ -594,6 +752,8 @@
       rows: [
         { label: "完了件数", value: `${Math.max(0, n("done"))} / ${Math.max(1, n("target"))}件` },
         { label: "時計が減った時間", value: durationText(clockUsedMs()) },
+        { label: "Uber稼働", value: durationText(uberUsedMs(at)) },
+        { label: "他社稼働", value: durationText(otherCompanyUsedMs(at)) },
         { label: "経過時間（休憩除外）", value: durationText(sessionElapsedMs(at)) },
         { label: "実稼働率", value: `${operationRate(at).toFixed(1)}%` }
       ],
@@ -644,11 +804,14 @@
       const progress = target ? `${Math.round(clamp(done / target * 100, 0, 999))}%達成` : "目標記録なし";
       const pace = historyPace(item);
       const usedMs = historyUsedMs(item);
+      const uberMs = historyUberUsedMs(item);
+      const otherMs = historyOtherCompanyMs(item);
       const rate = historyRate(item);
       const endedAt = item.endedAt || item.recordedAt;
+      const endedState = historyEndStateLabel(item);
       return `
         <div class="workHistoryItem" role="listitem">
-          <div class="workHistoryMain"><strong>${formatDateTime(item.startedAt || item.date)}〜${formatTime(endedAt)}</strong><small>${target ? `${done} / ${target}件` : `${done}件`} · ${progress}</small><div class="workHistoryMeta">経過 ${durationText(finite(item.elapsedMs, 0))} · 休憩 ${durationText(finite(item.breakMs, 0))}<br>実稼働率 ${rate.toFixed(1)}% · 平均 ${Number.isFinite(pace) ? `${pace.toFixed(2)}分/件` : "計測なし"}</div></div>
+          <div class="workHistoryMain"><strong>${formatDateTime(item.startedAt || item.date)}〜${formatTime(endedAt)}</strong><small>${target ? `${done} / ${target}件` : `${done}件`} · ${progress} · ${historyWorkTypeLabel(item)}${endedState ? ` · 終了時${endedState}` : ""}</small><div class="workHistoryMeta">Uber ${durationText(uberMs)} · 他社 ${durationText(otherMs)}<br>経過 ${durationText(finite(item.elapsedMs, 0))} · 休憩 ${durationText(finite(item.breakMs, 0))}<br>実稼働率 ${rate.toFixed(1)}% · 平均 ${Number.isFinite(pace) ? `${pace.toFixed(2)}分/件` : "計測なし"}</div></div>
           <div class="workHistoryDuration"><span>時計が減った時間</span><strong>${durationText(usedMs)}</strong></div>
           <button class="workHistoryDelete" type="button" data-history-index="${index}" aria-label="${formatDateTime(item.startedAt || item.date)}開始の履歴を削除">削除</button>
         </div>`;
@@ -660,15 +823,28 @@
     if (!panel) return;
     const at = nowMs();
     const ended = Boolean(clockState.sessionEndedAt);
+    const totalUsed = clockUsedMs();
+    const otherUsed = otherCompanyUsedMs(at, totalUsed);
+    const uberUsed = Math.max(0, totalUsed - otherUsed);
+    const sharedMode = clockState.on ? "otherCompany" : "break";
     $("workStartTime").textContent = clockState.sessionStartAt ? formatDateTime(clockState.sessionStartAt) : "未開始";
-    $("workActiveTime").textContent = durationText(clockUsedMs());
+    $("workActiveTime").textContent = durationText(totalUsed);
+    $("workUberTime").textContent = durationText(uberUsed);
+    $("workOtherCompanyTime").textContent = durationText(otherUsed);
     $("workElapsedTime").textContent = durationText(sessionElapsedMs(at));
     $("workRate").textContent = `${operationRate(at).toFixed(1)}%`;
     $("workBreakTime").textContent = durationText(sessionBreakMs(at));
-    $("breakToggle").textContent = clockState.breakOn ? "休憩終了" : "休憩開始";
-    $("breakToggle").classList.toggle("active", clockState.breakOn);
+    $("breakToggle").textContent = sharedMode === "otherCompany"
+      ? (clockState.otherCompanyOn ? "他社稼働OFF" : "他社稼働ON")
+      : (clockState.breakOn ? "休憩終了" : "休憩開始");
+    $("breakToggle").dataset.mode = sharedMode;
+    $("breakToggle").classList.toggle("active", sharedMode === "break" && clockState.breakOn);
+    $("breakToggle").classList.toggle("otherCompany", sharedMode === "otherCompany" && clockState.otherCompanyOn);
     $("breakToggle").disabled = !clockState.sessionStartAt || ended;
     $("breakToggle").setAttribute("aria-disabled", String(!clockState.sessionStartAt || ended));
+    $("breakToggle").setAttribute("aria-label", sharedMode === "otherCompany"
+      ? (clockState.otherCompanyOn ? "他社稼働の記録を終了" : "他社稼働の記録を開始")
+      : (clockState.breakOn ? "休憩を終了" : "休憩を開始"));
     $("finishWork").textContent = ended ? "稼働終了済み" : "稼働終了";
     $("finishWork").disabled = !clockState.sessionStartAt || ended;
     $("finishWork").setAttribute("aria-disabled", String(!clockState.sessionStartAt || ended));
@@ -687,12 +863,12 @@
       .movementDetail{margin-top:8px;color:#8fa6ba;font-size:11px;line-height:1.45;text-align:center}
       .workSessionPanel{margin:12px 0;padding:16px;border:1px solid #28506c;border-radius:24px;background:linear-gradient(155deg,rgba(9,29,43,.96),rgba(4,18,30,.94));box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.17)}
       .workSessionHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.workSessionTitle{margin:0;font-size:18px}.workSessionStart{color:#8fa6ba;font-size:11px;text-align:right}.workSessionStart strong{display:block;margin-top:2px;color:#e7f2fb;font-size:13px}
-      .workSessionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:13px}.workSessionStat{padding:11px;border:1px solid rgba(59,91,116,.5);border-radius:16px;background:rgba(3,18,27,.58)}.workSessionStat span{display:block;color:#8fa6ba;font-size:9.5px;font-weight:750}.workSessionStat strong{display:block;margin-top:4px;font-size:17px;white-space:nowrap}.workSessionStat.primary{border-color:rgba(52,230,123,.36);background:rgba(18,76,52,.18)}.workSessionStat.primary strong{color:#68ef9b}
-      .workSessionActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.workSessionActions button{min-height:48px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}.workSessionActions .breakToggle.active{border-color:#ff9b42;background:rgba(116,57,16,.36);color:#ffc38b}.workSessionActions .finishWork{border-color:rgba(255,102,114,.68);background:linear-gradient(180deg,#b73545,#7f1f30);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 7px 18px rgba(103,19,33,.22)}
+      .workSessionGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.workSessionStat{min-width:0;padding:11px 8px;border:1px solid rgba(59,91,116,.5);border-radius:16px;background:rgba(3,18,27,.58)}.workSessionStat span{display:block;color:#8fa6ba;font-size:9.5px;font-weight:750}.workSessionStat strong{display:block;margin-top:4px;font-size:17px;white-space:nowrap}.workSessionStat.primary{border-color:rgba(52,230,123,.36);background:rgba(18,76,52,.18)}.workSessionStat.primary strong{color:#68ef9b}
+      .workSessionActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.workSessionActions button{min-height:48px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}.workSessionActions .breakToggle.active{border-color:#ff9b42;background:rgba(116,57,16,.36);color:#ffc38b}.workSessionActions .breakToggle.otherCompany{border-color:#20d5da;background:rgba(16,94,101,.34);color:#7cf2f4;box-shadow:0 0 18px rgba(32,213,218,.10)}.workSessionActions .finishWork{border-color:rgba(255,102,114,.68);background:linear-gradient(180deg,#b73545,#7f1f30);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 7px 18px rgba(103,19,33,.22)}
       .workSessionActions button:disabled,.toggleBtn:disabled,.editStartTime:disabled{opacity:.46;filter:none;cursor:default;transform:none;box-shadow:none}.workSessionNotice{margin-top:9px;padding:9px 11px;border:1px solid rgba(52,230,123,.32);border-radius:13px;background:rgba(24,92,59,.16);color:#86edaa;font-size:10px;line-height:1.45}.workSessionNotice[hidden]{display:none}
       .workHistory{margin-top:13px;padding-top:12px;border-top:1px solid rgba(69,99,122,.38)}.workHistoryTitle{margin:0 0 8px;color:#b9c9d7;font-size:11px}.workHistoryItem{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;align-items:center;gap:9px;margin-top:7px;padding:10px;border:1px solid rgba(59,91,116,.34);border-radius:15px;background:rgba(3,18,27,.44)}.workHistoryItem:first-child{margin-top:0}.workHistoryMain{min-width:0}.workHistoryMain strong,.workHistoryMain small{display:block}.workHistoryMain strong{overflow:hidden;color:#e7f0f7;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}.workHistoryMain small{margin-top:2px;color:#91a5b7;font-size:9.5px}.workHistoryMeta{margin-top:5px;color:#718ba1;font-size:8.8px;line-height:1.45}.workHistoryDuration{text-align:right;white-space:nowrap}.workHistoryDuration span,.workHistoryDuration strong{display:block}.workHistoryDuration span{color:#7890a5;font-size:8px}.workHistoryDuration strong{margin-top:3px;color:#68ef9b;font-size:11px}.workHistoryDelete{display:grid;width:44px;height:44px;padding:0;place-items:center;border:1px solid rgba(255,102,114,.42);border-radius:13px;background:rgba(105,26,39,.18);color:#ff9ba3;font-size:10px}.workHistoryDelete:focus-visible{outline:2px solid #ff7d89;outline-offset:2px}.workHistoryEmpty{padding:10px 0;color:#71869a;font-size:10px}
       .workConfirmLayer{position:fixed;z-index:120;inset:0;display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}.workConfirmLayer[hidden]{display:none}.workConfirmBackdrop{position:absolute;inset:0;background:rgba(0,5,12,.80);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.workConfirmDialog{position:relative;width:min(100%,430px);max-height:min(88dvh,560px);padding:18px;overflow:auto;border:1px solid #3b5368;border-radius:24px;background:radial-gradient(circle at 50% -10%,rgba(255,102,114,.10),transparent 38%),linear-gradient(160deg,#0b2536,#04131f);box-shadow:0 26px 72px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.06);outline:none;-webkit-overflow-scrolling:touch}.workConfirmDialog h3{margin:0;color:#f7f9fc;font-size:20px;letter-spacing:-.025em}.workConfirmDialog p{margin:6px 0 14px;color:#93a8ba;font-size:11px;line-height:1.55}.workConfirmSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.workConfirmSummary>div{min-width:0;padding:10px;border:1px solid rgba(72,105,130,.42);border-radius:14px;background:rgba(3,18,28,.64)}.workConfirmSummary span,.workConfirmSummary strong{display:block}.workConfirmSummary span{color:#849aac;font-size:9px}.workConfirmSummary strong{overflow:hidden;margin-top:3px;color:#eef4f8;font-size:14px;text-overflow:ellipsis;white-space:nowrap}.workConfirmActions{display:grid;grid-template-columns:1fr 1.2fr;gap:9px;margin-top:15px}.workConfirmActions button{min-height:50px;padding:11px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}.workConfirmActions .workConfirmSubmit{border-color:rgba(255,102,114,.72);background:linear-gradient(180deg,#c13b4c,#851f31)}.workConfirmActions .workConfirmSubmit.delete{background:linear-gradient(180deg,#a52c3b,#701925)}.workConfirmActions button:disabled{opacity:.5}.workConfirmOpen{overflow:hidden}
-      @media(max-width:390px){.workSessionPanel{padding:13px}.workSessionStat strong{font-size:15px}.workSessionActions{grid-template-columns:1fr}.workHistoryItem{grid-template-columns:minmax(0,1fr) 44px}.workHistoryDuration{grid-column:1;grid-row:2;display:flex;align-items:center;gap:5px;text-align:left}.workHistoryDuration strong{margin-top:0}.workHistoryDelete{grid-column:2;grid-row:1/3}.workConfirmDialog{padding:15px}.workConfirmSummary strong{font-size:13px}}
+      @media(max-width:390px){.workSessionPanel{padding:13px}.workSessionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.workSessionStat{padding:10px}.workSessionStat strong{font-size:15px}.workSessionActions{grid-template-columns:1fr}.workHistoryItem{grid-template-columns:minmax(0,1fr) 44px}.workHistoryDuration{grid-column:1;grid-row:2;display:flex;align-items:center;gap:5px;text-align:left}.workHistoryDuration strong{margin-top:0}.workHistoryDelete{grid-column:2;grid-row:1/3}.workConfirmDialog{padding:15px}.workConfirmSummary strong{font-size:13px}}
       @media(max-width:350px){.workConfirmSummary{grid-template-columns:1fr}.workConfirmActions{grid-template-columns:1fr 1fr}.workHistoryMain strong{white-space:normal}}
     `;
     document.head.appendChild(style);
@@ -707,9 +883,11 @@
     panel.className = "workSessionPanel";
     panel.tabIndex = -1;
     panel.innerHTML = `
-      <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">残り時間と連携し、休憩を除いて実稼働率を計算</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
+      <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">時間ONをUber／他社に分け、休憩を除いて記録</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
       <div class="workSessionGrid">
         <div class="workSessionStat primary"><span>時計が減った時間</span><strong id="workActiveTime">0時間00分</strong></div>
+        <div class="workSessionStat"><span>Uber稼働時間</span><strong id="workUberTime">0時間00分</strong></div>
+        <div class="workSessionStat"><span>他社稼働時間</span><strong id="workOtherCompanyTime">0時間00分</strong></div>
         <div class="workSessionStat"><span>実稼働率</span><strong id="workRate">0.0%</strong></div>
         <div class="workSessionStat"><span>経過時間（休憩除外）</span><strong id="workElapsedTime">0時間00分</strong></div>
         <div class="workSessionStat"><span>休憩時間</span><strong id="workBreakTime">0時間00分</strong></div>
@@ -718,7 +896,7 @@
       <div id="workSessionNotice" class="workSessionNotice" role="status" aria-live="polite" hidden></div>
       <div class="workHistory"><h3 id="workHistoryTitle" class="workHistoryTitle" tabindex="-1">最近の履歴</h3><div id="workHistoryList" role="list"></div></div>`;
     $("todaySummary").before(panel);
-    $("breakToggle").onclick = toggleBreak;
+    $("breakToggle").onclick = handleSharedWorkToggle;
     $("finishWork").onclick = event => requestSessionFinish(event.currentTarget);
     $("workHistoryList").onclick = event => {
       const button = event.target.closest(".workHistoryDelete");
@@ -777,9 +955,9 @@
 
     const desc = $("countPanel").querySelector(".desc");
     const hint = $("countPanel").querySelector(".hint");
-    if (desc) desc.textContent = "時間ON中は移動・停車にかかわらず連続で減少します。内部では秒単位で計算し、画面には分単位で表示します。";
-    if (hint) hint.textContent = "Uber側の残り時間が止まっている時は時間OFFにしてください。−／＋で1分ずつ補正できます。";
-    $("helpText").textContent = "時間ON中は残り稼働時間を連続で減らし、時間OFF中と休憩中は止めます。案件の有無や移動状態は自動判定しません。Uber側の時計に合わせてON／OFFと−1分・＋1分を使ってください。";
+    if (desc) desc.textContent = "時間ON中は移動・停車やUber／他社にかかわらず連続で減少します。内部では秒単位で計算し、画面には分単位で表示します。";
+    if (hint) hint.textContent = "時間OFFでは休憩、時間ONでは他社稼働を共通ボタンで記録できます。−／＋で1分ずつ補正できます。";
+    $("helpText").textContent = "時間ON中は残り稼働時間を連続で減らします。稼働計測の共通ボタンは、時間OFF中は休憩開始／終了、時間ON中は他社稼働ON／OFFとして動きます。他社稼働中も残り時間は減り、履歴ではUber稼働と分けて記録します。案件の有無や移動状態は自動判定しません。";
   }
 
   loadEnhancedClock();
@@ -795,7 +973,10 @@
   loadClock = function() { loadEnhancedClock(); };
   stopClock = function(remaining) {
     setExactRemaining(remaining);
+    const at = nowMs();
+    closeActiveOtherCompany(at);
     clockState.on = false;
+    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), at);
     persistEnhancedClock(true);
     save();
   };
@@ -849,6 +1030,11 @@
       breakMs: 0,
       breakSegments: [],
       legacyBreakMs: 0,
+      otherCompanyOn: false,
+      otherCompanyStartedAt: null,
+      otherCompanyMs: 0,
+      otherCompanySegments: [],
+      legacyOtherCompanyMs: 0,
       backgroundGap: null,
       lastBackfillMs: 0,
       lastBackfillAt: null,

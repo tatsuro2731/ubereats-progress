@@ -102,7 +102,7 @@
       <div class="countTop"><div class="status"><span id="countDot" class="dot stop"></span><span id="countStatus">停止中</span></div><div class="remainSync" role="group" aria-label="Uberの残り稼働時間に1分ずつ合わせる"><button id="remainMinus" class="remainStep" type="button" aria-label="残り稼働時間を1分減らす。長押しで連続して減らす" title="長押しで連続変更">−1分</button><div id="countRemain" class="remainBig">残り 0時間00分</div><button id="remainPlus" class="remainStep" type="button" aria-label="残り稼働時間を1分増やす。長押しで連続して増やす" title="長押しで連続変更">＋1分</button></div></div>
       <div class="desc">ON中は自動で減少。−／＋はタップで1分、長押しで連続して合わせられます。</div>
       <div class="hint">Uber側の残り時間が進んでいる時は時間ON、止まっている時は時間OFF。−／＋で1分ずつ補正できます。</div>
-      <div id="helpText" class="helpText" hidden>時間ON中は移動・停車にかかわらず残り稼働時間を連続で減らし、時間OFF中と休憩中は止めます。案件の有無や移動状態は自動判定しません。</div>
+      <div id="helpText" class="helpText" hidden>時間OFF中は共通ボタンで休憩、時間ON中は他社稼働を記録できます。他社稼働中も残り稼働時間は連続で減ります。</div>
     </div>
   </div>
   <section id="todaySummary" class="todaySummary" aria-labelledby="todaySummaryTitle" hidden>
@@ -1172,11 +1172,11 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=46").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=47").catch(() => {}));
 }
 </script>
-<script src="app-enhancements.js?v=6"></script>
+<script src="app-enhancements.js?v=7"></script>
 <script src="app-enhancements-fix.js?v=2"></script>
-<script src="app-session-ui-fix.js?v=7"></script>
+<script src="app-session-ui-fix.js?v=8"></script>
 </body>
 </html>

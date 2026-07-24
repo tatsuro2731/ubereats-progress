@@ -25,7 +25,7 @@ function instrumentedSessionUi() {
   const closeAt = source.lastIndexOf("})();");
   assert.ok(closeAt > 0);
   return source.slice(0, closeAt) + `
-  globalThis.__sessionUiTestApi = { saveEnhancedState, breakOverlapMs, applyStartTime, clockUsedMs };
+  globalThis.__sessionUiTestApi = { saveEnhancedState, breakOverlapMs, otherCompanyOverlapMs, applyStartTime, clockUsedMs };
 ` + source.slice(closeAt);
 }
 
@@ -95,6 +95,11 @@ test("saving an edited start time preserves session state and clears legacy move
       { startAt: 300000, endAt: 320000 }
     ],
     legacyBreakMs: 4000,
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 6000,
+    otherCompanySegments: [{ startAt: 220000, endAt: 225000 }],
+    legacyOtherCompanyMs: 1000,
     backgroundGap: {
       hiddenAt: 450000,
       movingBefore: true,
@@ -115,6 +120,9 @@ test("saving an edited start time preserves session state and clears legacy move
   assert.equal(saved.usageMode, "remaining-v1");
   assert.deepEqual(saved.breakSegments, state.breakSegments);
   assert.equal(saved.legacyBreakMs, 4000);
+  assert.deepEqual(saved.otherCompanySegments, state.otherCompanySegments);
+  assert.equal(saved.legacyOtherCompanyMs, 1000);
+  assert.equal(saved.otherCompanyMs, 6000);
   assert.equal(saved.backgroundGap, null);
   assert.equal(saved.lastBackfillMs, 0);
   assert.equal(saved.lastBackfillAt, null);
@@ -201,4 +209,38 @@ test("start-time validation uses linked remaining-clock usage instead of stale G
   assert.match(rejected.element("startTimeError").textContent, /開始時刻が遅すぎます/);
   assert.equal(rejectedState.sessionStartAt, base);
   assert.equal(rejected.values.has(ENHANCED_KEY), false);
+});
+
+test("editing the start time preserves other-company segments and recalculates their overlap", () => {
+  const minute = 60000;
+  const base = 1_700_000_040_000;
+  const now = base + 60 * minute;
+  const state = {
+    on: false,
+    remainingMs: WORK_LIMIT_MS - 30 * minute,
+    activeMs: 30 * minute,
+    sessionStartAt: base,
+    lastTickAt: now,
+    breakOn: false,
+    breakStartedAt: null,
+    breakMs: 0,
+    breakSegments: [],
+    legacyBreakMs: 0,
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 10 * minute,
+    otherCompanySegments: [{ startAt: base + 5 * minute, endAt: base + 15 * minute }],
+    legacyOtherCompanyMs: 0
+  };
+  const app = harness(state, now);
+
+  app.element("startTimeInput").value = localInput(base + 10 * minute);
+  app.api.applyStartTime();
+
+  assert.equal(app.element("startTimeError").textContent, "");
+  assert.equal(state.sessionStartAt, base + 10 * minute);
+  assert.equal(state.otherCompanyMs, 5 * minute);
+  const saved = JSON.parse(app.values.get(ENHANCED_KEY));
+  assert.equal(saved.otherCompanyMs, 5 * minute);
+  assert.deepEqual(saved.otherCompanySegments, state.otherCompanySegments);
 });

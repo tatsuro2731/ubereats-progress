@@ -52,6 +52,11 @@ function instrumentedSource() {
     setExactRemaining,
     enhancedToggleClock,
     toggleBreak,
+    toggleOtherCompany,
+    handleSharedWorkToggle,
+    otherCompanyDurationMs,
+    otherCompanyUsedMs,
+    uberUsedMs,
     finishSession,
     sessionBreakMs,
     sessionElapsedMs,
@@ -221,6 +226,11 @@ function state(overrides = {}) {
     breakStartedAt: null,
     breakMs: 0,
     breakSegments: [],
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 0,
+    otherCompanySegments: [],
+    legacyOtherCompanyMs: 0,
     updatedAt: 100000,
     ...overrides
   };
@@ -774,6 +784,10 @@ test("reset clears every timer, break, and background field in memory and storag
   assert.equal(reset.breakStartedAt, null);
   assert.equal(reset.breakMs, 0);
   assert.equal(reset.breakSegments.length, 0);
+  assert.equal(reset.otherCompanyOn, false);
+  assert.equal(reset.otherCompanyStartedAt, null);
+  assert.equal(reset.otherCompanyMs, 0);
+  assert.equal(reset.otherCompanySegments.length, 0);
   assert.equal(reset.backgroundGap, null);
   assert.equal(reset.lastBackfillMs, 0);
   assert.equal(reset.lastBackfillAt, null);
@@ -784,5 +798,140 @@ test("reset clears every timer, break, and background field in memory and storag
   assert.equal(persisted.remainingMs, 720 * 60000);
   assert.equal(persisted.activeMs, 0);
   assert.deepEqual(persisted.breakSegments, []);
+  assert.equal(persisted.otherCompanyOn, false);
+  assert.deepEqual(persisted.otherCompanySegments, []);
   assert.equal(persisted.backgroundGap, null);
+});
+
+test("time OFF shared control records a break and keeps remaining time paused", () => {
+  const now = 100000;
+  const app = timerHarness({ now });
+  app.api.setState(state({
+    on: false,
+    remainingMs: WORK_LIMIT_MS,
+    sessionStartAt: 1000,
+    lastTickAt: now
+  }));
+
+  app.api.renderEnhancedClock();
+  assert.equal(app.element("breakToggle").textContent, "休憩開始");
+  app.api.handleSharedWorkToggle();
+  assert.equal(app.api.getState().breakOn, true);
+  assert.equal(app.api.getState().otherCompanyOn, false);
+  assert.equal(app.element("breakToggle").textContent, "休憩終了");
+
+  app.setNow(now + 60000);
+  app.api.tickClock();
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS);
+  app.api.handleSharedWorkToggle();
+  assert.equal(app.api.getState().breakOn, false);
+});
+
+test("time ON shared control records other-company work without pausing the countdown", () => {
+  const now = 200000;
+  const app = timerHarness({ now });
+  app.api.setState(state({
+    on: true,
+    remainingMs: WORK_LIMIT_MS,
+    sessionStartAt: now,
+    lastTickAt: now
+  }));
+
+  app.api.renderEnhancedClock();
+  assert.equal(app.element("breakToggle").textContent, "他社稼働ON");
+  app.api.handleSharedWorkToggle();
+  assert.equal(app.api.getState().otherCompanyOn, true);
+  assert.equal(app.api.getState().breakOn, false);
+  assert.equal(app.element("breakToggle").textContent, "他社稼働OFF");
+
+  app.setNow(now + 60000);
+  app.api.tickClock();
+  app.api.renderEnhancedClock();
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+  assert.equal(app.api.otherCompanyDurationMs(), 60000);
+  assert.equal(app.api.otherCompanyUsedMs(), 60000);
+  assert.equal(app.api.uberUsedMs(), 0);
+  assert.equal(app.element("workActiveTime").textContent, "0時間01分");
+  assert.equal(app.element("workUberTime").textContent, "0時間00分");
+  assert.equal(app.element("workOtherCompanyTime").textContent, "0時間01分");
+  assert.equal(app.element("workRate").textContent, "100.0%");
+});
+
+test("using up the remaining time closes an active other-company segment", () => {
+  const now = 250000;
+  const app = timerHarness({ now });
+  app.api.setState(state({
+    on: true,
+    remainingMs: 30000,
+    sessionStartAt: now,
+    lastTickAt: now,
+    otherCompanyOn: true,
+    otherCompanyStartedAt: now,
+    otherCompanySegments: [{ startAt: now, endAt: null }]
+  }));
+
+  app.api.tickClock(now + 60000);
+  const exhausted = app.api.getState();
+  assert.equal(exhausted.remainingMs, 0);
+  assert.equal(exhausted.on, false);
+  assert.equal(exhausted.otherCompanyOn, false);
+  assert.equal(exhausted.otherCompanyStartedAt, null);
+  assert.equal(exhausted.otherCompanySegments[0].endAt, now + 30000);
+});
+
+test("time changes close the shared secondary state without starting the next one", () => {
+  const now = 300000;
+  const app = timerHarness({ now });
+  app.api.setState(state({
+    on: false,
+    remainingMs: WORK_LIMIT_MS,
+    sessionStartAt: 1000,
+    lastTickAt: now
+  }));
+
+  app.api.handleSharedWorkToggle();
+  assert.equal(app.api.getState().breakOn, true);
+  app.setNow(now + 60000);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().on, true);
+  assert.equal(app.api.getState().breakOn, false);
+  assert.equal(app.api.getState().otherCompanyOn, false);
+  assert.equal(app.element("breakToggle").textContent, "他社稼働ON");
+
+  app.api.handleSharedWorkToggle();
+  assert.equal(app.api.getState().otherCompanyOn, true);
+  app.setNow(now + 120000);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().otherCompanyOn, false);
+  assert.equal(app.api.getState().breakOn, false);
+  assert.equal(app.element("breakToggle").textContent, "休憩開始");
+});
+
+test("history snapshot separates Uber and other-company time without double counting", () => {
+  const minute = 60000;
+  const now = 5_000_000;
+  const app = timerHarness({
+    now,
+    regular: { target: "10", done: "2", remainH: "11", remainM: "30" }
+  });
+  app.api.setState(state({
+    on: false,
+    remainingMs: WORK_LIMIT_MS - 30 * minute,
+    sessionStartAt: now - 60 * minute,
+    lastTickAt: now,
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 10 * minute,
+    otherCompanySegments: [{ startAt: now - 20 * minute, endAt: now - 10 * minute }]
+  }));
+
+  const snapshot = app.api.sessionSnapshot(now);
+  assert.equal(snapshot.usedMs, 30 * minute);
+  assert.equal(snapshot.totalActiveMs, 30 * minute);
+  assert.equal(snapshot.uberUsedMs, 20 * minute);
+  assert.equal(snapshot.otherCompanyMs, 10 * minute);
+  assert.deepEqual([...snapshot.workTypes], ["uber", "otherCompany"]);
+  assert.equal(snapshot.actualPaceMinutes, 15);
+  assert.ok(Math.abs(snapshot.rate - 50) < 0.001);
 });

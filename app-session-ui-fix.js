@@ -56,6 +56,40 @@
     return Math.min(windowMs, legacyFallback + total);
   }
 
+  function otherCompanyOverlapMs(startAt, endAt = Date.now()) {
+    if (!clockState) return 0;
+    const windowMs = Math.max(0, endAt - startAt);
+    const segments = Array.isArray(clockState.otherCompanySegments) ? clockState.otherCompanySegments : [];
+    if (!segments.length) return Math.min(windowMs, Math.max(0, finite(clockState.otherCompanyMs, 0)));
+    const intervals = segments.map(segment => {
+      const rawStart = segment && (segment.startAt ?? segment.startedAt ?? segment.start);
+      const rawEnd = segment && (segment.endAt ?? segment.endedAt ?? segment.end);
+      const segmentStart = finite(rawStart, NaN);
+      const segmentEnd = rawEnd === null || rawEnd === undefined ? endAt : finite(rawEnd, NaN);
+      if (!Number.isFinite(segmentStart) || !Number.isFinite(segmentEnd)) return null;
+      const overlapStart = Math.max(startAt, segmentStart);
+      const overlapEnd = Math.min(endAt, segmentEnd);
+      return overlapEnd > overlapStart ? [overlapStart, overlapEnd] : null;
+    }).filter(Boolean).sort((a, b) => a[0] - b[0]);
+    let total = 0;
+    let mergedStart = null;
+    let mergedEnd = null;
+    intervals.forEach(([start, end]) => {
+      if (mergedStart === null) {
+        mergedStart = start;
+        mergedEnd = end;
+      } else if (start <= mergedEnd) {
+        mergedEnd = Math.max(mergedEnd, end);
+      } else {
+        total += mergedEnd - mergedStart;
+        mergedStart = start;
+        mergedEnd = end;
+      }
+    });
+    if (mergedStart !== null) total += mergedEnd - mergedStart;
+    return Math.min(windowMs, Math.max(0, finite(clockState.legacyOtherCompanyMs, 0)) + total);
+  }
+
   function toLocalInputValue(timestamp) {
     const date = new Date(timestamp);
     const pad = value => String(value).padStart(2, "0");
@@ -75,6 +109,10 @@
     clockState.countMode = COUNT_MODE;
     clockState.usageMode = USAGE_MODE;
     clockState.activeMs = clockUsedMs(remainingMs);
+    clockState.otherCompanyMs = Math.min(
+      clockState.activeMs,
+      otherCompanyOverlapMs(clockState.sessionStartAt || now, clockState.sessionEndedAt || now)
+    );
     clockState.baseAt = anchorAt;
     clockState.lastTickAt = anchorAt;
     clockState.updatedAt = anchorAt;
@@ -94,6 +132,14 @@
         endAt: segment.endAt === null ? null : segment.endAt
       })) : undefined,
       legacyBreakMs: Math.max(0, finite(clockState.legacyBreakMs, 0)),
+      otherCompanyOn: Boolean(clockState.otherCompanyOn),
+      otherCompanyStartedAt: clockState.otherCompanyStartedAt || null,
+      otherCompanyMs: Math.max(0, finite(clockState.otherCompanyMs, 0)),
+      otherCompanySegments: Array.isArray(clockState.otherCompanySegments) ? clockState.otherCompanySegments.map(segment => ({
+        startAt: segment.startAt,
+        endAt: segment.endAt === null ? null : segment.endAt
+      })) : undefined,
+      legacyOtherCompanyMs: Math.max(0, finite(clockState.legacyOtherCompanyMs, 0)),
       backgroundGap: null,
       lastBackfillMs: 0,
       lastBackfillAt: null,

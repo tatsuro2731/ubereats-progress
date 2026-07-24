@@ -497,6 +497,11 @@
         breakMs: resetEnded ? 0 : Math.max(0, Number(previous.breakMs) || 0),
         breakSegments: resetEnded ? [] : previous.breakSegments,
         legacyBreakMs: resetEnded ? 0 : Math.max(0, Number(previous.legacyBreakMs) || 0),
+        otherCompanyOn: resetEnded ? false : Boolean(previous.otherCompanyOn),
+        otherCompanyStartedAt: resetEnded ? null : (previous.otherCompanyOn ? (previous.otherCompanyStartedAt || now) : null),
+        otherCompanyMs: resetEnded ? 0 : Math.max(0, Number(previous.otherCompanyMs) || 0),
+        otherCompanySegments: resetEnded ? [] : previous.otherCompanySegments,
+        legacyOtherCompanyMs: resetEnded ? 0 : Math.max(0, Number(previous.legacyOtherCompanyMs) || 0),
         backgroundGap: null,
         lastBackfillMs: 0,
         lastBackfillAt: null,
@@ -645,7 +650,7 @@
     }
 
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=46").catch(() => {}));
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=47").catch(() => {}));
     }
   </script>
 </body>

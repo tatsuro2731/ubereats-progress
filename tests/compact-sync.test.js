@@ -420,6 +420,11 @@ test("ended sessions reject compact time edits until reset", () => {
     sessionStartAt: 10000,
     sessionEndedAt: 90000,
     breakOn: false,
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 60000,
+    otherCompanySegments: [{ startAt: 20000, endAt: 80000 }],
+    legacyOtherCompanyMs: 0,
     updatedAt: futureAnchor,
     futureField: { keep: true }
   };
@@ -448,6 +453,10 @@ test("ended sessions reject compact time edits until reset", () => {
   assert.equal(reset.on, false);
   assert.equal(reset.sessionStartAt, null);
   assert.equal(reset.sessionEndedAt, null);
+  assert.equal(reset.otherCompanyOn, false);
+  assert.equal(reset.otherCompanyStartedAt, null);
+  assert.equal(reset.otherCompanyMs, 0);
+  assert.deepEqual(reset.otherCompanySegments, []);
   assert.equal(reset.usageMode, USAGE_MODE);
   assert.equal(reset.updatedAt, futureAnchor, "reset must not move a future monotonic anchor backward");
   assert.deepEqual(reset.futureField, enhanced.futureField);
@@ -466,4 +475,37 @@ test("compact reset explicitly syncs 12 hours but does not silently toggle ON of
   assert.equal(saved.on, true);
   assert.equal(saved.activeMs, 0);
   assert.equal(saved.sessionStartAt, 10);
+});
+
+test("compact time edits preserve an active other-company category", () => {
+  const now = 600000;
+  const otherCompanySegments = [{ startAt: 500000, endAt: null }];
+  const app = runCompact({
+    [ENHANCED_KEY]: JSON.stringify({
+      countMode: COUNT_MODE,
+      usageMode: USAGE_MODE,
+      on: true,
+      remainingMs: 10 * 60 * 60000,
+      activeMs: 2 * 60 * 60000,
+      sessionStartAt: 100000,
+      breakOn: false,
+      otherCompanyOn: true,
+      otherCompanyStartedAt: 500000,
+      otherCompanyMs: 100000,
+      otherCompanySegments,
+      legacyOtherCompanyMs: 0,
+      updatedAt: now
+    })
+  }, now);
+
+  app.element("remainH").value = "9";
+  app.element("remainM").value = "30";
+  app.element("remainM").dispatch("change");
+
+  const saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(saved.on, true);
+  assert.equal(saved.otherCompanyOn, true);
+  assert.equal(saved.otherCompanyStartedAt, 500000);
+  assert.equal(saved.otherCompanyMs, 100000);
+  assert.deepEqual(saved.otherCompanySegments, otherCompanySegments);
 });
