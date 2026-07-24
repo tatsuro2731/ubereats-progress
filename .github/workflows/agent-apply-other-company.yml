@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   patch-and-test:
-    if: ${{ false }}
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.head_ref == 'agent/other-company-work')
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
@@ -23,4 +23,29 @@ jobs:
           fetch-depth: 0
 
       - name: Apply deterministic patch
-        run: python scripts/apply_other_company.py
+        run: |
+          set -o pipefail
+          python scripts/apply_other_company.py 2>&1 | tee patch-error.txt || {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add patch-error.txt
+            git commit -m "Record other-company patch diagnostic" || true
+            git push origin HEAD:agent/other-company-work
+            exit 1
+          }
+          rm -f patch-error.txt
+
+      - name: Validate JavaScript and regression tests
+        run: |
+          node --check app-enhancements.js
+          node --check app-session-ui-fix.js
+          node --test tests/*.test.js
+          git diff --check
+
+      - name: Commit validated feature
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "他社稼働を稼働計測へ反映"
+          git push origin HEAD:agent/other-company-work
