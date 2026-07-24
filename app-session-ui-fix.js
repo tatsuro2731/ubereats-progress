@@ -203,9 +203,19 @@
     }
     if (typeof remain === "function") remain();
     const remainingMs = Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000));
-    const activeMs = clockUsedMs(remainingMs) + otherCompanyOverlapMs(timestamp, now);
+    const currentStartAt = finite(clockState.sessionStartAt, timestamp);
+    const recordedOtherCompanyMs = otherCompanyOverlapMs(currentStartAt, now);
+    const earliestOtherCompanyStartAt = (Array.isArray(clockState.otherCompanySegments) ? clockState.otherCompanySegments : []).reduce((earliest, segment) => {
+      const startAt = finite(segment && segment.startAt, NaN);
+      const rawEnd = segment && segment.endAt;
+      const endAt = rawEnd === null || rawEnd === undefined ? now : finite(rawEnd, NaN);
+      if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) return earliest;
+      return Math.min(earliest, Math.max(currentStartAt, startAt));
+    }, Infinity);
+    const activeMs = clockUsedMs(remainingMs) + recordedOtherCompanyMs;
     const elapsedMs = Math.max(0, now - timestamp - breakOverlapMs(timestamp, now));
-    if (activeMs > elapsedMs) {
+    const startsAfterOtherCompanyWork = Number.isFinite(earliestOtherCompanyStartAt) && timestamp > earliestOtherCompanyStartAt;
+    if (startsAfterOtherCompanyWork || activeMs > elapsedMs) {
       error.textContent = "開始時刻が遅すぎます。総実稼働時間より後には設定できません。";
       return;
     }

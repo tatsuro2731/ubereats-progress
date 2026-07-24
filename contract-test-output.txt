@@ -2,120 +2,120 @@ TAP version 13
 # Subtest: compact startup prefers enhanced remainingMs without rewriting the enhanced clock
 ok 1 - compact startup prefers enhanced remainingMs without rewriting the enhanced clock
   ---
-  duration_ms: 6.987358
+  duration_ms: 4.731641
   type: 'test'
   ...
 # Subtest: non-time controls never overwrite the enhanced remaining time
 ok 2 - non-time controls never overwrite the enhanced remaining time
   ---
-  duration_ms: 4.001381
+  duration_ms: 1.960673
   type: 'test'
   ...
 # Subtest: an explicit compact time change syncs remainingMs while preserving ON and session state
 ok 3 - an explicit compact time change syncs remainingMs while preserving ON and session state
   ---
-  duration_ms: 2.212345
+  duration_ms: 1.501243
   type: 'test'
   ...
 # Subtest: compact follows enhanced-clock storage updates without writing back a rounded clock
 ok 4 - compact follows enhanced-clock storage updates without writing back a rounded clock
   ---
-  duration_ms: 1.854167
+  duration_ms: 1.151548
   type: 'test'
   ...
 # Subtest: compact rounds the minute-only countdown up without changing exact remainingMs
 ok 5 - compact rounds the minute-only countdown up without changing exact remainingMs
   ---
-  duration_ms: 1.981645
+  duration_ms: 1.220021
   type: 'test'
   ...
 # Subtest: compact displays the effective continuous countdown without rewriting its exact anchor
 ok 6 - compact displays the effective continuous countdown without rewriting its exact anchor
   ---
-  duration_ms: 2.351866
+  duration_ms: 1.641283
   type: 'test'
   ...
 # Subtest: an existing continuous clock gains canonical usage while its anchor still catches up for display
 ok 7 - an existing continuous clock gains canonical usage while its anchor still catches up for display
   ---
-  duration_ms: 2.061825
+  duration_ms: 1.166581
   type: 'test'
   ...
 # Subtest: a compact time edit settles continuous active time and starts a new anchor
 ok 8 - a compact time edit settles continuous active time and starts a new anchor
   ---
-  duration_ms: 1.89864
+  duration_ms: 1.115694
   type: 'test'
   ...
 # Subtest: compact time edits mirror canonical usage exactly in both directions and clamp above 12 hours
 ok 9 - compact time edits mirror canonical usage exactly in both directions and clamp above 12 hours
   ---
-  duration_ms: 3.025231
+  duration_ms: 1.84579
   type: 'test'
   ...
 # Subtest: compact migrates an unmarked movement clock without retroactive consumption
 ok 10 - compact migrates an unmarked movement clock without retroactive consumption
   ---
-  duration_ms: 2.291583
+  duration_ms: 1.664478
   type: 'test'
   ...
 # Subtest: the one-second refresh crosses a visible minute without persisting derived time
 ok 11 - the one-second refresh crosses a visible minute without persisting derived time
   ---
-  duration_ms: 1.769339
+  duration_ms: 1.368083
   type: 'test'
   ...
 # Subtest: ended sessions reject compact time edits until reset
 ok 12 - ended sessions reject compact time edits until reset
   ---
-  duration_ms: 1.494867
+  duration_ms: 1.982816
   type: 'test'
   ...
 # Subtest: compact reset explicitly syncs 12 hours but does not silently toggle ON off
 ok 13 - compact reset explicitly syncs 12 hours but does not silently toggle ON off
   ---
-  duration_ms: 2.15596
+  duration_ms: 1.541824
   type: 'test'
   ...
 # Subtest: the first visit loads all enhancements directly from index.html
 ok 14 - the first visit loads all enhancements directly from index.html
   ---
-  duration_ms: 2.668345
+  duration_ms: 3.541695
   type: 'test'
   ...
 # Subtest: the service worker cache revision and assets match direct script URLs
 ok 15 - the service worker cache revision and assets match direct script URLs
   ---
-  duration_ms: 2.146734
+  duration_ms: 3.277319
   type: 'test'
   ...
 # Subtest: timer UI includes the 440px iPhone breakpoint and start-time editor hooks
 ok 16 - timer UI includes the 440px iPhone breakpoint and start-time editor hooks
   ---
-  duration_ms: 0.420213
+  duration_ms: 0.549625
   type: 'test'
   ...
 # Subtest: the maximum minute-only remaining-time label stays legible and fits from 320px through 440px
 ok 17 - the maximum minute-only remaining-time label stays legible and fits from 320px through 440px
   ---
-  duration_ms: 0.821822
+  duration_ms: 1.191528
   type: 'test'
   ...
 # Subtest: remaining and work-session displays stop at minutes while calculations keep sub-minute precision
 ok 18 - remaining and work-session displays stop at minutes while calculations keep sub-minute precision
   ---
-  duration_ms: 1.26559
+  duration_ms: 1.773862
   type: 'test'
   ...
 # Subtest: the enhanced timer is continuous while ON and never requests location
 not ok 19 - the enhanced timer is continuous while ON and never requests location
   ---
-  duration_ms: 4.835727
+  duration_ms: 10.38086
   type: 'test'
   location: '/home/runner/work/ubereats-progress/ubereats-progress/tests/delivery-contracts.test.js:136:1'
   failureType: 'testCodeFailure'
   error: |-
-    The input did not match the regular expression /案件の有無や移動状態は自動判定しません/. Input:
+    The input did not match the regular expression /案件の有無や端末の移動状態は自動判定しません/. Input:
     
     '(() => {\n' +
       '  "use strict";\n' +
@@ -1427,118 +1427,120 @@ not ok 19 - the enhanced timer is continuous while ON and never requests locatio
 # Subtest: the settings header is a dedicated swipe-to-close surface without taking over form scrolling
 ok 20 - the settings header is a dedicated swipe-to-close surface without taking over form scrolling
   ---
-  duration_ms: 0.9494
+  duration_ms: 1.090356
   type: 'test'
   ...
 # Subtest: settings swipe rendering stays on the compositor path without per-move layout reads
 ok 21 - settings swipe rendering stays on the compositor path without per-move layout reads
   ---
-  duration_ms: 0.874891
+  duration_ms: 1.092219
   type: 'test'
   ...
 # Subtest: a downward swipe past the threshold closes settings and clears drag state
 ok 22 - a downward swipe past the threshold closes settings and clears drag state
   ---
-  duration_ms: 4.26856
+  duration_ms: 6.06395
   type: 'test'
   ...
 # Subtest: multiple pointer moves render only the newest position once per animation frame
 ok 23 - multiple pointer moves render only the newest position once per animation frame
   ---
-  duration_ms: 1.797331
+  duration_ms: 2.381725
   type: 'test'
   ...
 # Subtest: swipe height and close distance stay cached from pointer down through settling
 ok 24 - swipe height and close distance stay cached from pointer down through settling
   ---
-  duration_ms: 3.081877
+  duration_ms: 3.819662
   type: 'test'
   ...
 # Subtest: pointer up cancels an unpainted frame before the exit transform is applied
 ok 25 - pointer up cancels an unpainted frame before the exit transform is applied
   ---
-  duration_ms: 1.558526
+  duration_ms: 1.811859
   type: 'test'
   ...
 # Subtest: a short slow drag snaps back without closing settings
 ok 26 - a short slow drag snaps back without closing settings
   ---
-  duration_ms: 1.303811
+  duration_ms: 1.869996
   type: 'test'
   ...
 # Subtest: a short fast flick closes settings
 ok 27 - a short fast flick closes settings
   ---
-  duration_ms: 1.268846
+  duration_ms: 1.643787
   type: 'test'
   ...
 # Subtest: a short flick followed by a pause does not reuse stale velocity
 ok 28 - a short flick followed by a pause does not reuse stale velocity
   ---
-  duration_ms: 1.570889
+  duration_ms: 1.735194
   type: 'test'
   ...
 # Subtest: reduced motion closes immediately and still clears swipe visuals
 ok 29 - reduced motion closes immediately and still clears swipe visuals
   ---
-  duration_ms: 2.009067
+  duration_ms: 1.938359
   type: 'test'
   ...
 # Subtest: cancelled, upward, and horizontal gestures never close settings
 ok 30 - cancelled, upward, and horizontal gestures never close settings
   ---
-  duration_ms: 1.959503
+  duration_ms: 1.908204
   type: 'test'
   ...
 # Subtest: close controls are excluded and an external close cleans an active swipe
 ok 31 - close controls are excluded and an external close cleans an active swipe
   ---
-  duration_ms: 1.567783
+  duration_ms: 1.837337
   type: 'test'
   ...
 # Subtest: saving an edited start time preserves session state and clears legacy movement fields
 ok 32 - saving an edited start time preserves session state and clears legacy movement fields
   ---
-  duration_ms: 4.734328
+  duration_ms: 4.129157
   type: 'test'
   ...
 # Subtest: saving an edited start time never moves lastTickAt backward
 ok 33 - saving an edited start time never moves lastTickAt backward
   ---
-  duration_ms: 2.3063
+  duration_ms: 2.127793
   type: 'test'
   ...
 # Subtest: start-time validation computes the union of overlapping break segments
 ok 34 - start-time validation computes the union of overlapping break segments
   ---
-  duration_ms: 1.528039
+  duration_ms: 1.414292
   type: 'test'
   ...
 # Subtest: start-time validation uses linked remaining-clock usage instead of stale GPS active time
 ok 35 - start-time validation uses linked remaining-clock usage instead of stale GPS active time
   ---
-  duration_ms: 3.803382
+  duration_ms: 3.016617
   type: 'test'
   ...
 # Subtest: start-time validation includes recorded other-company work
 not ok 36 - start-time validation includes recorded other-company work
   ---
-  duration_ms: 3.245983
+  duration_ms: 4.270489
   type: 'test'
   location: '/home/runner/work/ubereats-progress/ubereats-progress/tests/session-ui-persistence.test.js:207:1'
   failureType: 'testCodeFailure'
   error: |-
-    The input did not match the regular expression /総実稼働時間/. Input:
+    Expected values to be strictly equal:
+    + actual - expected
     
-    ''
+    + '開始時刻が遅すぎます。総実稼働時間より後には設定できません。'
+    - ''
     
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
-  expected:
-  actual: ''
-  operator: 'match'
+  expected: ''
+  actual: '開始時刻が遅すぎます。総実稼働時間より後には設定できません。'
+  operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/runner/work/ubereats-progress/ubereats-progress/tests/session-ui-persistence.test.js:231:10)
+    TestContext.<anonymous> (/home/runner/work/ubereats-progress/ubereats-progress/tests/session-ui-persistence.test.js:236:10)
     Test.runInAsyncScope (node:async_hooks:214:14)
     Test.run (node:internal/test_runner/test:1047:25)
     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
@@ -1549,237 +1551,195 @@ not ok 36 - start-time validation includes recorded other-company work
 # Subtest: ±1 minute keeps the existing seconds exactly
 ok 37 - ±1 minute keeps the existing seconds exactly
   ---
-  duration_ms: 48.447728
+  duration_ms: 293.500054
   type: 'test'
   ...
 # Subtest: remaining time is shown only to minutes while keeping millisecond precision
 ok 38 - remaining time is shown only to minutes while keeping millisecond precision
   ---
-  duration_ms: 1.953122
+  duration_ms: 1.887883
   type: 'test'
   ...
 # Subtest: work-session durations are shown only to completed minutes without rounding engine data
 ok 39 - work-session durations are shown only to completed minutes without rounding engine data
   ---
-  duration_ms: 1.995361
+  duration_ms: 1.991389
   type: 'test'
   ...
 # Subtest: legacy GPS usage is relinked to the remaining clock and operation rate
 ok 40 - legacy GPS usage is relinked to the remaining clock and operation rate
   ---
-  duration_ms: 2.379316
+  duration_ms: 2.390107
   type: 'test'
   ...
 # Subtest: usage and rate stay at zero while remaining time is above 12 hours
 ok 41 - usage and rate stay at zero while remaining time is above 12 hours
   ---
-  duration_ms: 1.627264
+  duration_ms: 1.525229
   type: 'test'
   ...
 # Subtest: history uses canonical consumed time while preserving legacy fallback records
 ok 42 - history uses canonical consumed time while preserving legacy fallback records
   ---
-  duration_ms: 1.691864
+  duration_ms: 1.668314
   type: 'test'
   ...
 # Subtest: normal persistence mirrors enhanced remaining time into regular saved controls
 ok 43 - normal persistence mirrors enhanced remaining time into regular saved controls
   ---
-  duration_ms: 1.82355
+  duration_ms: 1.753752
   type: 'test'
   ...
 # Subtest: usage is capped at 12 hours and timestamps never move backward
 ok 44 - usage is capped at 12 hours and timestamps never move backward
   ---
-  duration_ms: 1.54987
+  duration_ms: 1.596837
   type: 'test'
   ...
 # Subtest: time ON continuously consumes elapsed seconds without requesting geolocation
 ok 45 - time ON continuously consumes elapsed seconds without requesting geolocation
   ---
-  duration_ms: 2.315868
+  duration_ms: 2.220473
   type: 'test'
   ...
 # Subtest: time OFF and breaks pause the continuous countdown
 ok 46 - time OFF and breaks pause the continuous countdown
   ---
-  duration_ms: 1.682998
+  duration_ms: 1.66599
   type: 'test'
   ...
 # Subtest: the first time ON starts one session and later toggles keep its start
 ok 47 - the first time ON starts one session and later toggles keep its start
   ---
-  duration_ms: 3.899471
+  duration_ms: 3.263828
   type: 'test'
   ...
 # Subtest: a break cannot start before the work session has started
 ok 48 - a break cannot start before the work session has started
   ---
-  duration_ms: 2.044923
+  duration_ms: 1.547182
   type: 'test'
   ...
 # Subtest: session elapsed time subtracts only breaks overlapping the edited start time
 ok 49 - session elapsed time subtracts only breaks overlapping the edited start time
   ---
-  duration_ms: 1.629728
+  duration_ms: 1.63248
   type: 'test'
   ...
 # Subtest: background time is consumed exactly once while the clock is ON
 ok 50 - background time is consumed exactly once while the clock is ON
   ---
-  duration_ms: 3.391353
+  duration_ms: 3.333934
   type: 'test'
   ...
 # Subtest: main view adopts an exact compact-clock edit from the storage event
 ok 51 - main view adopts an exact compact-clock edit from the storage event
   ---
-  duration_ms: 1.798683
+  duration_ms: 1.762295
   type: 'test'
   ...
 # Subtest: main view ignores an older delayed clock update
 ok 52 - main view ignores an older delayed clock update
   ---
-  duration_ms: 1.40002
+  duration_ms: 1.343867
   type: 'test'
   ...
 # Subtest: an explicit edit wins over a newer unpersisted display tick
 ok 53 - an explicit edit wins over a newer unpersisted display tick
   ---
-  duration_ms: 1.649065
+  duration_ms: 1.599951
   type: 'test'
   ...
 # Subtest: pageshow reloads a compact edit before resuming a BFCache-restored clock
 ok 54 - pageshow reloads a compact edit before resuming a BFCache-restored clock
   ---
-  duration_ms: 2.151782
+  duration_ms: 2.116887
   type: 'test'
   ...
 # Subtest: old movement state migrates without retroactively consuming its stored gap
 ok 55 - old movement state migrates without retroactively consuming its stored gap
   ---
-  duration_ms: 2.26315
+  duration_ms: 2.028505
   type: 'test'
   ...
 # Subtest: continuous state catches up once after a reload
 ok 56 - continuous state catches up once after a reload
   ---
-  duration_ms: 1.535653
+  duration_ms: 1.371288
   type: 'test'
   ...
 # Subtest: a future monotonic anchor does not double-count after the device clock moves backward
 ok 57 - a future monotonic anchor does not double-count after the device clock moves backward
   ---
-  duration_ms: 1.588852
+  duration_ms: 1.504779
   type: 'test'
   ...
 # Subtest: the use-up time stays fixed while counting and slides while paused
 ok 58 - the use-up time stays fixed while counting and slides while paused
   ---
-  duration_ms: 1.727461
+  duration_ms: 1.596846
   type: 'test'
   ...
 # Subtest: ending a session records once and freezes the continuous clock
 ok 59 - ending a session records once and freezes the continuous clock
   ---
-  duration_ms: 2.45079
+  duration_ms: 2.305239
   type: 'test'
   ...
 # Subtest: manual correction, open break, finish, and history keep one linked usage metric
-not ok 60 - manual correction, open break, finish, and history keep one linked usage metric
+ok 60 - manual correction, open break, finish, and history keep one linked usage metric
   ---
-  duration_ms: 3.571279
+  duration_ms: 5.893224
   type: 'test'
-  location: '/home/runner/work/ubereats-progress/ubereats-progress/tests/timer-engine.test.js:678:1'
-  failureType: 'testCodeFailure'
-  error: |-
-    Expected values to be strictly equal:
-    
-    false !== true
-    
-  code: 'ERR_ASSERTION'
-  name: 'AssertionError'
-  expected: true
-  actual: false
-  operator: 'strictEqual'
-  stack: |-
-    TestContext.<anonymous> (/home/runner/work/ubereats-progress/ubereats-progress/tests/timer-engine.test.js:704:10)
-    Test.runInAsyncScope (node:async_hooks:214:14)
-    Test.run (node:internal/test_runner/test:1047:25)
-    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
-    Test.postRun (node:internal/test_runner/test:1173:19)
-    Test.run (node:internal/test_runner/test:1101:12)
-    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
 # Subtest: an ended session rejects remaining-time corrections until reset
 ok 61 - an ended session rejects remaining-time corrections until reset
   ---
-  duration_ms: 1.881549
+  duration_ms: 2.780944
   type: 'test'
   ...
 # Subtest: reset clears every timer, break, and background field in memory and storage
 ok 62 - reset clears every timer, break, and background field in memory and storage
   ---
-  duration_ms: 2.636216
+  duration_ms: 3.150007
   type: 'test'
   ...
 # Subtest: time OFF shared control records other-company work without consuming Uber time
 ok 63 - time OFF shared control records other-company work without consuming Uber time
   ---
-  duration_ms: 2.560014
+  duration_ms: 2.491649
   type: 'test'
   ...
 # Subtest: switching Uber time ON closes other-company work and prevents overlap
 ok 64 - switching Uber time ON closes other-company work and prevents overlap
   ---
-  duration_ms: 2.419522
+  duration_ms: 2.226421
   type: 'test'
   ...
 # Subtest: time ON shared control remains the break control and pauses Uber countdown
-not ok 65 - time ON shared control remains the break control and pauses Uber countdown
+ok 65 - time ON shared control remains the break control and pauses Uber countdown
   ---
-  duration_ms: 3.483215
+  duration_ms: 3.334034
   type: 'test'
-  location: '/home/runner/work/ubereats-progress/ubereats-progress/tests/timer-engine.test.js:864:1'
-  failureType: 'testCodeFailure'
-  error: |-
-    Expected values to be strictly equal:
-    + actual - expected
-    
-    + 43000000
-    - 43200000
-    
-  code: 'ERR_ASSERTION'
-  name: 'AssertionError'
-  expected: 43200000
-  actual: 43000000
-  operator: 'strictEqual'
-  stack: |-
-    TestContext.<anonymous> (/home/runner/work/ubereats-progress/ubereats-progress/tests/timer-engine.test.js:888:10)
-    Test.runInAsyncScope (node:async_hooks:214:14)
-    Test.run (node:internal/test_runner/test:1047:25)
-    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
-    Test.postRun (node:internal/test_runner/test:1173:19)
-    Test.run (node:internal/test_runner/test:1101:12)
-    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
 # Subtest: history snapshot separates Uber, other-company and total active time
 ok 66 - history snapshot separates Uber, other-company and total active time
   ---
-  duration_ms: 1.585567
+  duration_ms: 1.530517
   type: 'test'
   ...
 # Subtest: reset offers to save an other-company-only session
 ok 67 - reset offers to save an other-company-only session
   ---
-  duration_ms: 2.091761
+  duration_ms: 2.111088
   type: 'test'
   ...
 1..67
 # tests 67
 # suites 0
-# pass 63
-# fail 4
+# pass 65
+# fail 2
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 302.214204
+# duration_ms 543.524892

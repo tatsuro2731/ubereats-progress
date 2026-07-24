@@ -700,6 +700,8 @@ test("manual correction, open break, finish, and history keep one linked usage m
   app.context.adjustRemain(-10);
   assert.equal(app.api.getState().remainingMs, 570 * minute);
   assert.equal(app.api.getState().activeMs, 150 * minute);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().on, true);
   app.api.toggleBreak();
   assert.equal(app.api.getState().breakOn, true);
 
@@ -870,6 +872,7 @@ test("time ON shared control remains the break control and pauses Uber countdown
       remainingMs: WORK_LIMIT_MS,
       sessionStartAt: now,
       lastTickAt: now,
+      updatedAt: now,
       otherCompanyOn: false,
       otherCompanyStartedAt: null,
       otherCompanyMs: 0,

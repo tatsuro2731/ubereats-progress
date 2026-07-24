@@ -148,7 +148,7 @@ test("the enhanced timer is continuous while ON and never requests location", ()
   assert.match(compact, /activeMs:\s*usedMsFromRemaining\(remainingMs\)/);
   assert.doesNotMatch(enhancements, /navigator\.geolocation|watchPosition|clearWatch/);
   assert.doesNotMatch(enhancements, /GPS|位置情報/);
-  assert.match(enhancements, /案件の有無や移動状態は自動判定しません/);
+  assert.match(enhancements, /案件の有無や端末の移動状態は自動判定しません/);
 });
 
 test("the settings header is a dedicated swipe-to-close surface without taking over form scrolling", () => {
