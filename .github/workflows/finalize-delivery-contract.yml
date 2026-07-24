@@ -4,13 +4,16 @@ on:
   push:
     branches:
       - agent/other-company-work
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   update-and-test:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.head_ref == 'agent/other-company-work')
     runs-on: ubuntu-latest
     steps:
       - name: Check out feature branch
