@@ -247,7 +247,10 @@ class FakeElement {
     this.attributes = new Map();
     this.capturedPointers = new Set();
     this.focusCount = 0;
+    this.blurCount = 0;
     this.rectReadCount = 0;
+    this.dialogOwner = null;
+    this.onBlur = null;
   }
   addEventListener(type, listener) {
     const listeners = this.listeners.get(type) || [];
@@ -282,6 +285,11 @@ class FakeElement {
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name); }
   focus() { this.focusCount += 1; }
+  blur() {
+    this.blurCount += 1;
+    if (this.onBlur) this.onBlur();
+  }
+  contains(element) { return Boolean(element && element.dialogOwner === this); }
   closest() { return null; }
 }
 
@@ -297,7 +305,11 @@ globalThis.__settingsSwipeTestApi = {
   setupSettingsSwipe,
   setSettingsOpen,
   getSwipe: () => settingsSwipe,
-  closeDistance: settingsSwipeCloseDistance
+  closeDistance: settingsSwipeCloseDistance,
+  setCommitCallbacks(saveCallback, calcCallback) {
+    save = saveCallback;
+    calc = calcCallback;
+  }
 };`;
 }
 
@@ -352,11 +364,21 @@ function settingsHarness({ reducedMotion = false } = {}) {
   });
   vm.runInContext(instrumentedIndexSource(), context, { filename: "index.html" });
   const api = context.__settingsSwipeTestApi;
+  const commitCalls = { save: 0, calc: 0, savedEndLimit: "" };
+  api.setCommitCallbacks(
+    () => {
+      commitCalls.save += 1;
+      commitCalls.savedEndLimit = element("endLimit").value || "";
+    },
+    () => { commitCalls.calc += 1; }
+  );
   api.setupSettingsSwipe();
   api.setSettingsOpen(true);
   return {
     api,
     element,
+    document,
+    commitCalls,
     area: element("settingsDragArea"),
     pendingAnimationFrames: () => animationFrames.size,
     animationFrameRequests: () => animationFrameRequests,
@@ -374,6 +396,31 @@ function settingsHarness({ reducedMotion = false } = {}) {
     }
   };
 }
+
+test("closing settings commits an iPhone time input before saving and recalculating", () => {
+  const html = read("index.html");
+  assert.match(html, /function\s+commitSettingsChanges\s*\([^)]*\)[\s\S]{0,500}active\.blur\(\)[\s\S]{0,500}save\(\)[\s\S]{0,200}calc\(\)/);
+  assert.match(html, /if\s*\(\s*!open\s*&&\s*wasOpen\s*\)\s*commitSettingsChanges\(\)/);
+  assert.match(html, /settingsClose"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
+  assert.match(html, /settingsDone"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
+  assert.match(html, /settingsBackdrop"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
+  assert.match(html, /if\s*\(close\)\s*setSettingsOpen\(false\)/);
+
+  const app = settingsHarness();
+  const input = app.element("endLimit");
+  input.dialogOwner = app.element("settingsDialog");
+  input.value = "";
+  input.onBlur = () => { input.value = "22:30"; };
+  app.document.activeElement = input;
+
+  app.api.setSettingsOpen(false);
+
+  assert.equal(input.blurCount, 1, "the native time control must commit before the sheet is hidden");
+  assert.equal(app.commitCalls.savedEndLimit, "22:30");
+  assert.equal(app.commitCalls.save, 1);
+  assert.equal(app.commitCalls.calc, 1);
+  assert.equal(app.element("settingsLayer").hidden, true);
+});
 
 test("a downward swipe past the threshold closes settings and clears drag state", () => {
   const app = settingsHarness();
@@ -401,6 +448,8 @@ test("a downward swipe past the threshold closes settings and clears drag state"
   assert.equal(app.element("settingsOpen").focusCount, 1, "focus returns to the settings button");
   assert.equal(app.element("settingsDialog").style.getPropertyValue("transform"), "");
   assert.equal(app.element("settingsBackdrop").style.getPropertyValue("opacity"), "");
+  assert.equal(app.commitCalls.save, 1, "swipe close must save settings");
+  assert.equal(app.commitCalls.calc, 1, "swipe close must recalculate immediately");
 });
 
 test("multiple pointer moves render only the newest position once per animation frame", () => {

@@ -365,8 +365,18 @@ function setupSettingsSwipe() {
   area.addEventListener("lostpointercapture", event => finishSettingsSwipe(event, true));
 }
 
+function commitSettingsChanges() {
+  const dialog = $("settingsDialog");
+  const active = document.activeElement;
+  if (active && dialog.contains(active) && typeof active.blur === "function") active.blur();
+  save();
+  calc();
+}
+
 function setSettingsOpen(open, restoreFocus = true) {
   const layer = $("settingsLayer");
+  const wasOpen = !layer.hidden;
+  if (!open && wasOpen) commitSettingsChanges();
   resetSettingsSwipeVisuals();
   if (open) {
     settingsReturnFocus = document.activeElement;
@@ -1186,7 +1196,7 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=48").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=49").catch(() => {}));
 }
 </script>
 <script src="app-enhancements.js?v=8"></script>
