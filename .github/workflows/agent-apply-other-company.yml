@@ -37,10 +37,21 @@ jobs:
 
       - name: Validate JavaScript and regression tests
         run: |
-          node --check app-enhancements.js
-          node --check app-session-ui-fix.js
-          node --test tests/*.test.js
-          git diff --check
+          set -o pipefail
+          {
+            node --check app-enhancements.js
+            node --check app-session-ui-fix.js
+            node --test tests/*.test.js
+            git diff --check
+          } 2>&1 | tee test-error.txt || {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add test-error.txt
+            git commit -m "Record other-company test diagnostic" || true
+            git push origin HEAD:agent/other-company-work
+            exit 1
+          }
+          rm -f test-error.txt
 
       - name: Commit validated feature
         run: |
