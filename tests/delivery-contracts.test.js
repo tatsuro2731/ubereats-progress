@@ -142,11 +142,13 @@ test("the enhanced timer is continuous while ON and never requests location", ()
   assert.match(enhancements, /clockState\.on\s*&&\s*!clockState\.breakOn\s*&&\s*!clockState\.sessionEndedAt/);
   assert.match(enhancements, /clockState\.remainingMs\s*-=?\s*consumed/);
   assert.match(enhancements, /WORK_LIMIT_MS\s*-\s*finite\(remainingMs/);
-  assert.match(enhancements, /clockUsedMs\(\)\s*\/\s*elapsed\s*\*\s*100/);
+  assert.match(enhancements, /clockUsedMs\(\)\s*\+\s*otherCompanyDurationMs\(at\)/);
+  assert.match(enhancements, /totalActiveMs\(at\)\s*\/\s*elapsed\s*\*\s*100/);
+  assert.match(enhancements, /sharedMode\s*=\s*clockState\.on\s*\?\s*["']break["']\s*:\s*["']otherCompany["']/);
   assert.match(compact, /activeMs:\s*usedMsFromRemaining\(remainingMs\)/);
   assert.doesNotMatch(enhancements, /navigator\.geolocation|watchPosition|clearWatch/);
   assert.doesNotMatch(enhancements, /GPS|位置情報/);
-  assert.match(enhancements, /案件の有無や移動状態は自動判定しません/);
+  assert.match(enhancements, /Uber側の時計が進む時は時間ONにし/);
 });
 
 test("the settings header is a dedicated swipe-to-close surface without taking over form scrolling", () => {
