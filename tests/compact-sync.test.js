@@ -509,3 +509,45 @@ test("compact time edits preserve an active other-company category", () => {
   assert.equal(saved.otherCompanyMs, 100000);
   assert.deepEqual(saved.otherCompanySegments, otherCompanySegments);
 });
+
+test("reaching the target in compact stops the exact countdown and closes other-company work", () => {
+  const now = 160000;
+  const remainingMs = 10 * 60 * 60000;
+  const app = runCompact({
+    [DATA_KEY]: JSON.stringify({ target: "10", done: "9", remainH: "10", remainM: "0" }),
+    [ENHANCED_KEY]: JSON.stringify({
+      countMode: COUNT_MODE,
+      usageMode: USAGE_MODE,
+      on: true,
+      remainingMs,
+      activeMs: usedMsFromRemaining(remainingMs),
+      sessionStartAt: 100000,
+      sessionEndedAt: null,
+      breakOn: false,
+      otherCompanyOn: true,
+      otherCompanyStartedAt: 100000,
+      otherCompanyMs: 0,
+      otherCompanySegments: [{ startAt: 100000, endAt: null }],
+      legacyOtherCompanyMs: 0,
+      updatedAt: 100000
+    })
+  }, now);
+
+  app.element("plus").dispatch("click");
+
+  const saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(app.element("done").value, "10");
+  assert.equal(app.element("slackMain").textContent, "目標達成");
+  assert.equal(saved.on, false);
+  assert.equal(saved.remainingMs, remainingMs - 60000, "the elapsed seconds must settle exactly before stopping");
+  assert.equal(saved.activeMs, usedMsFromRemaining(remainingMs - 60000));
+  assert.equal(saved.otherCompanyOn, false);
+  assert.equal(saved.otherCompanyStartedAt, null);
+  assert.deepEqual(saved.otherCompanySegments, [{ startAt: 100000, endAt: now }]);
+  assert.equal(saved.otherCompanyMs, 60000);
+  assert.deepEqual(JSON.parse(app.storage.getItem(LEGACY_KEY)), {
+    on: false,
+    baseRemain: (remainingMs - 60000) / 60000,
+    baseAt: now
+  });
+});

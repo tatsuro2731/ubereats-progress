@@ -154,6 +154,36 @@ test("the enhanced timer is continuous while ON and never requests location", ()
   assert.match(enhancements, /案件の有無や移動状態は自動判定しません/);
 });
 
+test("compact goal completion stops the shared clock and main follows compact progress changes", () => {
+  const index = read("index.html");
+  const compact = read("compact.html");
+  assert.match(compact, /remainingOrders\s*===\s*0\s*&&\s*stopEnhancedClockAtGoal\(\)/);
+  assert.match(compact, /on:\s*false[\s\S]{0,500}otherCompanyOn:\s*false/);
+  assert.match(compact, /otherCompanySegments/);
+  assert.match(
+    index,
+    /window\.addEventListener\("storage",[\s\S]{0,500}event\.key\s*===\s*STORAGE_KEY[\s\S]{0,500}load\(\)[\s\S]{0,500}calc\(\)/
+  );
+  const basePageShow = index.match(/window\.addEventListener\("pageshow",\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\);/);
+  assert.ok(basePageShow, "main must reload compact progress values when returning from page cache");
+  assert.match(basePageShow[1], /load\(\)/);
+  assert.match(basePageShow[1], /syncCardCountControl\(\)/);
+  assert.match(basePageShow[1], /renderCardSelectors\(\)/);
+  assert.doesNotMatch(basePageShow[1], /calc\(\)/, "the stale in-memory clock must not calculate before enhanced-state reconciliation");
+  const enhancements = read("app-enhancements.js");
+  assert.match(
+    enhancements,
+    /window\.addEventListener\("pageshow",[\s\S]{0,300}reconcileStoredClock\(\)[\s\S]{0,300}calc\(\)/
+  );
+  const baseVisibility = index.match(/document\.addEventListener\("visibilitychange",\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\);/);
+  assert.ok(baseVisibility, "main must retain its card-drag visibility cleanup");
+  assert.doesNotMatch(baseVisibility[1], /calc\(\)/, "the base page must not calculate with a stale clock before reconciliation");
+  assert.match(
+    enhancements,
+    /document\.addEventListener\("visibilitychange",[\s\S]{0,350}reconcileStoredClock\(\)[\s\S]{0,350}resumeBackgroundGap\(\)[\s\S]{0,350}calc\(\)/
+  );
+});
+
 test("the settings header is a dedicated swipe-to-close surface without taking over form scrolling", () => {
   const html = read("index.html");
   assert.match(html, /id="settingsDragArea"\s+class="settingsDragArea"/);

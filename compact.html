@@ -517,6 +517,92 @@
       return true;
     }
 
+    function compactSegmentDurationMs(segments, sessionStartAt, at) {
+      const startLimit = Number.isFinite(Number(sessionStartAt)) ? Number(sessionStartAt) : at;
+      const intervals = (Array.isArray(segments) ? segments : []).map(segment => {
+        const startAt = Math.max(startLimit, Number(segment && segment.startAt));
+        const rawEnd = segment && segment.endAt;
+        const endAt = Math.min(at, rawEnd === null || rawEnd === undefined ? at : Number(rawEnd));
+        return Number.isFinite(startAt) && Number.isFinite(endAt) && endAt > startAt ? [startAt, endAt] : null;
+      }).filter(Boolean).sort((a, b) => a[0] - b[0]);
+      let total = 0;
+      let rangeStart = null;
+      let rangeEnd = null;
+      intervals.forEach(([startAt, endAt]) => {
+        if (rangeStart === null) {
+          rangeStart = startAt;
+          rangeEnd = endAt;
+        } else if (startAt <= rangeEnd) {
+          rangeEnd = Math.max(rangeEnd, endAt);
+        } else {
+          total += rangeEnd - rangeStart;
+          rangeStart = startAt;
+          rangeEnd = endAt;
+        }
+      });
+      if (rangeStart !== null) total += rangeEnd - rangeStart;
+      return Math.max(0, total);
+    }
+
+    function stopEnhancedClockAtGoal() {
+      const now = Date.now();
+      const stored = readEnhancedClock();
+      const enhanced = stored ? migrateEnhancedClock(stored, now) : null;
+      if (!enhanced || !enhanced.data.on || enhanced.data.sessionEndedAt) return false;
+      const effective = effectiveEnhancedClock(enhanced, now);
+      const previous = enhanced.data;
+      const rawUpdatedAt = Number(previous.updatedAt);
+      const countedUntil = effective.exhausted && Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0
+        ? Math.min(now, rawUpdatedAt + enhanced.remainingMs)
+        : now;
+      const otherCompanySegments = Array.isArray(previous.otherCompanySegments)
+        ? previous.otherCompanySegments.map(segment => ({
+          startAt: segment.startAt,
+          endAt: segment.endAt === null ? null : segment.endAt
+        }))
+        : [];
+      if (previous.otherCompanyOn) {
+        const rawStartedAt = Number(previous.otherCompanyStartedAt);
+        const startedAt = Number.isFinite(rawStartedAt) && rawStartedAt > 0 ? rawStartedAt : countedUntil;
+        const endedAt = Math.max(startedAt, countedUntil);
+        const openSegment = [...otherCompanySegments].reverse().find(segment => segment.endAt === null);
+        if (openSegment) openSegment.endAt = endedAt;
+        else otherCompanySegments.push({ startAt: startedAt, endAt: endedAt });
+      }
+      const activeMs = usedMsFromRemaining(effective.remainingMs);
+      const legacyOtherCompanyMs = Math.max(0, Number(previous.legacyOtherCompanyMs) || 0);
+      const otherCompanyMs = Math.min(
+        activeMs,
+        legacyOtherCompanyMs + compactSegmentDurationMs(otherCompanySegments, previous.sessionStartAt, countedUntil)
+      );
+      const updatedAt = Math.max(now, Number.isFinite(rawUpdatedAt) ? rawUpdatedAt : 0);
+      const state = {
+        ...previous,
+        countMode: COUNT_MODE,
+        usageMode: USAGE_MODE,
+        on: false,
+        remainingMs: effective.remainingMs,
+        moving: false,
+        activeMs,
+        otherCompanyOn: false,
+        otherCompanyStartedAt: null,
+        otherCompanyMs,
+        otherCompanySegments,
+        backgroundGap: null,
+        lastBackfillMs: 0,
+        lastBackfillAt: null,
+        updatedAt
+      };
+      localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
+      localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
+        on: false,
+        baseRemain: state.remainingMs / 60000,
+        baseAt: updatedAt
+      }));
+      showEnhancedRemaining();
+      return true;
+    }
+
     function setTone(slackMinutes, perOrder, remainingOrders) {
       const hero = $("hero");
       const main = $("slackMain");
@@ -549,9 +635,12 @@
     function calc(shouldSave = true) {
       const target = Math.max(n("target"), 1);
       const done = Math.max(n("done"), 0);
-      const remainMinutes = Math.max(n("remainH") * 60 + n("remainM"), 0);
+      let remainMinutes = Math.max(n("remainH") * 60 + n("remainM"), 0);
       const perOrder = LIMIT_MINUTES / target;
       const remainingOrders = Math.max(target - done, 0);
+      if (remainingOrders === 0 && stopEnhancedClockAtGoal()) {
+        remainMinutes = Math.max(n("remainH") * 60 + n("remainM"), 0);
+      }
       const requiredMinutes = remainingOrders * perOrder;
       const slackMinutes = remainMinutes - requiredMinutes;
       const slackOrder = slackMinutes / perOrder;
@@ -650,7 +739,7 @@
     }
 
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=47").catch(() => {}));
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=48").catch(() => {}));
     }
   </script>
 </body>

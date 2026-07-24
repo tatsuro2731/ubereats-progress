@@ -1062,6 +1062,7 @@
     else {
       reconcileStoredClock();
       resumeBackgroundGap();
+      calc();
     }
     renderEnhancedClock();
   });

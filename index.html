@@ -1088,7 +1088,21 @@ function setup() {
   setInterval(calc, 15000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && cardDrag) finishCardDrag(false);
-    if (!document.hidden) calc();
+  });
+  window.addEventListener("storage", event => {
+    if (event.key === STORAGE_KEY && event.newValue) {
+      load();
+      syncCardCountControl();
+      renderCardSelectors();
+      calc();
+      return;
+    }
+    if (event.key && event.key.startsWith(PACE_MODE_KEY_PREFIX)) calc();
+  });
+  window.addEventListener("pageshow", () => {
+    load();
+    syncCardCountControl();
+    renderCardSelectors();
   });
 
   ["target", "done", "remainH", "remainM", "endLimit"].forEach(id => {
@@ -1172,10 +1186,10 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=47").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=48").catch(() => {}));
 }
 </script>
-<script src="app-enhancements.js?v=7"></script>
+<script src="app-enhancements.js?v=8"></script>
 <script src="app-enhancements-fix.js?v=2"></script>
 <script src="app-session-ui-fix.js?v=8"></script>
 </body>
