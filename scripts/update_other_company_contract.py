@@ -18,17 +18,17 @@ replace_exact(
 
 replace_exact(
     "app-session-ui-fix.js",
-    """  if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
-    closeEditor();
-    return;
-  }
-  const timestamp = parseLocalInput(input.value);""",
-    """  if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
-    closeEditor();
-    return;
-  }
-  error.textContent = "";
-  const timestamp = parseLocalInput(input.value);""",
+    """    if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
+      closeEditor();
+      return;
+    }
+    const timestamp = parseLocalInput(input.value);""",
+    """    if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
+      closeEditor();
+      return;
+    }
+    error.textContent = "";
+    const timestamp = parseLocalInput(input.value);""",
 )
 
 Path("contract-test-output.txt").unlink(missing_ok=True)
