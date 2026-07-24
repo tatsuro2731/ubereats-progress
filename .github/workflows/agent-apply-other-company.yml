@@ -1,0 +1,38 @@
+name: Apply other-company work tracking
+
+on:
+  push:
+    branches:
+      - agent/other-company-work
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/other-company-work
+          fetch-depth: 0
+
+      - name: Apply deterministic patch
+        run: python scripts/apply_other_company.py
+
+      - name: Validate JavaScript and regression tests
+        run: |
+          node --check app-enhancements.js
+          node --check app-session-ui-fix.js
+          node --test tests/*.test.js
+          git diff --check
+
+      - name: Commit validated feature
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "他社稼働を稼働計測へ反映"
+          git push origin HEAD:agent/other-company-work
