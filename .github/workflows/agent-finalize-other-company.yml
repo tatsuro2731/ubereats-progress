@@ -1,0 +1,113 @@
+name: Finalize other-company tracking
+
+on:
+  push:
+    branches:
+      - agent/other-company-work
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/other-company-work
+          fetch-depth: 0
+
+      - name: Apply final consistency fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected one match, found {count}: {old!r}")
+              target.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace_exact(
+              "app-enhancements.js",
+              'if (showMessage) alert("開始時刻がまだありません。時間ONで計測を開始してください。");',
+              'if (showMessage) alert("開始時刻がまだありません。時間ONまたは他社稼働ONで計測を開始してください。");',
+          )
+          replace_exact(
+              "app-enhancements.js",
+              'const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (clockUsedMs() > 0 || n("done") > 0));',
+              'const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (totalActiveMs() > 0 || n("done") > 0));',
+          )
+          replace_exact(
+              "README.md",
+              '- 稼働計測の「時計が減った時間」は`12時間 − 現在の残り時間`と連携し、実稼働率はその時間を休憩除外後の経過時間で割って計算します。残り時間を補正した場合も同じ値へ反映されます。',
+              '- Uber稼働時間は`12時間 − 現在の残り時間`と連携します。実稼働率は、Uber稼働時間と他社稼働時間の合計を、休憩除外後の経過時間で割って計算します。残り時間を補正した場合もUber稼働時間へ反映されます。',
+          )
+          replace_exact(
+              "README.md",
+              '- リセットすると、完了件数、残り稼働時間、終了上限が初期状態に戻ります。',
+              '- リセットすると、完了件数、残り稼働時間、終了上限、当日の稼働計測が初期状態に戻ります。記録済みの稼働がある場合は、リセット前に履歴へ保存できます。',
+          )
+          replace_exact("index.html", 'navigator.serviceWorker.register("sw.js?v=46")', 'navigator.serviceWorker.register("sw.js?v=47")')
+          replace_exact("index.html", '<script src="app-enhancements.js?v=6"></script>', '<script src="app-enhancements.js?v=7"></script>')
+          replace_exact("index.html", '<script src="app-session-ui-fix.js?v=7"></script>', '<script src="app-session-ui-fix.js?v=8"></script>')
+          replace_exact("compact.html", 'navigator.serviceWorker.register("sw.js?v=46")', 'navigator.serviceWorker.register("sw.js?v=47")')
+
+          test_path = Path("tests/timer-engine.test.js")
+          test_text = test_path.read_text(encoding="utf-8")
+          marker = 'test("reset offers to save an other-company-only session"'
+          if marker not in test_text:
+              test_text += r'''
+
+          test("reset offers to save an other-company-only session", () => {
+            const minute = 60000;
+            const now = 1_000_000;
+            const app = timerHarness({
+              now,
+              regular: { target: "10", done: "0", remainH: "12", remainM: "0" },
+              enhanced: state({
+                on: false,
+                remainingMs: WORK_LIMIT_MS,
+                activeMs: 0,
+                sessionStartAt: now - minute,
+                lastTickAt: now,
+                otherCompanyOn: false,
+                otherCompanyStartedAt: null,
+                otherCompanyMs: minute,
+                otherCompanySegments: [{ startAt: now - minute, endAt: now }]
+              })
+            });
+
+            app.element("reset").onclick();
+            assert.equal(app.confirmMessages.length, 2);
+            assert.match(app.confirmMessages[1], /保存/);
+            const items = JSON.parse(app.storage.getItem(HISTORY_KEY) || "[]");
+            assert.equal(items.length, 1);
+            assert.equal(items[0].usedMs, 0);
+            assert.equal(items[0].otherCompanyMs, minute);
+            assert.equal(items[0].totalActiveMs, minute);
+          });
+          '''
+              test_path.write_text(test_text, encoding="utf-8")
+
+          Path(".github/workflows/agent-finalize-other-company.yml").unlink()
+          PY
+
+      - name: Validate application
+        run: |
+          node --check app-enhancements.js
+          node --check app-session-ui-fix.js
+          node --test tests/*.test.js
+          git diff --check
+
+      - name: Commit final fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "他社稼働の保存導線とPWA更新を整合"
+          git push origin HEAD:agent/other-company-work
