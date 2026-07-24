@@ -1,0 +1,49 @@
+name: Diagnose PR merge tests
+
+on:
+  push:
+    branches:
+      - agent/other-company-work
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/other-company-work
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Reproduce PR merge tests and save output
+        run: |
+          git fetch origin +refs/pull/13/merge:refs/remotes/origin/pr-13-merge
+          git checkout --detach refs/remotes/origin/pr-13-merge
+          set +e
+          {
+            node --check app-enhancements.js
+            node --check app-enhancements-fix.js
+            node --check app-session-ui-fix.js
+            node --check sw.js
+            node --test tests/*.test.js
+          } > /tmp/pr-merge-test-output.txt 2>&1
+          status=$?
+          set -e
+          git checkout agent/other-company-work
+          cp /tmp/pr-merge-test-output.txt pr-merge-test-output.txt
+          printf '\nEXIT_STATUS=%s\n' "$status" >> pr-merge-test-output.txt
+          rm -f .github/workflows/diagnose-pr-merge.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Record PR merge test diagnostic"
+          git push origin HEAD:agent/other-company-work
