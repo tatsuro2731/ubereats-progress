@@ -191,6 +191,7 @@
       closeEditor();
       return;
     }
+    error.textContent = "";
     const timestamp = parseLocalInput(input.value);
     const now = Date.now();
     if (!Number.isFinite(timestamp)) {
