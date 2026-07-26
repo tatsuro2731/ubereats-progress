@@ -143,8 +143,11 @@ test("the enhanced timer is continuous while ON and never requests location", ()
   assert.match(enhancements, /clockState\.remainingMs\s*-=?\s*consumed/);
   assert.match(enhancements, /WORK_LIMIT_MS\s*-\s*finite\(remainingMs/);
   assert.match(enhancements, /clockUsedMs\(\)\s*\/\s*elapsed\s*\*\s*100/);
-  assert.match(enhancements, /sharedMode\s*=\s*clockState\.on\s*\?\s*["']otherCompany["']\s*:\s*["']break["']/);
+  assert.match(enhancements, /clockState\.on\s*=\s*false\s*;\s*startActiveBreak\(now\)/);
+  assert.match(enhancements, /clockState\.on\s*=\s*true[\s\S]{0,120}closeActiveBreak|closeActiveBreak\(now\)[\s\S]{0,120}clockState\.on\s*=\s*true/);
   assert.match(enhancements, /clockState\.on\s*&&\s*clockState\.otherCompanyOn/);
+  assert.match(enhancements, /id="otherCompanyToggle"[^>]*>他社稼働ON<\/button>/);
+  assert.doesNotMatch(enhancements, /id="breakToggle"|>休憩開始<\/button>|>休憩終了<\/button>/);
   assert.match(enhancements, /id="workUberTime">0時間00分<\/strong>/);
   assert.match(enhancements, /id="workOtherCompanyTime">0時間00分<\/strong>/);
   assert.match(enhancements, /他社稼働中も残り時間をカウントしています/);

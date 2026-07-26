@@ -51,9 +51,9 @@ function instrumentedSource() {
     tickClock,
     setExactRemaining,
     enhancedToggleClock,
-    toggleBreak,
     toggleOtherCompany,
-    handleSharedWorkToggle,
+    startActiveBreak,
+    normalizeState,
     otherCompanyDurationMs,
     otherCompanyUsedMs,
     uberUsedMs,
@@ -269,11 +269,12 @@ test("remaining time is shown only to minutes while keeping millisecond precisio
 
 test("work-session durations are shown only to completed minutes without rounding engine data", () => {
   const initial = state({
-    on: false,
+    on: true,
     remainingMs: WORK_LIMIT_MS - (2 * 60000 + 45500),
     activeMs: 2 * 60000 + 45500,
     sessionStartAt: 640001,
     lastTickAt: 1_000_000,
+    updatedAt: 1_000_000,
     lastBackfillMs: 30500,
     lastBackfillAt: 1_000_000
   });
@@ -287,7 +288,7 @@ test("work-session durations are shown only to completed minutes without roundin
   for (const id of ["workActiveTime", "workElapsedTime", "workBreakTime"]) {
     assert.doesNotMatch(app.element(id).textContent, /秒/, `${id} must not expose seconds`);
   }
-  assert.match(app.element("movementDetail").textContent, /時間OFF中/);
+  assert.match(app.element("movementDetail").textContent, /連続でカウント/);
   assert.doesNotMatch(app.element("movementDetail").textContent, /秒/);
   assert.equal(app.api.durationText(59999), "0時間00分");
   assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - (2 * 60000 + 45500));
@@ -418,6 +419,27 @@ test("time OFF and breaks pause the continuous countdown", () => {
   assert.equal(app.geolocationRequests(), 0);
 });
 
+test("a stored OFF state inside an active session resumes as an automatic break", () => {
+  const app = timerHarness({
+    now: 200000,
+    enhanced: state({
+      on: false,
+      sessionStartAt: 100000,
+      breakOn: false,
+      breakStartedAt: null,
+      breakSegments: [],
+      lastTickAt: undefined,
+      updatedAt: 150000
+    })
+  });
+  const restored = app.api.getState();
+
+  assert.equal(restored.on, false);
+  assert.equal(restored.breakOn, true);
+  assert.equal(restored.breakStartedAt, 150000);
+  assert.deepEqual([...restored.breakSegments].map(segment => ({ ...segment })), [{ startAt: 150000, endAt: null }]);
+});
+
 test("the first time ON starts one session and later toggles keep its start", () => {
   const app = timerHarness({ now: 100000 });
   app.api.setState(state({ on: false, sessionStartAt: null, lastTickAt: 100000 }));
@@ -430,11 +452,15 @@ test("the first time ON starts one session and later toggles keep its start", ()
   app.setNow(260000);
   app.api.enhancedToggleClock();
   assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().breakOn, true);
+  assert.equal(app.api.getState().breakStartedAt, 260000);
   assert.equal(app.api.getState().activeMs, usedMs(540000));
 
   app.setNow(300000);
   app.api.enhancedToggleClock();
   assert.equal(app.api.getState().sessionStartAt, 200000);
+  assert.equal(app.api.getState().breakOn, false);
+  assert.equal(app.api.sessionBreakMs(), 40000);
   assert.equal(app.geolocationRequests(), 0);
 });
 
@@ -448,7 +474,7 @@ test("a break cannot start before the work session has started", () => {
     breakSegments: []
   }));
 
-  app.api.toggleBreak();
+  app.api.startActiveBreak(100000);
   assert.equal(app.api.getState().breakOn, false);
   assert.equal(app.api.getState().breakStartedAt, null);
   assert.equal(app.api.getState().breakSegments.length, 0);
@@ -681,7 +707,7 @@ test("ending a session records once and freezes the continuous clock", () => {
   assert.equal(JSON.parse(app.storage.getItem(HISTORY_KEY)).length, 1);
 });
 
-test("manual correction, open break, finish, and history keep one linked usage metric", () => {
+test("manual correction, automatic break, finish, and history keep one linked usage metric", () => {
   const minute = 60000;
   const base = 1_000_000;
   const app = timerHarness({
@@ -706,7 +732,6 @@ test("manual correction, open break, finish, and history keep one linked usage m
   app.context.adjustRemain(-10);
   assert.equal(app.api.getState().remainingMs, 570 * minute);
   assert.equal(app.api.getState().activeMs, 150 * minute);
-  app.api.toggleBreak();
   assert.equal(app.api.getState().breakOn, true);
 
   app.setNow(base + 180 * minute);
@@ -723,8 +748,8 @@ test("manual correction, open break, finish, and history keep one linked usage m
   assert.equal(history[0].usedMs, 150 * minute);
   assert.equal(history[0].usageMode, "remaining-v1");
   assert.equal(history[0].activeMs, 150 * minute);
-  assert.equal(history[0].elapsedMs, 150 * minute);
-  assert.equal(history[0].breakMs, 30 * minute);
+  assert.equal(history[0].elapsedMs, 140 * minute);
+  assert.equal(history[0].breakMs, 40 * minute);
   assert.equal(history[0].rate, 100);
   assert.equal(history[0].actualPaceMinutes, 15);
   assert.equal(history[0].hourlyRate, 4);
@@ -803,31 +828,36 @@ test("reset clears every timer, break, and background field in memory and storag
   assert.equal(persisted.backgroundGap, null);
 });
 
-test("time OFF shared control records a break and keeps remaining time paused", () => {
+test("switching time OFF automatically records a break and ON ends it", () => {
   const now = 100000;
   const app = timerHarness({ now });
   app.api.setState(state({
-    on: false,
+    on: true,
     remainingMs: WORK_LIMIT_MS,
-    sessionStartAt: 1000,
+    sessionStartAt: now,
     lastTickAt: now
   }));
 
-  app.api.renderEnhancedClock();
-  assert.equal(app.element("breakToggle").textContent, "休憩開始");
-  app.api.handleSharedWorkToggle();
-  assert.equal(app.api.getState().breakOn, true);
-  assert.equal(app.api.getState().otherCompanyOn, false);
-  assert.equal(app.element("breakToggle").textContent, "休憩終了");
-
   app.setNow(now + 60000);
+  app.api.enhancedToggleClock();
+  app.api.renderEnhancedClock();
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().breakOn, true);
+  assert.equal(app.api.getState().breakStartedAt, now + 60000);
+  assert.equal(app.api.getState().otherCompanyOn, false);
+  assert.equal(app.element("countSub").textContent, "休憩中");
+  assert.equal(app.element("otherCompanyToggle").disabled, true);
+
+  app.setNow(now + 120000);
   app.api.tickClock();
-  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS);
-  app.api.handleSharedWorkToggle();
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+  app.api.enhancedToggleClock();
   assert.equal(app.api.getState().breakOn, false);
+  assert.equal(app.api.sessionBreakMs(), 60000);
+  assert.equal(app.element("otherCompanyToggle").disabled, false);
 });
 
-test("time ON shared control records other-company work without pausing the countdown", () => {
+test("time ON other-company control records its category without pausing the countdown", () => {
   const now = 200000;
   const app = timerHarness({ now });
   app.api.setState(state({
@@ -838,11 +868,11 @@ test("time ON shared control records other-company work without pausing the coun
   }));
 
   app.api.renderEnhancedClock();
-  assert.equal(app.element("breakToggle").textContent, "他社稼働ON");
-  app.api.handleSharedWorkToggle();
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働ON");
+  app.api.toggleOtherCompany();
   assert.equal(app.api.getState().otherCompanyOn, true);
   assert.equal(app.api.getState().breakOn, false);
-  assert.equal(app.element("breakToggle").textContent, "他社稼働OFF");
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働OFF");
 
   app.setNow(now + 60000);
   app.api.tickClock();
@@ -877,35 +907,41 @@ test("using up the remaining time closes an active other-company segment", () =>
   assert.equal(exhausted.otherCompanyOn, false);
   assert.equal(exhausted.otherCompanyStartedAt, null);
   assert.equal(exhausted.otherCompanySegments[0].endAt, now + 30000);
+  assert.equal(exhausted.breakOn, true);
+  assert.equal(exhausted.breakStartedAt, now + 30000);
+  assert.deepEqual([...exhausted.breakSegments].map(segment => ({ ...segment })), [{ startAt: now + 30000, endAt: null }]);
 });
 
-test("time changes close the shared secondary state without starting the next one", () => {
+test("time changes end breaks automatically and close other-company work before the next break", () => {
   const now = 300000;
   const app = timerHarness({ now });
   app.api.setState(state({
     on: false,
     remainingMs: WORK_LIMIT_MS,
     sessionStartAt: 1000,
-    lastTickAt: now
+    lastTickAt: now,
+    breakOn: true,
+    breakStartedAt: now,
+    breakSegments: [{ startAt: now, endAt: null }]
   }));
 
-  app.api.handleSharedWorkToggle();
-  assert.equal(app.api.getState().breakOn, true);
   app.setNow(now + 60000);
   app.api.enhancedToggleClock();
   assert.equal(app.api.getState().on, true);
   assert.equal(app.api.getState().breakOn, false);
   assert.equal(app.api.getState().otherCompanyOn, false);
-  assert.equal(app.element("breakToggle").textContent, "他社稼働ON");
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働ON");
 
-  app.api.handleSharedWorkToggle();
+  app.api.toggleOtherCompany();
   assert.equal(app.api.getState().otherCompanyOn, true);
   app.setNow(now + 120000);
   app.api.enhancedToggleClock();
   assert.equal(app.api.getState().on, false);
   assert.equal(app.api.getState().otherCompanyOn, false);
-  assert.equal(app.api.getState().breakOn, false);
-  assert.equal(app.element("breakToggle").textContent, "休憩開始");
+  assert.equal(app.api.getState().breakOn, true);
+  assert.equal(app.api.getState().breakStartedAt, now + 120000);
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働ON");
+  assert.equal(app.element("otherCompanyToggle").disabled, true);
 });
 
 test("history snapshot separates Uber and other-company time without double counting", () => {

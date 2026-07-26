@@ -421,10 +421,35 @@
       };
     }
 
+    function compactSessionFlags(data, now = Date.now()) {
+      const ended = Boolean(data.sessionEndedAt);
+      const rawUpdatedAt = Number(data.updatedAt);
+      const anchorAt = Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0 ? rawUpdatedAt : now;
+      const storedBreakOn = Boolean(data.breakOn);
+      const on = !ended && Boolean(data.on) && !storedBreakOn;
+      const sessionStartAt = data.sessionStartAt || null;
+      const breakOn = !ended && Boolean(sessionStartAt) && !on;
+      const automaticBreakStart = Math.max(Number(sessionStartAt) || anchorAt, anchorAt);
+      const breakStartedAt = breakOn ? (storedBreakOn && data.breakStartedAt ? data.breakStartedAt : automaticBreakStart) : null;
+      const otherCompanyOn = on && Boolean(data.otherCompanyOn);
+      return {
+        on,
+        breakOn,
+        breakStartedAt,
+        otherCompanyOn,
+        otherCompanyStartedAt: otherCompanyOn ? (data.otherCompanyStartedAt || anchorAt) : null
+      };
+    }
+
     function migrateEnhancedClock(enhanced, now = Date.now()) {
       const wasContinuous = enhanced.data.countMode === COUNT_MODE;
-      if (wasContinuous && enhanced.data.usageMode === USAGE_MODE) return enhanced;
-      const ended = Boolean(enhanced.data.sessionEndedAt);
+      const flags = compactSessionFlags(enhanced.data, now);
+      const flagsMatch = Boolean(enhanced.data.on) === flags.on
+        && Boolean(enhanced.data.breakOn) === flags.breakOn
+        && (enhanced.data.breakStartedAt || null) === flags.breakStartedAt
+        && Boolean(enhanced.data.otherCompanyOn) === flags.otherCompanyOn
+        && (enhanced.data.otherCompanyStartedAt || null) === flags.otherCompanyStartedAt;
+      if (wasContinuous && enhanced.data.usageMode === USAGE_MODE && flagsMatch) return enhanced;
       const rawUpdatedAt = Number(enhanced.data.updatedAt);
       const updatedAt = wasContinuous && Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0
         ? rawUpdatedAt
@@ -433,12 +458,14 @@
         ...enhanced.data,
         countMode: COUNT_MODE,
         usageMode: USAGE_MODE,
-        on: !ended && Boolean(enhanced.data.on),
+        on: flags.on,
         remainingMs: enhanced.remainingMs,
         moving: false,
         activeMs: usedMsFromRemaining(enhanced.remainingMs),
-        breakOn: !ended && Boolean(enhanced.data.breakOn),
-        breakStartedAt: !ended && enhanced.data.breakOn ? (enhanced.data.breakStartedAt || now) : null,
+        breakOn: flags.breakOn,
+        breakStartedAt: flags.breakStartedAt,
+        otherCompanyOn: flags.otherCompanyOn,
+        otherCompanyStartedAt: flags.otherCompanyStartedAt,
         backgroundGap: null,
         lastBackfillMs: 0,
         lastBackfillAt: null,
@@ -473,7 +500,8 @@
     function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
       const now = Date.now();
       const remainingMs = Math.max(0, Math.min(n("remainH") * 60 + n("remainM"), MAX_REMAIN_INPUT_MINUTES)) * 60000;
-      const current = readEnhancedClock();
+      const stored = readEnhancedClock();
+      const current = stored ? migrateEnhancedClock(stored, now) : null;
       const previous = current ? current.data : {};
       if (previous.sessionEndedAt && !resetEnded) {
         showEnhancedRemaining();
@@ -482,6 +510,18 @@
       const effective = current ? effectiveEnhancedClock(current, now) : { activeMs: 0, exhausted: false };
       const on = !resetEnded && (typeof previous.on === "boolean" ? previous.on : false) && !effective.exhausted;
       const updatedAt = Math.max(now, Number(previous.updatedAt) || 0);
+      const sessionStartAt = resetEnded ? null : (previous.sessionStartAt || null);
+      const breakOn = !resetEnded && Boolean(sessionStartAt) && !on;
+      const rawUpdatedAt = Number(previous.updatedAt);
+      const exhaustedAt = effective.exhausted && Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0
+        ? Math.min(now, rawUpdatedAt + current.remainingMs)
+        : updatedAt;
+      const breakStartedAt = breakOn ? (previous.breakOn && previous.breakStartedAt ? previous.breakStartedAt : exhaustedAt) : null;
+      const breakSegments = resetEnded ? [] : (Array.isArray(previous.breakSegments) ? previous.breakSegments.map(segment => ({
+        startAt: segment.startAt,
+        endAt: segment.endAt === null ? null : segment.endAt
+      })) : []);
+      if (breakOn && !previous.breakOn) breakSegments.push({ startAt: breakStartedAt, endAt: null });
       const state = {
         ...previous,
         countMode: COUNT_MODE,
@@ -490,15 +530,15 @@
         remainingMs,
         moving: false,
         activeMs: usedMsFromRemaining(remainingMs),
-        sessionStartAt: resetEnded ? null : (previous.sessionStartAt || null),
+        sessionStartAt,
         sessionEndedAt: resetEnded ? null : (previous.sessionEndedAt || null),
-        breakOn: resetEnded ? false : Boolean(previous.breakOn),
-        breakStartedAt: resetEnded ? null : (previous.breakOn ? (previous.breakStartedAt || now) : null),
+        breakOn,
+        breakStartedAt,
         breakMs: resetEnded ? 0 : Math.max(0, Number(previous.breakMs) || 0),
-        breakSegments: resetEnded ? [] : previous.breakSegments,
+        breakSegments,
         legacyBreakMs: resetEnded ? 0 : Math.max(0, Number(previous.legacyBreakMs) || 0),
-        otherCompanyOn: resetEnded ? false : Boolean(previous.otherCompanyOn),
-        otherCompanyStartedAt: resetEnded ? null : (previous.otherCompanyOn ? (previous.otherCompanyStartedAt || now) : null),
+        otherCompanyOn: !resetEnded && on && Boolean(previous.otherCompanyOn),
+        otherCompanyStartedAt: !resetEnded && on && previous.otherCompanyOn ? (previous.otherCompanyStartedAt || now) : null,
         otherCompanyMs: resetEnded ? 0 : Math.max(0, Number(previous.otherCompanyMs) || 0),
         otherCompanySegments: resetEnded ? [] : previous.otherCompanySegments,
         legacyOtherCompanyMs: resetEnded ? 0 : Math.max(0, Number(previous.legacyOtherCompanyMs) || 0),
@@ -575,6 +615,14 @@
         activeMs,
         legacyOtherCompanyMs + compactSegmentDurationMs(otherCompanySegments, previous.sessionStartAt, countedUntil)
       );
+      const breakSegments = Array.isArray(previous.breakSegments)
+        ? previous.breakSegments.map(segment => ({
+          startAt: segment.startAt,
+          endAt: segment.endAt === null ? null : segment.endAt
+        }))
+        : [];
+      const breakOn = Boolean(previous.sessionStartAt);
+      if (breakOn) breakSegments.push({ startAt: countedUntil, endAt: null });
       const updatedAt = Math.max(now, Number.isFinite(rawUpdatedAt) ? rawUpdatedAt : 0);
       const state = {
         ...previous,
@@ -584,6 +632,9 @@
         remainingMs: effective.remainingMs,
         moving: false,
         activeMs,
+        breakOn,
+        breakStartedAt: breakOn ? countedUntil : null,
+        breakSegments,
         otherCompanyOn: false,
         otherCompanyStartedAt: null,
         otherCompanyMs,
@@ -739,7 +790,7 @@
     }
 
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=49").catch(() => {}));
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=50").catch(() => {}));
     }
   </script>
 </body>

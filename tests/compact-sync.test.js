@@ -138,6 +138,31 @@ test("compact startup prefers enhanced remainingMs without rewriting the enhance
   assert.equal(regular.remainM, "13");
 });
 
+test("compact upgrades an active-session OFF state to an automatic break", () => {
+  const now = 200000;
+  const enhanced = {
+    countMode: COUNT_MODE,
+    usageMode: USAGE_MODE,
+    on: false,
+    remainingMs: 10 * 60 * 60000,
+    activeMs: 2 * 60 * 60000,
+    sessionStartAt: 100000,
+    sessionEndedAt: null,
+    breakOn: false,
+    breakStartedAt: null,
+    breakSegments: [],
+    updatedAt: 150000
+  };
+  const app = runCompact({ [ENHANCED_KEY]: JSON.stringify(enhanced) }, now);
+  const migrated = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+
+  assert.equal(migrated.on, false);
+  assert.equal(migrated.breakOn, true);
+  assert.equal(migrated.breakStartedAt, 150000);
+  assert.equal(migrated.sessionStartAt, enhanced.sessionStartAt);
+  assert.equal(migrated.remainingMs, enhanced.remainingMs);
+});
+
 test("non-time controls never overwrite the enhanced remaining time", () => {
   const remainingMs = 32123456;
   const enhanced = { countMode: COUNT_MODE, usageMode: USAGE_MODE, on: true, remainingMs, activeMs: usedMsFromRemaining(remainingMs), updatedAt: 123 };
@@ -159,13 +184,13 @@ test("an explicit compact time change syncs remainingMs while preserving ON and 
     remainingMs: 40000000,
     activeMs: 456789,
     sessionStartAt: 1700000000000,
-    breakOn: true,
-    breakStartedAt: 1700000100000,
+    breakOn: false,
+    breakStartedAt: null,
     breakMs: 22000,
     updatedAt: 1700000200000,
     futureField: 42
   };
-  const app = runCompact({ [ENHANCED_KEY]: JSON.stringify(enhanced) });
+  const app = runCompact({ [ENHANCED_KEY]: JSON.stringify(enhanced) }, enhanced.updatedAt);
 
   app.element("remainH").value = "8";
   app.element("remainM").value = "17";
@@ -177,8 +202,8 @@ test("an explicit compact time change syncs remainingMs while preserving ON and 
   assert.equal(saved.on, true, "editing compact time must not switch an active clock off");
   assert.equal(saved.activeMs, (720 - (8 * 60 + 17)) * 60000);
   assert.equal(saved.sessionStartAt, enhanced.sessionStartAt);
-  assert.equal(saved.breakOn, true);
-  assert.equal(saved.breakStartedAt, enhanced.breakStartedAt);
+  assert.equal(saved.breakOn, false);
+  assert.equal(saved.breakStartedAt, null);
   assert.equal(saved.breakMs, enhanced.breakMs);
   assert.equal(saved.futureField, 42);
   assert.ok(saved.updatedAt >= enhanced.updatedAt);
@@ -545,6 +570,9 @@ test("reaching the target in compact stops the exact countdown and closes other-
   assert.equal(saved.otherCompanyStartedAt, null);
   assert.deepEqual(saved.otherCompanySegments, [{ startAt: 100000, endAt: now }]);
   assert.equal(saved.otherCompanyMs, 60000);
+  assert.equal(saved.breakOn, true);
+  assert.equal(saved.breakStartedAt, now);
+  assert.deepEqual(saved.breakSegments, [{ startAt: now, endAt: null }]);
   assert.deepEqual(JSON.parse(app.storage.getItem(LEGACY_KEY)), {
     on: false,
     baseRemain: (remainingMs - 60000) / 60000,
