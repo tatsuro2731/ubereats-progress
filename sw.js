@@ -1,5 +1,5 @@
-const CACHE="ubereats-progress-v51";
-const ASSETS=["./?v=51","index.html?v=51","app-enhancements.js?v=9","app-enhancements-fix.js?v=2","app-session-ui-fix.js?v=8","compact.html?v=51","manifest.webmanifest","apple-touch-icon.png","assets/favicon-32.png","assets/icon-192.png","assets/icon-512.png","assets/delivery-scooter.png"];
+const CACHE="ubereats-progress-v52";
+const ASSETS=["./?v=52","index.html?v=52","app-enhancements.js?v=9","app-enhancements-fix.js?v=2","app-session-ui-fix.js?v=8","compact.html?v=52","manifest.webmanifest","apple-touch-icon.png","assets/favicon-32.png","assets/icon-192.png","assets/icon-512.png","assets/delivery-scooter.png"];
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));

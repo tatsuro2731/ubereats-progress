@@ -79,8 +79,15 @@ test("single and double guidance use the same responsive font size", () => {
   const html = read("index.html");
   const mobileRules = html.match(/@media\(max-width:560px\)\{([\s\S]*?)\n\s*@media\(max-width:560px\) and/);
   assert.ok(mobileRules, "the shared mobile guidance rules must remain explicit");
-  assert.match(mobileRules[1], /\.lim\{font-size:clamp\(11\.5px,3vw,12\.5px\)\}/);
-  assert.doesNotMatch(mobileRules[1], /\.lim:first-child\{[^}]*font-size/);
+  assert.match(
+    mobileRules[1],
+    /\.lim\{gap:4px;white-space:nowrap;font-size:clamp\(11\.5px,3vw,12\.5px\);letter-spacing:-\.035em\}/
+  );
+  assert.doesNotMatch(
+    mobileRules[1],
+    /\.lim:first-child\{/,
+    "the first guidance chip must not receive different mobile typography"
+  );
 });
 
 test("the maximum minute-only remaining-time label stays legible and fits from 320px through 440px", () => {
