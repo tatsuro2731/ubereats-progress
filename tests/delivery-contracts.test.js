@@ -75,6 +75,14 @@ test("timer UI includes the 440px iPhone breakpoint and start-time editor hooks"
   assert.match(source, /@media\s*\(\s*max-width\s*:\s*370px\s*\)/);
 });
 
+test("single and double guidance use the same responsive font size", () => {
+  const html = read("index.html");
+  const mobileRules = html.match(/@media\(max-width:560px\)\{([\s\S]*?)\n\s*@media\(max-width:560px\) and/);
+  assert.ok(mobileRules, "the shared mobile guidance rules must remain explicit");
+  assert.match(mobileRules[1], /\.lim\{font-size:clamp\(11\.5px,3vw,12\.5px\)\}/);
+  assert.doesNotMatch(mobileRules[1], /\.lim:first-child\{[^}]*font-size/);
+});
+
 test("the maximum minute-only remaining-time label stays legible and fits from 320px through 440px", () => {
   const source = read("app-session-ui-fix.js");
   const baseColumns = source.match(/\.remainSync\s*\{[^}]*grid-template-columns\s*:\s*([^;]+);[^}]*gap\s*:\s*([^;}]+)/);
