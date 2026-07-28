@@ -6,6 +6,7 @@
   const USAGE_MODE = "remaining-v1";
   const WORK_LIMIT_MS = 720 * 60000;
   const $id = id => document.getElementById(id);
+  let breakEditorInitialMinutes = null;
 
   function finite(value, fallback = 0) {
     return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -206,12 +207,99 @@
     const activeMs = clockUsedMs(remainingMs);
     const elapsedMs = Math.max(0, now - timestamp - breakOverlapMs(timestamp, now));
     if (activeMs > elapsedMs) {
-      error.textContent = "開始時刻が遅すぎます。時計が減った時間より後には設定できません。";
+      error.textContent = "開始時刻が遅すぎます。記録済みの稼働時間を収められません。";
       return;
     }
     clockState.sessionStartAt = timestamp;
     saveEnhancedState();
     closeEditor();
+  }
+
+  function currentBreakMs(at = Date.now()) {
+    if (!clockState || !clockState.sessionStartAt) return 0;
+    const endAt = clockState.sessionEndedAt || at;
+    return breakOverlapMs(clockState.sessionStartAt, endAt);
+  }
+
+  function closeBreakEditor(restoreFocus = true) {
+    const layer = $id("breakTimeEditorLayer");
+    if (!layer) return;
+    layer.hidden = true;
+    $id("appRoot").inert = false;
+    document.body.classList.remove("breakTimeEditorOpen");
+    breakEditorInitialMinutes = null;
+    const editButton = $id("editBreakTime");
+    if (editButton) {
+      editButton.setAttribute("aria-expanded", "false");
+      if (restoreFocus) editButton.focus({ preventScroll: true });
+    }
+  }
+
+  function openBreakEditor() {
+    const layer = $id("breakTimeEditorLayer");
+    const hours = $id("breakTimeHours");
+    const minutes = $id("breakTimeMinutes");
+    const error = $id("breakTimeError");
+    if (!layer || !hours || !minutes || !clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) return;
+    if (typeof remain === "function") remain();
+    breakEditorInitialMinutes = Math.floor(currentBreakMs() / 60000);
+    hours.value = String(Math.floor(breakEditorInitialMinutes / 60));
+    minutes.value = String(breakEditorInitialMinutes % 60);
+    error.textContent = "";
+    layer.hidden = false;
+    $id("appRoot").inert = true;
+    document.body.classList.add("breakTimeEditorOpen");
+    $id("editBreakTime").setAttribute("aria-expanded", "true");
+    setTimeout(() => hours.focus({ preventScroll: true }), 0);
+  }
+
+  function setBreakDuration(milliseconds, at = Date.now()) {
+    if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
+      return { ok: false, reason: "inactive", maxMs: 0 };
+    }
+    const desiredMs = Math.max(0, finite(milliseconds, 0));
+    const remainingMs = Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000));
+    const activeMs = clockUsedMs(remainingMs);
+    const wallElapsedMs = Math.max(0, at - clockState.sessionStartAt);
+    const maxMs = Math.max(0, wallElapsedMs - activeMs);
+    if (desiredMs > maxMs) return { ok: false, reason: "too-long", maxMs };
+
+    const continues = Boolean(clockState.breakOn);
+    clockState.legacyBreakMs = desiredMs;
+    clockState.breakMs = desiredMs;
+    clockState.breakSegments = continues ? [{ startAt: at, endAt: null }] : [];
+    clockState.breakStartedAt = continues ? at : null;
+    saveEnhancedState();
+    return { ok: true, maxMs };
+  }
+
+  function applyBreakTime() {
+    const hours = $id("breakTimeHours");
+    const minutes = $id("breakTimeMinutes");
+    const error = $id("breakTimeError");
+    if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
+      closeBreakEditor();
+      return;
+    }
+    const hourValue = Math.max(0, finite(hours.value, 0));
+    const minuteValue = Math.max(0, Math.min(59, finite(minutes.value, 0)));
+    const totalMinutes = hourValue * 60 + minuteValue;
+    if (totalMinutes === breakEditorInitialMinutes) {
+      closeBreakEditor();
+      return;
+    }
+    if (typeof remain === "function") remain();
+    const result = setBreakDuration(totalMinutes * 60000, Date.now());
+    if (!result.ok) {
+      if (result.reason === "too-long") {
+        const maximumMinutes = Math.floor(result.maxMs / 60000);
+        error.textContent = `休憩時間が長すぎます。現在は最大${Math.floor(maximumMinutes / 60)}時間${String(maximumMinutes % 60).padStart(2, "0")}分まで設定できます。`;
+      } else {
+        error.textContent = "稼働中の休憩時間だけ修正できます。";
+      }
+      return;
+    }
+    closeBreakEditor();
   }
 
   function injectStyles() {
@@ -220,9 +308,9 @@
       .remainSync{min-width:0;width:100%;max-width:none;grid-template-columns:clamp(44px,11.5vw,50px) minmax(0,1fr) clamp(44px,11.5vw,50px);gap:clamp(4px,1.2vw,5px)}
       .remainSync .remainBig{min-width:0;margin:0;padding:0 2px;overflow:hidden;font-size:clamp(24px,6.5vw,26px);font-variant-numeric:tabular-nums;line-height:1.15;letter-spacing:-.06em;text-align:center;white-space:nowrap}
       .remainStep{width:100%;min-width:0;padding-left:2px;padding-right:2px}
-      .workSessionStart{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:3px 7px;max-width:58%}
-      .workSessionStart>span{grid-column:1/-1;color:#8fa6ba;font-size:11px}
-      .workSessionStart strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .workSessionStart{display:grid;width:100%;max-width:none;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:7px;padding:8px 9px;border:1px solid rgba(59,91,116,.42);border-radius:13px;background:rgba(3,18,27,.48);text-align:left}
+      .workSessionStart>span{grid-column:auto;color:#8fa6ba;font-size:10px;font-weight:750;white-space:nowrap}
+      .workSessionStart strong{display:block;min-width:0;margin:0;overflow:visible;color:#e7f2fb;font-size:13px;font-variant-numeric:tabular-nums;text-overflow:clip;white-space:nowrap}
       .editStartTime{align-self:center;min-height:32px;padding:5px 9px;border:1px solid #2f8bff;border-radius:11px;background:rgba(16,83,164,.24);color:#74b8ff;font-size:10px;box-shadow:none}
       .startTimeEditorLayer{position:fixed;z-index:100;inset:0;display:grid;place-items:center;padding:clamp(8px,4vw,18px)}
       .startTimeEditorLayer[hidden]{display:none}
@@ -236,21 +324,33 @@
       .startTimeEditorActions button{min-height:46px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}
       .startTimeEditorActions .applyStartTime{border-color:#2f8bff;background:linear-gradient(180deg,#1769c4,#0a4b9e)}
       .startTimeEditorOpen{overflow:hidden}
+      .breakTimeEditorLayer{position:fixed;z-index:100;inset:0;display:grid;place-items:center;padding:clamp(8px,4vw,18px)}
+      .breakTimeEditorLayer[hidden]{display:none}
+      .breakTimeEditorBackdrop{position:absolute;inset:0;background:rgba(0,5,12,.78);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+      .breakTimeEditor{position:relative;width:100%;max-width:430px;min-width:0;padding:clamp(14px,4.5vw,18px);overflow:hidden;border:1px solid #28506c;border-radius:24px;background:linear-gradient(160deg,#0a2436,#04131f);box-shadow:0 24px 70px rgba(0,0,0,.58);outline:none}
+      .breakTimeEditor h3{margin:0;color:#f5f9fc;font-size:19px}
+      .breakTimeEditor p{margin:5px 0 14px;color:#8fa6ba;font-size:11px;line-height:1.5}
+      .breakTimeFields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+      .breakTimeFields label{min-width:0;margin:0;color:#aebdcc;font-size:10px;font-weight:750}
+      .breakTimeFields select{display:block;width:100%;max-width:100%;min-width:0;min-height:54px;margin-top:5px;padding:10px;border:1px solid #2a4c66;border-radius:15px;background:#061522;color:#f4f8fb;font-size:17px;color-scheme:dark}
+      .breakTimeError{min-height:20px;margin:7px 1px 0;color:#ff8a94;font-size:10px;line-height:1.4}
+      .breakTimeEditorActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+      .breakTimeEditorActions button{min-height:46px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}
+      .breakTimeEditorActions .applyBreakTime{border-color:#2f8bff;background:linear-gradient(180deg,#1769c4,#0a4b9e)}
+      .breakTimeEditorOpen{overflow:hidden}
       .workSessionStat{min-width:0}
-      .workSessionStat strong{max-width:100%;font-size:clamp(12px,4vw,17px);letter-spacing:-.035em;white-space:normal;overflow-wrap:anywhere}
+      .workSessionStat strong{max-width:100%;font-size:clamp(12px,3.8vw,17px);font-variant-numeric:tabular-nums;letter-spacing:-.04em;white-space:nowrap;overflow-wrap:normal}
       @media(max-width:440px){
         .countPanel{padding-left:12px;padding-right:12px}
         .remainSync .remainBig{padding-left:0;padding-right:0}
         .remainStep{min-height:46px;font-size:13px;border-radius:14px}
-        .workSessionStart{max-width:64%}
       }
       @media(max-width:370px){
         .remainSync{grid-template-columns:1fr 1fr;gap:7px}
         .remainSync .remainBig{grid-column:1/-1;grid-row:1;font-size:26px;white-space:nowrap}
         .remainSync #remainMinus{grid-column:1;grid-row:2}
         .remainSync #remainPlus{grid-column:2;grid-row:2}
-        .workSessionHead{align-items:stretch;flex-direction:column}
-        .workSessionStart{max-width:none;text-align:left}
+        .workSessionStart{grid-template-columns:auto minmax(0,1fr) auto}
       }
     `;
     document.head.appendChild(style);
@@ -322,9 +422,79 @@
     });
   }
 
+  function injectBreakEditor() {
+    const button = $id("editBreakTime");
+    if (!button || $id("breakTimeEditorLayer")) return;
+    button.setAttribute("aria-controls", "breakTimeEditorDialog");
+    button.setAttribute("aria-expanded", "false");
+
+    const layer = document.createElement("div");
+    layer.id = "breakTimeEditorLayer";
+    layer.className = "breakTimeEditorLayer";
+    layer.hidden = true;
+    layer.innerHTML = `
+      <div id="breakTimeEditorBackdrop" class="breakTimeEditorBackdrop"></div>
+      <section id="breakTimeEditorDialog" class="breakTimeEditor" role="dialog" aria-modal="true" aria-labelledby="breakTimeEditorTitle" tabindex="-1">
+        <h3 id="breakTimeEditorTitle">休憩時間を修正</h3>
+        <p>時間OFFで自動記録された今日の累計休憩時間を合わせます。休憩中に直した場合は、変更後もそのまま加算を続けます。</p>
+        <div class="breakTimeFields">
+          <label>時間<select id="breakTimeHours" aria-label="休憩時間の時間"></select></label>
+          <label>分<select id="breakTimeMinutes" aria-label="休憩時間の分"></select></label>
+        </div>
+        <div id="breakTimeError" class="breakTimeError" aria-live="polite"></div>
+        <div class="breakTimeEditorActions"><button id="cancelBreakTime" type="button">キャンセル</button><button id="applyBreakTime" class="applyBreakTime" type="button">変更する</button></div>
+      </section>`;
+    document.body.appendChild(layer);
+
+    const hours = $id("breakTimeHours");
+    const minutes = $id("breakTimeMinutes");
+    for (let value = 0; value <= 23; value += 1) {
+      const option = document.createElement("option");
+      option.value = String(value);
+      option.textContent = `${value}時間`;
+      hours.appendChild(option);
+    }
+    for (let value = 0; value <= 59; value += 1) {
+      const option = document.createElement("option");
+      option.value = String(value);
+      option.textContent = `${value}分`;
+      minutes.appendChild(option);
+    }
+
+    button.onclick = openBreakEditor;
+    $id("cancelBreakTime").onclick = closeBreakEditor;
+    $id("breakTimeEditorBackdrop").onclick = closeBreakEditor;
+    $id("applyBreakTime").onclick = applyBreakTime;
+    layer.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeBreakEditor();
+        return;
+      }
+      if (event.key === "Enter" && (event.target === hours || event.target === minutes)) {
+        event.preventDefault();
+        applyBreakTime();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...$id("breakTimeEditorDialog").querySelectorAll("button:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex='-1'])")].filter(element => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
   function initialize() {
     injectStyles();
     injectEditor();
+    injectBreakEditor();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });

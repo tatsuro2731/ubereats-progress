@@ -112,12 +112,26 @@ test("timer UI includes the 440px iPhone breakpoint and start-time editor hooks"
   assert.match(source, /datetime-local/);
   assert.match(source, /sessionStartAt/);
   assert.match(source, /\.remainSync/);
+  assert.match(source, /\.workSessionStart\{[^}]*width:100%[^}]*max-width:none/);
+  assert.match(source, /\.workSessionStart strong\{[^}]*overflow:visible[^}]*white-space:nowrap/);
   assert.match(
     source,
     /@media\s*\(\s*max-width\s*:\s*(?:4[4-9]\d|5\d\d)px\s*\)[\s\S]{0,1800}\.remainSync/,
     "the responsive timer fix must cover a 440px-wide iPhone"
   );
   assert.match(source, /@media\s*\(\s*max-width\s*:\s*370px\s*\)/);
+});
+
+test("work-session summary removes the duplicate total and allows break correction", () => {
+  const enhancements = read("app-enhancements.js");
+  const sessionUi = read("app-session-ui-fix.js");
+  assert.match(enhancements, /class="workSessionStat mainStat primary"><span>Uber稼働<\/span>/);
+  assert.match(enhancements, /class="workSessionStat mainStat otherStat"><span>他社稼働<\/span>/);
+  assert.doesNotMatch(enhancements, /class="workSessionStat[^"]*"[^>]*><span>時計が減った時間<\/span>/);
+  assert.match(enhancements, /id="editBreakTime"[^>]*aria-label="休憩時間を修正"/);
+  assert.match(sessionUi, /function\s+setBreakDuration\s*\(/);
+  assert.match(sessionUi, /id="breakTimeEditorTitle">休憩時間を修正<\/h3>/);
+  assert.match(sessionUi, /breakSegments\s*=\s*continues\s*\?\s*\[\{\s*startAt:\s*at,\s*endAt:\s*null\s*\}\]\s*:\s*\[\]/);
 });
 
 test("single and double guidance use the same responsive font size", () => {

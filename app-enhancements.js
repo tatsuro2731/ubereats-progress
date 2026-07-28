@@ -738,15 +738,17 @@
     if (!clockState.sessionStartAt || clockState.sessionEndedAt) return;
     const at = nowMs();
     tickClock(at);
+    const totalUsed = clockUsedMs();
+    const otherUsed = otherCompanyUsedMs(at, totalUsed);
     openWorkConfirm({
       title: "稼働を終了しますか？",
       description: "現在の件数と稼働指標を履歴に保存し、時間計測を停止します。目標未達でも記録されます。",
       rows: [
         { label: "完了件数", value: `${Math.max(0, n("done"))} / ${Math.max(1, n("target"))}件` },
-        { label: "時計が減った時間", value: durationText(clockUsedMs()) },
-        { label: "Uber稼働", value: durationText(uberUsedMs(at)) },
-        { label: "他社稼働", value: durationText(otherCompanyUsedMs(at)) },
-        { label: "経過時間（休憩除外）", value: durationText(sessionElapsedMs(at)) },
+        { label: "Uber稼働", value: durationText(Math.max(0, totalUsed - otherUsed)) },
+        { label: "他社稼働", value: durationText(otherUsed) },
+        { label: "休憩", value: durationText(sessionBreakMs(at)) },
+        { label: "経過（休憩除く）", value: durationText(sessionElapsedMs(at)) },
         { label: "実稼働率", value: `${operationRate(at).toFixed(1)}%` }
       ],
       actionLabel: "終了して記録",
@@ -768,7 +770,8 @@
       rows: [
         { label: "開始日時", value: formatDateTime(item.startedAt || item.date) },
         { label: "完了件数", value: target ? `${done} / ${target}件` : `${done}件` },
-        { label: "時計が減った時間", value: durationText(historyUsedMs(item)) }
+        { label: "Uber稼働", value: durationText(historyUberUsedMs(item)) },
+        { label: "他社稼働", value: durationText(historyOtherCompanyMs(item)) }
       ],
       actionLabel: "1件削除",
       source,
@@ -795,7 +798,6 @@
       const target = Math.max(0, finite(item.target, 0));
       const progress = target ? `${Math.round(clamp(done / target * 100, 0, 999))}%達成` : "目標記録なし";
       const pace = historyPace(item);
-      const usedMs = historyUsedMs(item);
       const uberMs = historyUberUsedMs(item);
       const otherMs = historyOtherCompanyMs(item);
       const rate = historyRate(item);
@@ -804,7 +806,6 @@
       return `
         <div class="workHistoryItem" role="listitem">
           <div class="workHistoryMain"><strong>${formatDateTime(item.startedAt || item.date)}〜${formatTime(endedAt)}</strong><small>${target ? `${done} / ${target}件` : `${done}件`} · ${progress} · ${historyWorkTypeLabel(item)}${endedState ? ` · 終了時${endedState}` : ""}</small><div class="workHistoryMeta">Uber ${durationText(uberMs)} · 他社 ${durationText(otherMs)}<br>経過 ${durationText(finite(item.elapsedMs, 0))} · 休憩 ${durationText(finite(item.breakMs, 0))}<br>実稼働率 ${rate.toFixed(1)}% · 平均 ${Number.isFinite(pace) ? `${pace.toFixed(2)}分/件` : "計測なし"}</div></div>
-          <div class="workHistoryDuration"><span>時計が減った時間</span><strong>${durationText(usedMs)}</strong></div>
           <button class="workHistoryDelete" type="button" data-history-index="${index}" aria-label="${formatDateTime(item.startedAt || item.date)}開始の履歴を削除">削除</button>
         </div>`;
     }).join("") : '<div class="workHistoryEmpty">保存した履歴はまだありません</div>';
@@ -841,6 +842,11 @@
       editButton.disabled = !clockState.sessionStartAt || ended;
       editButton.setAttribute("aria-disabled", String(!clockState.sessionStartAt || ended));
     }
+    const breakEditButton = $("editBreakTime");
+    if (breakEditButton) {
+      breakEditButton.disabled = !clockState.sessionStartAt || ended;
+      breakEditButton.setAttribute("aria-disabled", String(!clockState.sessionStartAt || ended));
+    }
   }
 
   function injectUi() {
@@ -848,13 +854,13 @@
     style.textContent = `
       .movementDetail{margin-top:8px;color:#8fa6ba;font-size:11px;line-height:1.45;text-align:center}
       .workSessionPanel{margin:12px 0;padding:16px;border:1px solid #28506c;border-radius:24px;background:linear-gradient(155deg,rgba(9,29,43,.96),rgba(4,18,30,.94));box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.17)}
-      .workSessionHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.workSessionTitle{margin:0;font-size:18px}.workSessionStart{color:#8fa6ba;font-size:11px;text-align:right}.workSessionStart strong{display:block;margin-top:2px;color:#e7f2fb;font-size:13px}
-      .workSessionGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.workSessionStat{min-width:0;padding:11px 8px;border:1px solid rgba(59,91,116,.5);border-radius:16px;background:rgba(3,18,27,.58)}.workSessionStat span{display:block;color:#8fa6ba;font-size:9.5px;font-weight:750}.workSessionStat strong{display:block;margin-top:4px;font-size:17px;white-space:nowrap}.workSessionStat.primary{border-color:rgba(52,230,123,.36);background:rgba(18,76,52,.18)}.workSessionStat.primary strong{color:#68ef9b}
+      .workSessionHead{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}.workSessionTitle{margin:0;font-size:18px}.workSessionStart{color:#8fa6ba;font-size:11px;text-align:left}.workSessionStart strong{display:block;margin-top:2px;color:#e7f2fb;font-size:13px}
+      .workSessionGrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:13px}.workSessionStat{grid-column:span 2;min-width:0;padding:11px 8px;border:1px solid rgba(59,91,116,.5);border-radius:16px;background:rgba(3,18,27,.58)}.workSessionStat.mainStat{grid-column:span 3}.workSessionStat span{display:block;color:#8fa6ba;font-size:9.5px;font-weight:750}.workSessionStat strong{display:block;margin-top:4px;font-size:17px;white-space:nowrap}.workSessionStat.primary{border-color:rgba(52,230,123,.36);background:rgba(18,76,52,.18)}.workSessionStat.primary strong{color:#68ef9b}.workSessionStat.otherStat{border-color:rgba(32,213,218,.28);background:rgba(16,74,84,.13)}.workSessionStat.otherStat strong{color:#7ce9ec}.workSessionStatLabel{display:flex!important;min-width:0;align-items:center;justify-content:space-between;gap:4px}.editBreakTime{flex:0 0 auto;min-height:23px;padding:3px 7px;border:1px solid #356786;border-radius:8px;background:rgba(12,54,79,.56);color:#89c8ee;font-size:8.5px;line-height:1;box-shadow:none}
       .workSessionActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.workSessionActions button{min-height:48px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}.workSessionActions .otherCompanyToggle.active{border-color:#20d5da;background:rgba(16,94,101,.34);color:#7cf2f4;box-shadow:0 0 18px rgba(32,213,218,.10)}.workSessionActions .finishWork{border-color:rgba(255,102,114,.68);background:linear-gradient(180deg,#b73545,#7f1f30);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 7px 18px rgba(103,19,33,.22)}
-      .workSessionActions button:disabled,.toggleBtn:disabled,.editStartTime:disabled{opacity:.46;filter:none;cursor:default;transform:none;box-shadow:none}.workSessionNotice{margin-top:9px;padding:9px 11px;border:1px solid rgba(52,230,123,.32);border-radius:13px;background:rgba(24,92,59,.16);color:#86edaa;font-size:10px;line-height:1.45}.workSessionNotice[hidden]{display:none}
-      .workHistory{margin-top:13px;padding-top:12px;border-top:1px solid rgba(69,99,122,.38)}.workHistoryTitle{margin:0 0 8px;color:#b9c9d7;font-size:11px}.workHistoryItem{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;align-items:center;gap:9px;margin-top:7px;padding:10px;border:1px solid rgba(59,91,116,.34);border-radius:15px;background:rgba(3,18,27,.44)}.workHistoryItem:first-child{margin-top:0}.workHistoryMain{min-width:0}.workHistoryMain strong,.workHistoryMain small{display:block}.workHistoryMain strong{overflow:hidden;color:#e7f0f7;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}.workHistoryMain small{margin-top:2px;color:#91a5b7;font-size:9.5px}.workHistoryMeta{margin-top:5px;color:#718ba1;font-size:8.8px;line-height:1.45}.workHistoryDuration{text-align:right;white-space:nowrap}.workHistoryDuration span,.workHistoryDuration strong{display:block}.workHistoryDuration span{color:#7890a5;font-size:8px}.workHistoryDuration strong{margin-top:3px;color:#68ef9b;font-size:11px}.workHistoryDelete{display:grid;width:44px;height:44px;padding:0;place-items:center;border:1px solid rgba(255,102,114,.42);border-radius:13px;background:rgba(105,26,39,.18);color:#ff9ba3;font-size:10px}.workHistoryDelete:focus-visible{outline:2px solid #ff7d89;outline-offset:2px}.workHistoryEmpty{padding:10px 0;color:#71869a;font-size:10px}
+      .workSessionActions button:disabled,.toggleBtn:disabled,.editStartTime:disabled,.editBreakTime:disabled{opacity:.46;filter:none;cursor:default;transform:none;box-shadow:none}.workSessionNotice{margin-top:9px;padding:9px 11px;border:1px solid rgba(52,230,123,.32);border-radius:13px;background:rgba(24,92,59,.16);color:#86edaa;font-size:10px;line-height:1.45}.workSessionNotice[hidden]{display:none}
+      .workHistory{margin-top:13px;padding-top:12px;border-top:1px solid rgba(69,99,122,.38)}.workHistoryTitle{margin:0 0 8px;color:#b9c9d7;font-size:11px}.workHistoryItem{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;gap:9px;margin-top:7px;padding:10px;border:1px solid rgba(59,91,116,.34);border-radius:15px;background:rgba(3,18,27,.44)}.workHistoryItem:first-child{margin-top:0}.workHistoryMain{min-width:0}.workHistoryMain strong,.workHistoryMain small{display:block}.workHistoryMain strong{overflow:hidden;color:#e7f0f7;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}.workHistoryMain small{margin-top:2px;color:#91a5b7;font-size:9.5px}.workHistoryMeta{margin-top:5px;color:#718ba1;font-size:8.8px;line-height:1.45}.workHistoryDelete{display:grid;width:44px;height:44px;padding:0;place-items:center;border:1px solid rgba(255,102,114,.42);border-radius:13px;background:rgba(105,26,39,.18);color:#ff9ba3;font-size:10px}.workHistoryDelete:focus-visible{outline:2px solid #ff7d89;outline-offset:2px}.workHistoryEmpty{padding:10px 0;color:#71869a;font-size:10px}
       .workConfirmLayer{position:fixed;z-index:120;inset:0;display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}.workConfirmLayer[hidden]{display:none}.workConfirmBackdrop{position:absolute;inset:0;background:rgba(0,5,12,.80);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.workConfirmDialog{position:relative;width:min(100%,430px);max-height:min(88dvh,560px);padding:18px;overflow:auto;border:1px solid #3b5368;border-radius:24px;background:radial-gradient(circle at 50% -10%,rgba(255,102,114,.10),transparent 38%),linear-gradient(160deg,#0b2536,#04131f);box-shadow:0 26px 72px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.06);outline:none;-webkit-overflow-scrolling:touch}.workConfirmDialog h3{margin:0;color:#f7f9fc;font-size:20px;letter-spacing:-.025em}.workConfirmDialog p{margin:6px 0 14px;color:#93a8ba;font-size:11px;line-height:1.55}.workConfirmSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.workConfirmSummary>div{min-width:0;padding:10px;border:1px solid rgba(72,105,130,.42);border-radius:14px;background:rgba(3,18,28,.64)}.workConfirmSummary span,.workConfirmSummary strong{display:block}.workConfirmSummary span{color:#849aac;font-size:9px}.workConfirmSummary strong{overflow:hidden;margin-top:3px;color:#eef4f8;font-size:14px;text-overflow:ellipsis;white-space:nowrap}.workConfirmActions{display:grid;grid-template-columns:1fr 1.2fr;gap:9px;margin-top:15px}.workConfirmActions button{min-height:50px;padding:11px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}.workConfirmActions .workConfirmSubmit{border-color:rgba(255,102,114,.72);background:linear-gradient(180deg,#c13b4c,#851f31)}.workConfirmActions .workConfirmSubmit.delete{background:linear-gradient(180deg,#a52c3b,#701925)}.workConfirmActions button:disabled{opacity:.5}.workConfirmOpen{overflow:hidden}
-      @media(max-width:390px){.workSessionPanel{padding:13px}.workSessionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.workSessionStat{padding:10px}.workSessionStat strong{font-size:15px}.workSessionActions{grid-template-columns:1fr}.workHistoryItem{grid-template-columns:minmax(0,1fr) 44px}.workHistoryDuration{grid-column:1;grid-row:2;display:flex;align-items:center;gap:5px;text-align:left}.workHistoryDuration strong{margin-top:0}.workHistoryDelete{grid-column:2;grid-row:1/3}.workConfirmDialog{padding:15px}.workConfirmSummary strong{font-size:13px}}
+      @media(max-width:390px){.workSessionPanel{padding:13px}.workSessionGrid{gap:7px}.workSessionStat{padding:10px 6px}.workSessionStat strong{font-size:clamp(12px,3.7vw,15px)}.workSessionActions{grid-template-columns:1fr}.workHistoryItem{grid-template-columns:minmax(0,1fr) 44px}.workConfirmDialog{padding:15px}.workConfirmSummary strong{font-size:13px}}
       @media(max-width:350px){.workConfirmSummary{grid-template-columns:1fr}.workConfirmActions{grid-template-columns:1fr 1fr}.workHistoryMain strong{white-space:normal}}
     `;
     document.head.appendChild(style);
@@ -869,15 +875,15 @@
     panel.className = "workSessionPanel";
     panel.tabIndex = -1;
     panel.innerHTML = `
-      <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">時間OFFを休憩として自動記録し、時間ONをUber／他社に分けます</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
+      <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">時間ONをUber／他社、時間OFFを休憩として記録します</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
       <div class="workSessionGrid">
-        <div class="workSessionStat primary"><span>時計が減った時間</span><strong id="workActiveTime">0時間00分</strong></div>
-        <div class="workSessionStat"><span>Uber稼働時間</span><strong id="workUberTime">0時間00分</strong></div>
-        <div class="workSessionStat"><span>他社稼働時間</span><strong id="workOtherCompanyTime">0時間00分</strong></div>
+        <div class="workSessionStat mainStat primary"><span>Uber稼働</span><strong id="workUberTime">0時間00分</strong></div>
+        <div class="workSessionStat mainStat otherStat"><span>他社稼働</span><strong id="workOtherCompanyTime">0時間00分</strong></div>
+        <div class="workSessionStat breakStat"><span class="workSessionStatLabel">休憩<button id="editBreakTime" class="editBreakTime" type="button" aria-label="休憩時間を修正" aria-haspopup="dialog" disabled>修正</button></span><strong id="workBreakTime">0時間00分</strong></div>
+        <div class="workSessionStat"><span>経過（休憩除く）</span><strong id="workElapsedTime">0時間00分</strong></div>
         <div class="workSessionStat"><span>実稼働率</span><strong id="workRate">0.0%</strong></div>
-        <div class="workSessionStat"><span>経過時間（休憩除外）</span><strong id="workElapsedTime">0時間00分</strong></div>
-        <div class="workSessionStat"><span>休憩時間</span><strong id="workBreakTime">0時間00分</strong></div>
       </div>
+      <strong hidden id="workActiveTime">0時間00分</strong>
       <div class="workSessionActions"><button id="otherCompanyToggle" class="otherCompanyToggle" type="button">他社稼働ON</button><button id="finishWork" class="finishWork" type="button">稼働終了</button></div>
       <div id="workSessionNotice" class="workSessionNotice" role="status" aria-live="polite" hidden></div>
       <div class="workHistory"><h3 id="workHistoryTitle" class="workHistoryTitle" tabindex="-1">最近の履歴</h3><div id="workHistoryList" role="list"></div></div>`;

@@ -25,7 +25,7 @@ function instrumentedSessionUi() {
   const closeAt = source.lastIndexOf("})();");
   assert.ok(closeAt > 0);
   return source.slice(0, closeAt) + `
-  globalThis.__sessionUiTestApi = { saveEnhancedState, breakOverlapMs, otherCompanyOverlapMs, applyStartTime, clockUsedMs };
+  globalThis.__sessionUiTestApi = { saveEnhancedState, breakOverlapMs, otherCompanyOverlapMs, applyStartTime, setBreakDuration, clockUsedMs };
 ` + source.slice(closeAt);
 }
 
@@ -243,4 +243,99 @@ test("editing the start time preserves other-company segments and recalculates t
   const saved = JSON.parse(app.values.get(ENHANCED_KEY));
   assert.equal(saved.otherCompanyMs, 5 * minute);
   assert.deepEqual(saved.otherCompanySegments, state.otherCompanySegments);
+});
+
+test("manual break correction replaces the displayed total without changing the saved format", () => {
+  const minute = 60000;
+  const base = 1_700_000_040_000;
+  const now = base + 180 * minute;
+  const state = {
+    on: true,
+    remainingMs: WORK_LIMIT_MS - 90 * minute,
+    activeMs: 90 * minute,
+    sessionStartAt: base,
+    lastTickAt: now,
+    breakOn: false,
+    breakStartedAt: null,
+    breakMs: 20 * minute,
+    breakSegments: [{ startAt: base + 100 * minute, endAt: base + 120 * minute }],
+    legacyBreakMs: 0,
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 10 * minute,
+    otherCompanySegments: [{ startAt: base + 20 * minute, endAt: base + 30 * minute }],
+    legacyOtherCompanyMs: 0
+  };
+  const app = harness(state, now);
+
+  const result = app.api.setBreakDuration(35 * minute, now);
+
+  assert.equal(result.ok, true);
+  assert.equal(state.breakMs, 35 * minute);
+  assert.equal(state.legacyBreakMs, 35 * minute);
+  assert.equal(JSON.stringify(state.breakSegments), "[]");
+  assert.deepEqual(state.otherCompanySegments, [{ startAt: base + 20 * minute, endAt: base + 30 * minute }]);
+  const saved = JSON.parse(app.values.get(ENHANCED_KEY));
+  assert.equal(saved.breakMs, 35 * minute);
+  assert.equal(saved.legacyBreakMs, 35 * minute);
+  assert.deepEqual(saved.breakSegments, []);
+  assert.equal(saved.otherCompanyMs, 10 * minute);
+});
+
+test("manual break correction keeps an active break running from the edit moment", () => {
+  const minute = 60000;
+  const base = 1_700_000_040_000;
+  const now = base + 180 * minute;
+  const state = {
+    on: false,
+    remainingMs: WORK_LIMIT_MS - 60 * minute,
+    activeMs: 60 * minute,
+    sessionStartAt: base,
+    lastTickAt: now,
+    breakOn: true,
+    breakStartedAt: base + 150 * minute,
+    breakMs: 30 * minute,
+    breakSegments: [{ startAt: base + 150 * minute, endAt: null }],
+    legacyBreakMs: 0
+  };
+  const app = harness(state, now);
+
+  const result = app.api.setBreakDuration(45 * minute, now);
+
+  assert.equal(result.ok, true);
+  assert.equal(state.breakOn, true);
+  assert.equal(state.breakStartedAt, now);
+  assert.equal(state.legacyBreakMs, 45 * minute);
+  assert.equal(JSON.stringify(state.breakSegments), JSON.stringify([{ startAt: now, endAt: null }]));
+  const saved = JSON.parse(app.values.get(ENHANCED_KEY));
+  assert.equal(saved.breakOn, true);
+  assert.equal(saved.breakStartedAt, now);
+  assert.deepEqual(saved.breakSegments, [{ startAt: now, endAt: null }]);
+});
+
+test("manual break correction rejects a total that cannot fit after recorded work", () => {
+  const minute = 60000;
+  const base = 1_700_000_040_000;
+  const now = base + 120 * minute;
+  const state = {
+    on: true,
+    remainingMs: WORK_LIMIT_MS - 90 * minute,
+    activeMs: 90 * minute,
+    sessionStartAt: base,
+    lastTickAt: now,
+    breakOn: false,
+    breakStartedAt: null,
+    breakMs: 0,
+    breakSegments: [],
+    legacyBreakMs: 0
+  };
+  const app = harness(state, now);
+
+  const result = app.api.setBreakDuration(31 * minute, now);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "too-long");
+  assert.equal(result.maxMs, 30 * minute);
+  assert.equal(state.legacyBreakMs, 0);
+  assert.equal(app.values.has(ENHANCED_KEY), false);
 });
