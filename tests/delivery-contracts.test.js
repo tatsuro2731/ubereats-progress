@@ -134,6 +134,16 @@ test("work-session summary removes the duplicate total and allows break correcti
   assert.match(sessionUi, /breakSegments\s*=\s*continues\s*\?\s*\[\{\s*startAt:\s*at,\s*endAt:\s*null\s*\}\]\s*:\s*\[\]/);
 });
 
+test("saved history exposes an end-time editor with dependent metric recalculation", () => {
+  const enhancements = read("app-enhancements.js");
+  assert.match(enhancements, /class="workHistoryEdit"/);
+  assert.match(enhancements, /id="historyEndEditorTitle">履歴の終了日時を修正<\/h3>/);
+  assert.match(enhancements, /id="historyEndInput"\s+type="datetime-local"/);
+  assert.match(enhancements, /function\s+recalculateHistoryEnd\s*\(/);
+  assert.match(enhancements, /elapsedMs\s*=\s*Number\.isFinite\(startedAt\)\s*\?\s*Math\.max\(0,\s*endedAt\s*-\s*startedAt\s*-\s*breakMs\)/);
+  assert.match(enhancements, /rate:\s*elapsedMs\s*>\s*0\s*\?\s*clamp\(usedMs\s*\/\s*elapsedMs\s*\*\s*100,\s*0,\s*100\)/);
+});
+
 test("single and double guidance use the same responsive font size", () => {
   const html = read("index.html");
   const mobileRules = html.match(/@media\(max-width:560px\)\{([\s\S]*?)\n\s*@media\(max-width:560px\) and/);

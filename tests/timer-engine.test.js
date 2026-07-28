@@ -72,6 +72,10 @@ function instrumentedSource() {
     sessionSnapshot,
     historyUsedMs,
     historyRate,
+    historyStartAt,
+    historyEndAt,
+    historyEndEditError,
+    recalculateHistoryEnd,
     getState: () => clockState,
     setState: value => { clockState = value; }
   };
@@ -363,6 +367,74 @@ test("history uses canonical consumed time while preserving legacy fallback reco
   const legacy = { activeMs: 10 * 60000, elapsedMs: 20 * 60000, rate: 12.3 };
   assert.equal(app.api.historyUsedMs(legacy), 10 * 60000);
   assert.equal(app.api.historyRate(legacy), 50);
+});
+
+test("editing a history end time recalculates elapsed time and operation rate only", () => {
+  const minute = 60000;
+  const startedAt = 1_700_000_000_000;
+  const app = timerHarness({ now: startedAt + 8 * 60 * minute });
+  const original = {
+    id: "history-1",
+    startedAt,
+    endedAt: startedAt + 5 * 60 * minute,
+    recordedAt: startedAt + 5 * 60 * minute + 15 * 1000,
+    usedMs: 120 * minute,
+    uberUsedMs: 90 * minute,
+    otherCompanyMs: 30 * minute,
+    breakMs: 30 * minute,
+    elapsedMs: 270 * minute,
+    rate: 44.44,
+    done: 8,
+    actualPaceMinutes: 15
+  };
+  const nextEnd = startedAt + 6 * 60 * minute;
+  const updated = app.api.recalculateHistoryEnd(original, nextEnd);
+
+  assert.equal(updated.endedAt, nextEnd);
+  assert.equal(updated.elapsedMs, 330 * minute);
+  assert.ok(Math.abs(updated.rate - (120 / 330 * 100)) < 0.001);
+  assert.equal(updated.recordedAt, original.recordedAt);
+  assert.equal(updated.usedMs, original.usedMs);
+  assert.equal(updated.uberUsedMs, original.uberUsedMs);
+  assert.equal(updated.otherCompanyMs, original.otherCompanyMs);
+  assert.equal(updated.breakMs, original.breakMs);
+  assert.equal(updated.done, original.done);
+  assert.equal(updated.actualPaceMinutes, original.actualPaceMinutes);
+  assert.equal(original.endedAt, startedAt + 5 * 60 * minute, "the saved object must not be mutated before persistence succeeds");
+});
+
+test("history end-time editing supports legacy dates and sessions crossing midnight", () => {
+  const minute = 60000;
+  const startedAt = new Date("2026-07-28T23:30:00+09:00").getTime();
+  const endedAt = new Date("2026-07-29T02:00:00+09:00").getTime();
+  const app = timerHarness({ now: endedAt + minute });
+  const legacy = {
+    date: new Date(startedAt).toISOString(),
+    recordedAt: new Date(endedAt - 30 * minute).toISOString(),
+    activeMs: 90 * minute,
+    breakMs: 30 * minute
+  };
+
+  assert.equal(app.api.historyStartAt(legacy), startedAt);
+  assert.equal(app.api.historyEndAt(legacy), endedAt - 30 * minute);
+  assert.equal(app.api.historyEndEditError(legacy, endedAt, endedAt + minute), "");
+  const updated = app.api.recalculateHistoryEnd(legacy, endedAt);
+  assert.equal(updated.elapsedMs, 120 * minute);
+  assert.equal(updated.rate, 75);
+});
+
+test("history end-time validation rejects future, pre-start, and break-inconsistent values", () => {
+  const minute = 60000;
+  const startedAt = 10_000_000;
+  const now = startedAt + 180 * minute;
+  const app = timerHarness({ now });
+  const item = { startedAt, endedAt: now, usedMs: 60 * minute, breakMs: 40 * minute };
+
+  assert.match(app.api.historyEndEditError(item, NaN, now), /入力/);
+  assert.match(app.api.historyEndEditError(item, now + minute, now), /現在より後/);
+  assert.match(app.api.historyEndEditError(item, startedAt, now), /開始日時より後/);
+  assert.match(app.api.historyEndEditError(item, startedAt + 39 * minute, now), /休憩時間分/);
+  assert.equal(app.api.historyEndEditError(item, startedAt + 40 * minute, now), "");
 });
 
 test("normal persistence mirrors enhanced remaining time into regular saved controls", () => {

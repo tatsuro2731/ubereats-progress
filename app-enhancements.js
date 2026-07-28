@@ -13,6 +13,7 @@
   let pendingConfirmAction = null;
   let confirmReturnFocus = null;
   let finalizingSession = false;
+  let historyEndEditorState = null;
 
   function nowMs() { return Date.now(); }
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
@@ -694,6 +695,132 @@
     return usedMs > 0 ? usedMs / 60000 / done : NaN;
   }
 
+  function historyTimestamp(value, fallback = NaN) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    if (typeof value !== "string" || !value.trim()) return fallback;
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function historyStartAt(item) {
+    const startedAt = historyTimestamp(item && item.startedAt, NaN);
+    return Number.isFinite(startedAt) ? startedAt : historyTimestamp(item && item.date, NaN);
+  }
+
+  function historyEndAt(item) {
+    const endedAt = historyTimestamp(item && item.endedAt, NaN);
+    return Number.isFinite(endedAt) ? endedAt : historyTimestamp(item && item.recordedAt, NaN);
+  }
+
+  function historyEndEditError(item, endedAt, now = nowMs()) {
+    if (!Number.isFinite(endedAt)) return "終了日時を入力してください。";
+    const startedAt = historyStartAt(item);
+    if (!Number.isFinite(startedAt)) return "開始日時がない履歴は修正できません。";
+    if (endedAt > now) return "終了日時を現在より後には設定できません。";
+    if (endedAt <= startedAt) return "終了日時は開始日時より後にしてください。";
+    const breakMs = Math.max(0, finite(item && item.breakMs, 0));
+    if (endedAt - startedAt < breakMs) return "終了日時が早すぎます。開始から休憩時間分を確保してください。";
+    return "";
+  }
+
+  function recalculateHistoryEnd(item, endedAt) {
+    const startedAt = historyStartAt(item);
+    const breakMs = Math.max(0, finite(item && item.breakMs, 0));
+    const elapsedMs = Number.isFinite(startedAt) ? Math.max(0, endedAt - startedAt - breakMs) : 0;
+    const usedMs = historyUsedMs(item);
+    return {
+      ...item,
+      endedAt,
+      elapsedMs,
+      rate: elapsedMs > 0 ? clamp(usedMs / elapsedMs * 100, 0, 100) : 0
+    };
+  }
+
+  function toLocalMinuteInputValue(timestamp) {
+    const date = new Date(timestamp);
+    const pad = value => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function closeHistoryEndEditor(restoreFocus = true) {
+    const layer = $("historyEndEditorLayer");
+    if (!layer || layer.hidden) return;
+    layer.hidden = true;
+    $("appRoot").inert = false;
+    document.body.classList.remove("historyEndEditorOpen");
+    const state = historyEndEditorState;
+    historyEndEditorState = null;
+    if (restoreFocus && state && state.source && state.source.isConnected && !state.source.disabled) {
+      state.source.focus({ preventScroll: true });
+    }
+  }
+
+  function openHistoryEndEditor(index, source) {
+    const items = history();
+    const item = items[index];
+    const layer = $("historyEndEditorLayer");
+    const input = $("historyEndInput");
+    const error = $("historyEndError");
+    if (!item || !layer || !layer.hidden || !input || !error) return;
+    const startedAt = historyStartAt(item);
+    const endedAt = historyEndAt(item);
+    if (!Number.isFinite(startedAt) || !Number.isFinite(endedAt)) {
+      alert("開始日時または終了日時を読み取れないため、この履歴は修正できません。");
+      return;
+    }
+    const breakMs = Math.max(0, finite(item.breakMs, 0));
+    input.value = toLocalMinuteInputValue(endedAt);
+    input.min = toLocalMinuteInputValue(Math.ceil(Math.max(startedAt + 1, startedAt + breakMs) / 60000) * 60000);
+    input.max = toLocalMinuteInputValue(nowMs());
+    error.textContent = "";
+    historyEndEditorState = {
+      index,
+      identity: historyIdentity(item, index),
+      initialAt: endedAt,
+      source
+    };
+    layer.hidden = false;
+    $("appRoot").inert = true;
+    document.body.classList.add("historyEndEditorOpen");
+    setTimeout(() => input.focus({ preventScroll: true }), 0);
+  }
+
+  function applyHistoryEndEdit() {
+    const state = historyEndEditorState;
+    const input = $("historyEndInput");
+    const error = $("historyEndError");
+    if (!state || !input || !error) return;
+    const items = history();
+    let targetIndex = state.index;
+    if (!items[targetIndex] || historyIdentity(items[targetIndex], targetIndex) !== state.identity) {
+      targetIndex = items.findIndex((candidate, candidateIndex) => historyIdentity(candidate, candidateIndex) === state.identity);
+    }
+    if (targetIndex < 0) {
+      error.textContent = "対象の履歴が見つかりません。履歴を開き直してください。";
+      return;
+    }
+    const item = items[targetIndex];
+    const endedAt = historyTimestamp(input.value, NaN);
+    const validationError = historyEndEditError(item, endedAt);
+    if (validationError) {
+      error.textContent = validationError;
+      return;
+    }
+    if (input.value === toLocalMinuteInputValue(state.initialAt)) {
+      closeHistoryEndEditor();
+      return;
+    }
+    items[targetIndex] = recalculateHistoryEnd(item, endedAt);
+    if (!saveHistory(items)) return;
+    closeHistoryEndEditor(false);
+    renderHistory();
+    setTimeout(() => {
+      const button = $("workHistoryList").querySelector(`.workHistoryEdit[data-history-index="${targetIndex}"]`);
+      (button || $("workHistoryTitle")).focus({ preventScroll: true });
+    }, 0);
+  }
+
   function closeWorkConfirm(restoreFocus = true) {
     const layer = $("workConfirmLayer");
     if (!layer || layer.hidden) return;
@@ -801,12 +928,15 @@
       const uberMs = historyUberUsedMs(item);
       const otherMs = historyOtherCompanyMs(item);
       const rate = historyRate(item);
-      const endedAt = item.endedAt || item.recordedAt;
+      const endedAt = historyEndAt(item);
       const endedState = historyEndStateLabel(item);
       return `
         <div class="workHistoryItem" role="listitem">
           <div class="workHistoryMain"><strong>${formatDateTime(item.startedAt || item.date)}〜${formatTime(endedAt)}</strong><small>${target ? `${done} / ${target}件` : `${done}件`} · ${progress} · ${historyWorkTypeLabel(item)}${endedState ? ` · 終了時${endedState}` : ""}</small><div class="workHistoryMeta">Uber ${durationText(uberMs)} · 他社 ${durationText(otherMs)}<br>経過 ${durationText(finite(item.elapsedMs, 0))} · 休憩 ${durationText(finite(item.breakMs, 0))}<br>実稼働率 ${rate.toFixed(1)}% · 平均 ${Number.isFinite(pace) ? `${pace.toFixed(2)}分/件` : "計測なし"}</div></div>
-          <button class="workHistoryDelete" type="button" data-history-index="${index}" aria-label="${formatDateTime(item.startedAt || item.date)}開始の履歴を削除">削除</button>
+          <div class="workHistoryActions">
+            <button class="workHistoryEdit" type="button" data-history-index="${index}" aria-label="${formatDateTime(item.startedAt || item.date)}開始の履歴の終了日時を修正" aria-haspopup="dialog">修正</button>
+            <button class="workHistoryDelete" type="button" data-history-index="${index}" aria-label="${formatDateTime(item.startedAt || item.date)}開始の履歴を削除">削除</button>
+          </div>
         </div>`;
     }).join("") : '<div class="workHistoryEmpty">保存した履歴はまだありません</div>';
   }
@@ -858,8 +988,9 @@
       .workSessionGrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:13px}.workSessionStat{grid-column:span 2;min-width:0;padding:11px 8px;border:1px solid rgba(59,91,116,.5);border-radius:16px;background:rgba(3,18,27,.58)}.workSessionStat.mainStat{grid-column:span 3}.workSessionStat span{display:block;color:#8fa6ba;font-size:9.5px;font-weight:750}.workSessionStat strong{display:block;margin-top:4px;font-size:17px;white-space:nowrap}.workSessionStat.primary{border-color:rgba(52,230,123,.36);background:rgba(18,76,52,.18)}.workSessionStat.primary strong{color:#68ef9b}.workSessionStat.otherStat{border-color:rgba(32,213,218,.28);background:rgba(16,74,84,.13)}.workSessionStat.otherStat strong{color:#7ce9ec}.workSessionStatLabel{display:flex!important;min-width:0;align-items:center;justify-content:space-between;gap:4px}.editBreakTime{flex:0 0 auto;min-height:23px;padding:3px 7px;border:1px solid #356786;border-radius:8px;background:rgba(12,54,79,.56);color:#89c8ee;font-size:8.5px;line-height:1;box-shadow:none}
       .workSessionActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.workSessionActions button{min-height:48px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}.workSessionActions .otherCompanyToggle.active{border-color:#20d5da;background:rgba(16,94,101,.34);color:#7cf2f4;box-shadow:0 0 18px rgba(32,213,218,.10)}.workSessionActions .finishWork{border-color:rgba(255,102,114,.68);background:linear-gradient(180deg,#b73545,#7f1f30);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 7px 18px rgba(103,19,33,.22)}
       .workSessionActions button:disabled,.toggleBtn:disabled,.editStartTime:disabled,.editBreakTime:disabled{opacity:.46;filter:none;cursor:default;transform:none;box-shadow:none}.workSessionNotice{margin-top:9px;padding:9px 11px;border:1px solid rgba(52,230,123,.32);border-radius:13px;background:rgba(24,92,59,.16);color:#86edaa;font-size:10px;line-height:1.45}.workSessionNotice[hidden]{display:none}
-      .workHistory{margin-top:13px;padding-top:12px;border-top:1px solid rgba(69,99,122,.38)}.workHistoryTitle{margin:0 0 8px;color:#b9c9d7;font-size:11px}.workHistoryItem{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;gap:9px;margin-top:7px;padding:10px;border:1px solid rgba(59,91,116,.34);border-radius:15px;background:rgba(3,18,27,.44)}.workHistoryItem:first-child{margin-top:0}.workHistoryMain{min-width:0}.workHistoryMain strong,.workHistoryMain small{display:block}.workHistoryMain strong{overflow:hidden;color:#e7f0f7;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}.workHistoryMain small{margin-top:2px;color:#91a5b7;font-size:9.5px}.workHistoryMeta{margin-top:5px;color:#718ba1;font-size:8.8px;line-height:1.45}.workHistoryDelete{display:grid;width:44px;height:44px;padding:0;place-items:center;border:1px solid rgba(255,102,114,.42);border-radius:13px;background:rgba(105,26,39,.18);color:#ff9ba3;font-size:10px}.workHistoryDelete:focus-visible{outline:2px solid #ff7d89;outline-offset:2px}.workHistoryEmpty{padding:10px 0;color:#71869a;font-size:10px}
+      .workHistory{margin-top:13px;padding-top:12px;border-top:1px solid rgba(69,99,122,.38)}.workHistoryTitle{margin:0 0 8px;color:#b9c9d7;font-size:11px}.workHistoryItem{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;gap:9px;margin-top:7px;padding:10px;border:1px solid rgba(59,91,116,.34);border-radius:15px;background:rgba(3,18,27,.44)}.workHistoryItem:first-child{margin-top:0}.workHistoryMain{min-width:0}.workHistoryMain strong,.workHistoryMain small{display:block}.workHistoryMain strong{overflow:hidden;color:#e7f0f7;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}.workHistoryMain small{margin-top:2px;color:#91a5b7;font-size:9.5px}.workHistoryMeta{margin-top:5px;color:#718ba1;font-size:8.8px;line-height:1.45}.workHistoryActions{display:grid;gap:6px}.workHistoryEdit,.workHistoryDelete{display:grid;width:44px;min-height:38px;padding:0;place-items:center;border-radius:12px;font-size:10px}.workHistoryEdit{border:1px solid rgba(61,149,255,.52);background:rgba(24,92,164,.20);color:#83beff}.workHistoryDelete{border:1px solid rgba(255,102,114,.42);background:rgba(105,26,39,.18);color:#ff9ba3}.workHistoryEdit:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}.workHistoryDelete:focus-visible{outline:2px solid #ff7d89;outline-offset:2px}.workHistoryEmpty{padding:10px 0;color:#71869a;font-size:10px}
       .workConfirmLayer{position:fixed;z-index:120;inset:0;display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}.workConfirmLayer[hidden]{display:none}.workConfirmBackdrop{position:absolute;inset:0;background:rgba(0,5,12,.80);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.workConfirmDialog{position:relative;width:min(100%,430px);max-height:min(88dvh,560px);padding:18px;overflow:auto;border:1px solid #3b5368;border-radius:24px;background:radial-gradient(circle at 50% -10%,rgba(255,102,114,.10),transparent 38%),linear-gradient(160deg,#0b2536,#04131f);box-shadow:0 26px 72px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.06);outline:none;-webkit-overflow-scrolling:touch}.workConfirmDialog h3{margin:0;color:#f7f9fc;font-size:20px;letter-spacing:-.025em}.workConfirmDialog p{margin:6px 0 14px;color:#93a8ba;font-size:11px;line-height:1.55}.workConfirmSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.workConfirmSummary>div{min-width:0;padding:10px;border:1px solid rgba(72,105,130,.42);border-radius:14px;background:rgba(3,18,28,.64)}.workConfirmSummary span,.workConfirmSummary strong{display:block}.workConfirmSummary span{color:#849aac;font-size:9px}.workConfirmSummary strong{overflow:hidden;margin-top:3px;color:#eef4f8;font-size:14px;text-overflow:ellipsis;white-space:nowrap}.workConfirmActions{display:grid;grid-template-columns:1fr 1.2fr;gap:9px;margin-top:15px}.workConfirmActions button{min-height:50px;padding:11px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}.workConfirmActions .workConfirmSubmit{border-color:rgba(255,102,114,.72);background:linear-gradient(180deg,#c13b4c,#851f31)}.workConfirmActions .workConfirmSubmit.delete{background:linear-gradient(180deg,#a52c3b,#701925)}.workConfirmActions button:disabled{opacity:.5}.workConfirmOpen{overflow:hidden}
+      .historyEndEditorDialog{border-color:#285e85;background:radial-gradient(circle at 50% -10%,rgba(61,149,255,.12),transparent 40%),linear-gradient(160deg,#0a2436,#04131f)}.historyEndEditorDialog input{display:block;width:100%;max-width:100%;min-width:0;min-height:56px;padding:11px 9px;border:1px solid #2a5878;border-radius:15px;background:#061522;color:#f4f8fb;font-size:clamp(15px,4.8vw,17px);color-scheme:dark}.historyEndError{min-height:20px;margin:7px 1px 0;color:#ff8a94;font-size:10px;line-height:1.4}.historyEndEditorActions{margin-top:10px}.historyEndEditorActions .applyHistoryEnd{border-color:#2f8bff;background:linear-gradient(180deg,#1769c4,#0a4b9e)}.historyEndEditorOpen{overflow:hidden}
       @media(max-width:390px){.workSessionPanel{padding:13px}.workSessionGrid{gap:7px}.workSessionStat{padding:10px 6px}.workSessionStat strong{font-size:clamp(12px,3.7vw,15px)}.workSessionActions{grid-template-columns:1fr}.workHistoryItem{grid-template-columns:minmax(0,1fr) 44px}.workConfirmDialog{padding:15px}.workConfirmSummary strong{font-size:13px}}
       @media(max-width:350px){.workConfirmSummary{grid-template-columns:1fr}.workConfirmActions{grid-template-columns:1fr 1fr}.workHistoryMain strong{white-space:normal}}
     `;
@@ -891,9 +1022,13 @@
     $("otherCompanyToggle").onclick = toggleOtherCompany;
     $("finishWork").onclick = event => requestSessionFinish(event.currentTarget);
     $("workHistoryList").onclick = event => {
-      const button = event.target.closest(".workHistoryDelete");
-      if (!button) return;
-      requestHistoryDelete(Number(button.dataset.historyIndex), button);
+      const editButton = event.target.closest(".workHistoryEdit");
+      if (editButton) {
+        openHistoryEndEditor(Number(editButton.dataset.historyIndex), editButton);
+        return;
+      }
+      const deleteButton = event.target.closest(".workHistoryDelete");
+      if (deleteButton) requestHistoryDelete(Number(deleteButton.dataset.historyIndex), deleteButton);
     };
 
     const confirmLayer = document.createElement("div");
@@ -933,6 +1068,48 @@
       }
       if (event.key !== "Tab") return;
       const focusable = [...$("workConfirmDialog").querySelectorAll("button:not([disabled]),[tabindex]:not([tabindex='-1'])")].filter(element => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    const historyEndLayer = document.createElement("div");
+    historyEndLayer.id = "historyEndEditorLayer";
+    historyEndLayer.className = "workConfirmLayer historyEndEditorLayer";
+    historyEndLayer.hidden = true;
+    historyEndLayer.innerHTML = `
+      <div id="historyEndEditorBackdrop" class="workConfirmBackdrop"></div>
+      <section id="historyEndEditorDialog" class="workConfirmDialog historyEndEditorDialog" role="dialog" aria-modal="true" aria-labelledby="historyEndEditorTitle" aria-describedby="historyEndEditorDescription" tabindex="-1">
+        <h3 id="historyEndEditorTitle">履歴の終了日時を修正</h3>
+        <p id="historyEndEditorDescription">実際に稼働を終えた日時へ合わせます。経過時間と実稼働率も自動で再計算します。</p>
+        <input id="historyEndInput" type="datetime-local" step="60" aria-label="履歴の終了日時">
+        <div id="historyEndError" class="historyEndError" aria-live="polite"></div>
+        <div class="workConfirmActions historyEndEditorActions"><button id="cancelHistoryEnd" type="button">キャンセル</button><button id="applyHistoryEnd" class="applyHistoryEnd" type="button">変更する</button></div>
+      </section>`;
+    document.body.appendChild(historyEndLayer);
+    $("cancelHistoryEnd").onclick = () => closeHistoryEndEditor();
+    $("historyEndEditorBackdrop").onclick = () => closeHistoryEndEditor();
+    $("applyHistoryEnd").onclick = applyHistoryEndEdit;
+    historyEndLayer.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeHistoryEndEditor();
+        return;
+      }
+      if (event.key === "Enter" && event.target === $("historyEndInput")) {
+        event.preventDefault();
+        applyHistoryEndEdit();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...$("historyEndEditorDialog").querySelectorAll("button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex='-1'])")].filter(element => element.offsetParent !== null);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
