@@ -35,6 +35,51 @@ test("the first visit loads all enhancements directly from index.html", () => {
   assert.ok(positions.every(position => position > 0 && position < html.lastIndexOf("</body>")));
 });
 
+test("a fresh visit starts at zero deliveries with the full 12 hours in both views", () => {
+  const index = read("index.html");
+  const compact = read("compact.html");
+  const indexSetup = index.match(/function\s+setup\s*\(\)\s*\{([\s\S]*?)\n\}/);
+  const compactDefaults = compact.match(/function\s+setDefaultValues\s*\(\)\s*\{([\s\S]*?)\n\s*\}/);
+  assert.ok(indexSetup, "the main setup defaults must remain inspectable");
+  assert.ok(compactDefaults, "the compact defaults must remain inspectable");
+  for (const source of [indexSetup[1], compactDefaults[1]]) {
+    assert.match(source, /\$\("done"\)\.value\s*=\s*"0"/);
+    assert.match(source, /\$\("remainH"\)\.value\s*=\s*"12"/);
+    assert.match(source, /\$\("remainM"\)\.value\s*=\s*"0"/);
+    assert.doesNotMatch(source, /\$\("done"\)\.value\s*=\s*"10"/);
+  }
+});
+
+test("the progress card shows actual completed deliveries beyond the target", () => {
+  const index = read("index.html");
+  const progressCard = index.match(/remaining:\s*\{\s*k:\s*"進捗件数"[\s\S]*?\n\s*need:/);
+  assert.ok(progressCard, "the progress-card template must remain inspectable");
+  assert.match(progressCard[0], /progressCurrent">\$\{done\}/);
+  assert.doesNotMatch(progressCard[0], /Math\.min\(done,\s*target\)/);
+  assert.match(index, /const\s+left\s*=\s*Math\.max\(target\s*-\s*done,\s*0\)/);
+});
+
+test("compact select controls expose their labels to VoiceOver", () => {
+  const compact = read("compact.html");
+  assert.match(compact, /<label\s+for="target">目標件数<\/label>\s*<select\s+id="target"/);
+  assert.match(compact, /<label\s+for="done">完了件数<\/label>\s*<select\s+id="done"/);
+  assert.match(compact, /id="remainingTimeLabel">残り稼働時間<\/label>/);
+  assert.match(compact, /class="row2"\s+role="group"\s+aria-labelledby="remainingTimeLabel"/);
+  assert.match(compact, /<select\s+id="remainH"\s+aria-label="残り稼働時間の時間"/);
+  assert.match(compact, /<select\s+id="remainM"\s+aria-label="残り稼働時間の分"/);
+});
+
+test("the documented past end-limit rule matches the six-hour implementation", () => {
+  const index = read("index.html");
+  const readme = read("README.md");
+  const endInfo = index.match(/function\s+endInfo\s*\(\)\s*\{([\s\S]*?)\n\}/);
+  assert.ok(endInfo, "the end-limit resolver must remain inspectable");
+  assert.match(endInfo[1], /now\s*-\s*end\s*<=\s*21600000/);
+  assert.match(endInfo[1], /end\.setDate\(end\.getDate\(\)\s*\+\s*1\)/);
+  assert.match(readme, /6時間以内の過去時刻は「今日の上限を超過済み」/);
+  assert.match(readme, /6時間より前なら翌日の終了上限/);
+});
+
 test("the service worker cache revision and assets match direct script URLs", () => {
   const html = read("index.html");
   const compact = read("compact.html");

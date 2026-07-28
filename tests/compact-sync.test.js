@@ -32,7 +32,18 @@ class FakeElement {
     this.innerHTML = "";
     this.dataset = {};
     this.listeners = new Map();
-    this.classList = { add() {}, remove() {}, toggle() {} };
+    this.classes = new Set();
+    this.classList = {
+      add: (...names) => names.forEach(name => this.classes.add(name)),
+      remove: (...names) => names.forEach(name => this.classes.delete(name)),
+      toggle: (name, force) => {
+        const next = force === undefined ? !this.classes.has(name) : Boolean(force);
+        if (next) this.classes.add(name);
+        else this.classes.delete(name);
+        return next;
+      },
+      contains: name => this.classes.has(name)
+    };
   }
   appendChild() {}
   addEventListener(type, listener) {
@@ -108,6 +119,45 @@ function runCompact(initial = {}, now = Date.now()) {
     }
   };
 }
+
+test("a fresh compact visit starts at zero deliveries with the full 12 hours", () => {
+  const app = runCompact();
+
+  assert.equal(app.element("target").value, "46");
+  assert.equal(app.element("done").value, "0");
+  assert.equal(app.element("remainH").value, "12");
+  assert.equal(app.element("remainM").value, "0");
+  assert.equal(app.element("slackOrders").textContent, "");
+
+  const saved = JSON.parse(app.storage.getItem(DATA_KEY));
+  assert.equal(saved.done, "0");
+  assert.equal(saved.remainH, "12");
+  assert.equal(saved.remainM, "0");
+});
+
+test("compact delay tone stays orange through 18 minutes and turns red at 19", () => {
+  const app = runCompact();
+  app.element("target").value = "40";
+  app.element("done").value = "0";
+  app.element("remainH").value = "11";
+  app.element("remainM").value = "42";
+  app.element("target").dispatch("change");
+
+  assert.equal(app.element("slackMain").textContent, "18分遅れ");
+  assert.equal(app.element("slackOrders").textContent, "");
+  assert.equal(app.element("hero").classList.contains("late"), true);
+  assert.equal(app.element("hero").classList.contains("bad"), false);
+  assert.equal(app.element("slackMain").classList.contains("lateTxt"), true);
+
+  app.element("remainM").value = "41";
+  app.element("target").dispatch("change");
+
+  assert.equal(app.element("slackMain").textContent, "19分遅れ");
+  assert.equal(app.element("slackOrders").textContent, "");
+  assert.equal(app.element("hero").classList.contains("late"), false);
+  assert.equal(app.element("hero").classList.contains("bad"), true);
+  assert.equal(app.element("slackMain").classList.contains("badTxt"), true);
+});
 
 test("compact startup prefers enhanced remainingMs without rewriting the enhanced clock", () => {
   const enhanced = {

@@ -1067,7 +1067,7 @@ function calc() {
 
   const constraintNote = active.endOn ? (active.kind === "end" ? "終了上限が12時間制限より短い" : `${active.endLabel}上限は補助情報`) : "終了上限なし";
   const values = {
-    remaining: { k: "進捗件数", v: `<span class="progressCurrent">${Math.min(done, target)}</span><span class="progressGoal">/ ${target}件</span>`, p: `<div class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate.toFixed(1)}" aria-valuetext="${rate.toFixed(1)}%達成"><span class="progressFill" style="width:${rate.toFixed(1)}%"></span></div>`, n: `<span>残り${left}件</span><span class="progressPercent">${Math.round(rate)}%</span>` },
+    remaining: { k: "進捗件数", v: `<span class="progressCurrent">${done}</span><span class="progressGoal">/ ${target}件</span>`, p: `<div class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate.toFixed(1)}" aria-valuetext="${rate.toFixed(1)}%達成"><span class="progressFill" style="width:${rate.toFixed(1)}%"></span></div>`, n: `<span>残り${left}件</span><span class="progressPercent">${Math.round(rate)}%</span>` },
     need: { k: "必要ペース", v: left ? paceCardText(neededPace, "need") : "達成済み", n: `タップで切替 / ${paceModeLabel("need")} / ${active.label}基準` },
     eta: { k: "終了予測", v: etaText, n: etaNote },
     actualPace: { k: "実績ペース", v: Number.isFinite(actualPace) ? paceCardText(actualPace, "actualPace") : "計測待ち", n: Number.isFinite(projection) ? `現ペースなら${projection.toFixed(1)}件` : "配達完了後に表示" },
@@ -1086,9 +1086,9 @@ function setup() {
   addOptions($("remainH"), 0, 12, "時間");
   addOptions($("remainM"), 0, 59, "分", 1, true);
   $("target").value = "46";
-  $("done").value = "10";
-  $("remainH").value = "10";
-  $("remainM").value = "12";
+  $("done").value = "0";
+  $("remainH").value = "12";
+  $("remainM").value = "0";
 
   load();
   loadClock();
@@ -1196,7 +1196,7 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=52").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=53").catch(() => {}));
 }
 </script>
 <script src="app-enhancements.js?v=9"></script>
