@@ -121,3 +121,15 @@ PWA表示、スマホ表示、小さめiPhone向けの表示調整を入れて�
 ## 開発メモ
 
 アプリアイコンは、iPhone用の `apple-touch-icon.png`（180px）と、PWA用の192px・512px画像、ブラウザ用の32px画像をサイズ別に用意しています。
+
+アプリはビルド不要の静的PWAです。HTML、CSS、共通計算、通常版、コンパクト版、稼働計測を分離しています。
+
+```sh
+npm run verify
+```
+
+仕様と保守手順は次を参照してください。
+
+- [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md): 計算・時計・保存互換の仕様
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): ファイル構成と責務
+- [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md): 変更・検証・配信手順

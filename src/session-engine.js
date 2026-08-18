@@ -1,11 +1,25 @@
 (() => {
   "use strict";
 
-  const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
-  const HISTORY_KEY = "ubereatsProgressWorkHistoryV1";
-  const COUNT_MODE = "continuous-v1";
-  const USAGE_MODE = "remaining-v1";
-  const WORK_LIMIT_MS = 720 * 60000;
+  const {
+    CONFIG,
+    STORAGE_KEYS,
+    clamp,
+    finite,
+    formatDurationMs,
+    normalizeSegments,
+    overlapDurationMs,
+    timestamp,
+    toLocalMinuteInputValue: coreToLocalMinuteInputValue,
+    usedMsFromRemaining
+  } = UberProgressCore;
+  const ENHANCED_CLOCK_KEY = STORAGE_KEYS.enhancedClock;
+  const LEGACY_CLOCK_KEY = STORAGE_KEYS.legacyClock;
+  const HISTORY_KEY = STORAGE_KEYS.history;
+  const COUNT_MODE = CONFIG.countMode;
+  const USAGE_MODE = CONFIG.usageMode;
+  const WORK_LIMIT_MS = CONFIG.workLimitMs;
+  const MAX_REMAIN_INPUT_MINUTES = CONFIG.maxRemainingInputMinutes;
   const SAVE_INTERVAL_MS = 5000;
 
   const legacyRemain = typeof remain === "function" ? remain() : manualRemain();
@@ -16,10 +30,8 @@
   let historyEndEditorState = null;
 
   function nowMs() { return Date.now(); }
-  function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
-  function finite(value, fallback = 0) { return Number.isFinite(Number(value)) ? Number(value) : fallback; }
   function clockUsedMs(remainingMs = clockState.remainingMs) {
-    return clamp(WORK_LIMIT_MS - finite(remainingMs, WORK_LIMIT_MS), 0, WORK_LIMIT_MS);
+    return usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
   }
 
   function syncClockUsage() {
@@ -61,26 +73,12 @@
   }
 
   function normalizeBreakSegments(value, breakOn, breakStartedAt, now) {
-    if (!Array.isArray(value)) return [];
-    const segments = value.map(segment => {
-      const startAt = finite(segment && segment.startAt, NaN);
-      const rawEnd = segment && segment.endAt;
-      const endAt = rawEnd === null || rawEnd === undefined ? null : finite(rawEnd, NaN);
-      if (!Number.isFinite(startAt) || startAt <= 0) return null;
-      if (endAt !== null && (!Number.isFinite(endAt) || endAt < startAt)) return null;
-      return { startAt, endAt };
-    }).filter(Boolean).sort((a, b) => a.startAt - b.startAt).slice(-200);
-
-    let keptOpen = false;
-    for (let index = segments.length - 1; index >= 0; index -= 1) {
-      if (segments[index].endAt !== null) continue;
-      if (breakOn && !keptOpen) keptOpen = true;
-      else segments[index].endAt = now;
-    }
-    if (breakOn && !keptOpen) {
-      segments.push({ startAt: finite(breakStartedAt, now), endAt: null });
-    }
-    return segments;
+    return normalizeSegments(value, {
+      active: breakOn,
+      activeStartedAt: breakStartedAt,
+      at: now,
+      maxSegments: 200
+    });
   }
 
   function normalizeState(data) {
@@ -226,7 +224,7 @@
     clockState.baseAt = anchorAt;
     clockState.updatedAt = anchorAt;
     localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(serializableState()));
-    localStorage.setItem(CLOCK_KEY, JSON.stringify({
+    localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
       on: clockState.on,
       baseRemain: clockState.remainingMs / 60000,
       baseAt: now
@@ -278,17 +276,11 @@
   }
 
   function remainingText(ms) {
-    const totalMinutes = Math.max(0, Math.ceil(ms / 60000));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}時間${String(minutes).padStart(2, "0")}分`;
+    return formatDurationMs(ms, "ceil");
   }
 
   function durationText(ms) {
-    const totalMinutes = Math.max(0, Math.floor(ms / 60000));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}時間${String(minutes).padStart(2, "0")}分`;
+    return formatDurationMs(ms, "floor");
   }
 
   function sessionMetricAt(at = nowMs()) {
@@ -300,57 +292,14 @@
   function sessionBreakMs(at = nowMs()) {
     at = sessionMetricAt(at);
     const sessionStart = clockState.sessionStartAt ? finite(clockState.sessionStartAt, at) : at;
-    const intervals = (Array.isArray(clockState.breakSegments) ? clockState.breakSegments : []).map(segment => {
-      const startAt = Math.max(sessionStart, finite(segment && segment.startAt, at));
-      const rawEnd = segment && segment.endAt;
-      const endAt = Math.min(at, rawEnd === null || rawEnd === undefined ? at : finite(rawEnd, at));
-      return endAt > startAt ? [startAt, endAt] : null;
-    }).filter(Boolean).sort((a, b) => a[0] - b[0]);
-    let segmentMs = 0;
-    let rangeStart = null;
-    let rangeEnd = null;
-    intervals.forEach(([startAt, endAt]) => {
-      if (rangeStart === null) {
-        rangeStart = startAt;
-        rangeEnd = endAt;
-      } else if (startAt <= rangeEnd) {
-        rangeEnd = Math.max(rangeEnd, endAt);
-      } else {
-        segmentMs += rangeEnd - rangeStart;
-        rangeStart = startAt;
-        rangeEnd = endAt;
-      }
-    });
-    if (rangeStart !== null) segmentMs += rangeEnd - rangeStart;
+    const segmentMs = overlapDurationMs(clockState.breakSegments, sessionStart, at);
     return Math.max(0, finite(clockState.legacyBreakMs, 0)) + segmentMs;
   }
 
   function segmentDurationMs(segments, at = nowMs()) {
     at = sessionMetricAt(at);
     const sessionStart = clockState.sessionStartAt ? finite(clockState.sessionStartAt, at) : at;
-    const intervals = (Array.isArray(segments) ? segments : []).map(segment => {
-      const startAt = Math.max(sessionStart, finite(segment && segment.startAt, at));
-      const rawEnd = segment && segment.endAt;
-      const endAt = Math.min(at, rawEnd === null || rawEnd === undefined ? at : finite(rawEnd, at));
-      return endAt > startAt ? [startAt, endAt] : null;
-    }).filter(Boolean).sort((a, b) => a[0] - b[0]);
-    let total = 0;
-    let rangeStart = null;
-    let rangeEnd = null;
-    intervals.forEach(([startAt, endAt]) => {
-      if (rangeStart === null) {
-        rangeStart = startAt;
-        rangeEnd = endAt;
-      } else if (startAt <= rangeEnd) {
-        rangeEnd = Math.max(rangeEnd, endAt);
-      } else {
-        total += rangeEnd - rangeStart;
-        rangeStart = startAt;
-        rangeEnd = endAt;
-      }
-    });
-    if (rangeStart !== null) total += rangeEnd - rangeStart;
-    return Math.max(0, total);
+    return overlapDurationMs(segments, sessionStart, at);
   }
 
   function otherCompanyDurationMs(at = nowMs()) {
@@ -696,11 +645,7 @@
   }
 
   function historyTimestamp(value, fallback = NaN) {
-    const numeric = Number(value);
-    if (Number.isFinite(numeric) && numeric > 0) return numeric;
-    if (typeof value !== "string" || !value.trim()) return fallback;
-    const parsed = new Date(value).getTime();
-    return Number.isFinite(parsed) ? parsed : fallback;
+    return timestamp(value, fallback);
   }
 
   function historyStartAt(item) {
@@ -738,9 +683,7 @@
   }
 
   function toLocalMinuteInputValue(timestamp) {
-    const date = new Date(timestamp);
-    const pad = value => String(value).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    return coreToLocalMinuteInputValue(timestamp);
   }
 
   function closeHistoryEndEditor(restoreFocus = true) {
@@ -1187,8 +1130,8 @@
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
       on: false,
-      remainingMs: 720 * 60000,
-      baseRemain: 720,
+      remainingMs: WORK_LIMIT_MS,
+      baseRemain: CONFIG.workLimitMinutes,
       baseAt: now,
       lastTickAt: now,
       moving: false,

@@ -43,9 +43,9 @@ class FakeElement {
 }
 
 function instrumentedSource() {
-  const source = fs.readFileSync(path.join(ROOT, "app-enhancements.js"), "utf8");
+  const source = fs.readFileSync(path.join(ROOT, "src/session-engine.js"), "utf8");
   const closeAt = source.lastIndexOf("})();");
-  assert.ok(closeAt > 0, "app-enhancements.js must end in an IIFE");
+  assert.ok(closeAt > 0, "src/session-engine.js must end in an IIFE");
   const exports = `
   globalThis.__timerTestApi = {
     tickClock,
@@ -146,6 +146,7 @@ function timerHarness(options = {}) {
     Date: FakeDate,
     Math,
     JSON,
+    UberProgressCore: require("../src/app-core.js"),
     localStorage: storage,
     document,
     navigator,
@@ -185,16 +186,11 @@ function timerHarness(options = {}) {
     },
     adjustRemain() {}
   });
-  vm.runInContext(instrumentedSource(), context, { filename: "app-enhancements.js" });
+  vm.runInContext(instrumentedSource(), context, { filename: "src/session-engine.js" });
   vm.runInContext(
-    fs.readFileSync(path.join(ROOT, "app-enhancements-fix.js"), "utf8"),
+    fs.readFileSync(path.join(ROOT, "src/session-editors.js"), "utf8"),
     context,
-    { filename: "app-enhancements-fix.js" }
-  );
-  vm.runInContext(
-    fs.readFileSync(path.join(ROOT, "app-session-ui-fix.js"), "utf8"),
-    context,
-    { filename: "app-session-ui-fix.js" }
+    { filename: "src/session-editors.js" }
   );
 
   return {

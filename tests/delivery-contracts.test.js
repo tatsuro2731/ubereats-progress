@@ -13,12 +13,13 @@ function normalizedAsset(value) {
   return value.replace(/^\.\//, "");
 }
 
-test("the first visit loads all enhancements directly from index.html", () => {
+test("the first visit loads the modular application scripts in dependency order", () => {
   const html = read("index.html");
   const expected = [
-    "app-enhancements.js",
-    "app-enhancements-fix.js",
-    "app-session-ui-fix.js"
+    "src/app-core.js",
+    "src/main-app.js",
+    "src/session-engine.js",
+    "src/session-editors.js"
   ];
   const directScripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi)]
     .map(match => match[1]);
@@ -36,8 +37,8 @@ test("the first visit loads all enhancements directly from index.html", () => {
 });
 
 test("a fresh visit starts at zero deliveries with the full 12 hours in both views", () => {
-  const index = read("index.html");
-  const compact = read("compact.html");
+  const index = read("src/main-app.js");
+  const compact = read("src/compact-app.js");
   const indexSetup = index.match(/function\s+setup\s*\(\)\s*\{([\s\S]*?)\n\}/);
   const compactDefaults = compact.match(/function\s+setDefaultValues\s*\(\)\s*\{([\s\S]*?)\n\s*\}/);
   assert.ok(indexSetup, "the main setup defaults must remain inspectable");
@@ -51,12 +52,13 @@ test("a fresh visit starts at zero deliveries with the full 12 hours in both vie
 });
 
 test("the progress card shows actual completed deliveries beyond the target", () => {
-  const index = read("index.html");
+  const index = read("src/main-app.js");
   const progressCard = index.match(/remaining:\s*\{\s*k:\s*"進捗件数"[\s\S]*?\n\s*need:/);
   assert.ok(progressCard, "the progress-card template must remain inspectable");
   assert.match(progressCard[0], /progressCurrent">\$\{done\}/);
   assert.doesNotMatch(progressCard[0], /Math\.min\(done,\s*target\)/);
-  assert.match(index, /const\s+left\s*=\s*Math\.max\(target\s*-\s*done,\s*0\)/);
+  assert.match(index, /const\s+progress\s*=\s*calculateProgress\(/);
+  assert.match(index, /const\s+left\s*=\s*progress\.remainingOrders/);
 });
 
 test("compact select controls expose their labels to VoiceOver", () => {
@@ -70,12 +72,11 @@ test("compact select controls expose their labels to VoiceOver", () => {
 });
 
 test("the documented past end-limit rule matches the six-hour implementation", () => {
-  const index = read("index.html");
+  const core = read("src/app-core.js");
   const readme = read("README.md");
-  const endInfo = index.match(/function\s+endInfo\s*\(\)\s*\{([\s\S]*?)\n\}/);
-  assert.ok(endInfo, "the end-limit resolver must remain inspectable");
-  assert.match(endInfo[1], /now\s*-\s*end\s*<=\s*21600000/);
-  assert.match(endInfo[1], /end\.setDate\(end\.getDate\(\)\s*\+\s*1\)/);
+  assert.match(core, /pastEndLimitThresholdMs:\s*6\s*\*\s*60\s*\*\s*60000/);
+  assert.match(core, /now\s*-\s*end\s*<=\s*CONFIG\.pastEndLimitThresholdMs/);
+  assert.match(core, /end\.setDate\(end\.getDate\(\)\s*\+\s*1\)/);
   assert.match(readme, /6時間以内の過去時刻は「今日の上限を超過済み」/);
   assert.match(readme, /6時間より前なら翌日の終了上限/);
 });
@@ -83,6 +84,8 @@ test("the documented past end-limit rule matches the six-hour implementation", (
 test("the service worker cache revision and assets match direct script URLs", () => {
   const html = read("index.html");
   const compact = read("compact.html");
+  const mainApp = read("src/main-app.js");
+  const compactApp = read("src/compact-app.js");
   const serviceWorker = read("sw.js");
   const cacheMatch = serviceWorker.match(/const\s+CACHE\s*=\s*["']ubereats-progress-v(\d+)["']/);
   assert.ok(cacheMatch, "sw.js must use a numbered ubereats-progress cache");
@@ -95,20 +98,22 @@ test("the service worker cache revision and assets match direct script URLs", ()
   const assets = JSON.parse(assetsMatch[1]).map(normalizedAsset);
   assert.ok(assets.includes(`?v=${revision}`), "the root navigation must carry the cache revision");
   assert.ok(assets.includes(`index.html?v=${revision}`), "index.html must carry the cache revision");
-  assert.match(html, new RegExp(`serviceWorker\\.register\\(["']sw\\.js\\?v=${revision}["']\\)`));
-  assert.match(compact, new RegExp(`serviceWorker\\.register\\(["']sw\\.js\\?v=${revision}["']\\)`));
+  assert.match(mainApp, new RegExp(`serviceWorker\\.register\\(["']sw\\.js\\?v=${revision}["']\\)`));
+  assert.match(compactApp, new RegExp(`serviceWorker\\.register\\(["']sw\\.js\\?v=${revision}["']\\)`));
 
-  const directEnhancements = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']*app-(?:enhancements(?:-fix)?|session-ui-fix)\.js[^"']*)["'][^>]*><\/script>/gi)]
-    .map(match => normalizedAsset(match[1]));
-  assert.equal(directEnhancements.length, 3);
-  for (const source of directEnhancements) {
+  const pageAssets = [html, compact].flatMap(page => [
+    ...[...page.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi)].map(match => match[1]),
+    ...[...page.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1])
+  ]).map(normalizedAsset);
+  assert.equal(pageAssets.length, 8);
+  for (const source of pageAssets) {
     assert.ok(assets.includes(source), `${source} must be pre-cached exactly as referenced`);
   }
   assert.ok(assets.some(asset => asset.split("?")[0] === "compact.html"), "compact.html must remain available offline");
 });
 
 test("timer UI includes the 440px iPhone breakpoint and start-time editor hooks", () => {
-  const source = read("app-session-ui-fix.js");
+  const source = read("src/session-editors.js");
   assert.match(source, /datetime-local/);
   assert.match(source, /sessionStartAt/);
   assert.match(source, /\.remainSync/);
@@ -123,8 +128,8 @@ test("timer UI includes the 440px iPhone breakpoint and start-time editor hooks"
 });
 
 test("work-session summary removes the duplicate total and allows break correction", () => {
-  const enhancements = read("app-enhancements.js");
-  const sessionUi = read("app-session-ui-fix.js");
+  const enhancements = read("src/session-engine.js");
+  const sessionUi = read("src/session-editors.js");
   assert.match(enhancements, /class="workSessionStat mainStat primary"><span>Uber稼働<\/span>/);
   assert.match(enhancements, /class="workSessionStat mainStat otherStat"><span>他社稼働<\/span>/);
   assert.doesNotMatch(enhancements, /class="workSessionStat[^"]*"[^>]*><span>時計が減った時間<\/span>/);
@@ -135,7 +140,7 @@ test("work-session summary removes the duplicate total and allows break correcti
 });
 
 test("saved history exposes an end-time editor with dependent metric recalculation", () => {
-  const enhancements = read("app-enhancements.js");
+  const enhancements = read("src/session-engine.js");
   assert.match(enhancements, /class="workHistoryEdit"/);
   assert.match(enhancements, /id="historyEndEditorTitle">履歴の終了日時を修正<\/h3>/);
   assert.match(enhancements, /id="historyEndInput"\s+type="datetime-local"/);
@@ -145,8 +150,8 @@ test("saved history exposes an end-time editor with dependent metric recalculati
 });
 
 test("single and double guidance use the same responsive font size", () => {
-  const html = read("index.html");
-  const mobileRules = html.match(/@media\(max-width:560px\)\{([\s\S]*?)\n\s*@media\(max-width:560px\) and/);
+  const css = read("styles/main.css");
+  const mobileRules = css.match(/@media\(max-width:560px\)\{([\s\S]*?)\n\s*@media\(max-width:560px\) and/);
   assert.ok(mobileRules, "the shared mobile guidance rules must remain explicit");
   assert.match(
     mobileRules[1],
@@ -160,7 +165,7 @@ test("single and double guidance use the same responsive font size", () => {
 });
 
 test("the maximum minute-only remaining-time label stays legible and fits from 320px through 440px", () => {
-  const source = read("app-session-ui-fix.js");
+  const source = read("src/session-editors.js");
   const baseColumns = source.match(/\.remainSync\s*\{[^}]*grid-template-columns\s*:\s*([^;]+);[^}]*gap\s*:\s*([^;}]+)/);
   const baseLabel = source.match(/\.remainSync \.remainBig\s*\{[^}]*font-size\s*:\s*([^;]+);[^}]*letter-spacing\s*:\s*([^;}]+)/);
   const wideBlock = source.match(/@media\s*\(\s*max-width\s*:\s*440px\s*\)\s*\{([\s\S]*?)\n\s*\}\s*\n\s*@media\s*\(\s*max-width\s*:\s*370px/);
@@ -201,9 +206,9 @@ test("the maximum minute-only remaining-time label stays legible and fits from 3
 });
 
 test("remaining and work-session displays stop at minutes while calculations keep sub-minute precision", () => {
-  const index = read("index.html");
-  const compact = read("compact.html");
-  const enhancements = read("app-enhancements.js");
+  const index = read("src/main-app.js");
+  const compact = read("src/compact-app.js");
+  const enhancements = read("src/session-engine.js");
   assert.match(index, /function\s+remainingText\s*\([^)]*\)\s*\{[\s\S]{0,180}Math\.ceil/);
   assert.match(index, /function\s+elapsedText\s*\([^)]*\)\s*\{[\s\S]{0,180}Math\.floor/);
   assert.match(index, /countRemain"\)\.textContent\s*=\s*`残り \$\{remainingText\(remaining\)\}`/);
@@ -218,14 +223,17 @@ test("remaining and work-session displays stop at minutes while calculations kee
 });
 
 test("the enhanced timer is continuous while ON and never requests location", () => {
-  const enhancements = read("app-enhancements.js");
-  const compact = read("compact.html");
-  assert.match(enhancements, /const\s+COUNT_MODE\s*=\s*["']continuous-v1["']/);
-  assert.match(enhancements, /const\s+USAGE_MODE\s*=\s*["']remaining-v1["']/);
-  assert.match(compact, /const\s+USAGE_MODE\s*=\s*["']remaining-v1["']/);
+  const enhancements = read("src/session-engine.js");
+  const compact = read("src/compact-app.js");
+  const core = read("src/app-core.js");
+  assert.match(core, /countMode:\s*["']continuous-v1["']/);
+  assert.match(core, /usageMode:\s*["']remaining-v1["']/);
+  assert.match(enhancements, /const\s+COUNT_MODE\s*=\s*CONFIG\.countMode/);
+  assert.match(enhancements, /const\s+USAGE_MODE\s*=\s*CONFIG\.usageMode/);
+  assert.match(compact, /const\s+USAGE_MODE\s*=\s*CONFIG\.usageMode/);
   assert.match(enhancements, /clockState\.on\s*&&\s*!clockState\.breakOn\s*&&\s*!clockState\.sessionEndedAt/);
   assert.match(enhancements, /clockState\.remainingMs\s*-=?\s*consumed/);
-  assert.match(enhancements, /WORK_LIMIT_MS\s*-\s*finite\(remainingMs/);
+  assert.match(enhancements, /usedMsFromRemaining\(remainingMs,\s*WORK_LIMIT_MS\)/);
   assert.match(enhancements, /clockUsedMs\(\)\s*\/\s*elapsed\s*\*\s*100/);
   assert.match(enhancements, /clockState\.on\s*=\s*false\s*;\s*startActiveBreak\(now\)/);
   assert.match(enhancements, /clockState\.on\s*=\s*true[\s\S]{0,120}closeActiveBreak|closeActiveBreak\(now\)[\s\S]{0,120}clockState\.on\s*=\s*true/);
@@ -242,8 +250,8 @@ test("the enhanced timer is continuous while ON and never requests location", ()
 });
 
 test("compact goal completion stops the shared clock and main follows compact progress changes", () => {
-  const index = read("index.html");
-  const compact = read("compact.html");
+  const index = read("src/main-app.js");
+  const compact = read("src/compact-app.js");
   assert.match(compact, /remainingOrders\s*===\s*0\s*&&\s*stopEnhancedClockAtGoal\(\)/);
   assert.match(compact, /on:\s*false[\s\S]{0,500}otherCompanyOn:\s*false/);
   assert.match(compact, /otherCompanySegments/);
@@ -257,7 +265,7 @@ test("compact goal completion stops the shared clock and main follows compact pr
   assert.match(basePageShow[1], /syncCardCountControl\(\)/);
   assert.match(basePageShow[1], /renderCardSelectors\(\)/);
   assert.doesNotMatch(basePageShow[1], /calc\(\)/, "the stale in-memory clock must not calculate before enhanced-state reconciliation");
-  const enhancements = read("app-enhancements.js");
+  const enhancements = read("src/session-engine.js");
   assert.match(
     enhancements,
     /window\.addEventListener\("pageshow",[\s\S]{0,300}reconcileStoredClock\(\)[\s\S]{0,300}calc\(\)/
@@ -273,25 +281,27 @@ test("compact goal completion stops the shared clock and main follows compact pr
 
 test("the settings header is a dedicated swipe-to-close surface without taking over form scrolling", () => {
   const html = read("index.html");
+  const css = read("styles/main.css");
+  const app = read("src/main-app.js");
   assert.match(html, /id="settingsDragArea"\s+class="settingsDragArea"/);
-  assert.match(html, /\.settingsDragArea\{[^}]*touch-action:none[^}]*user-select:none/);
+  assert.match(css, /\.settingsDragArea\{[^}]*touch-action:none[^}]*user-select:none/);
   assert.match(html, /settingsDragArea[\s\S]{0,1000}settingsSheetHeader/);
-  assert.match(html, /function\s+setupSettingsSwipe\s*\([^)]*\)[\s\S]{0,900}pointerdown[\s\S]{0,900}pointercancel/);
-  assert.match(html, /event\.target\.closest\("button,a,input,select,textarea,\[role='button'\]"\)/);
-  assert.match(html, /\.settingsScroll\{overflow:auto[^}]*overscroll-behavior:contain/);
-  assert.doesNotMatch(html, /\$\("settingsScroll"\)\.addEventListener\("pointerdown"/);
+  assert.match(app, /function\s+setupSettingsSwipe\s*\([^)]*\)[\s\S]{0,900}pointerdown[\s\S]{0,900}pointercancel/);
+  assert.match(app, /event\.target\.closest\("button,a,input,select,textarea,\[role='button'\]"\)/);
+  assert.match(css, /\.settingsScroll\{overflow:auto[^}]*overscroll-behavior:contain/);
+  assert.doesNotMatch(app, /\$\("settingsScroll"\)\.addEventListener\("pointerdown"/);
 });
 
 test("settings swipe rendering stays on the compositor path without per-move layout reads", () => {
-  const html = read("index.html");
-  const move = html.match(/function\s+continueSettingsSwipe\s*\([^)]*\)\s*\{([\s\S]*?)\n\}/);
+  const app = read("src/main-app.js");
+  const move = app.match(/function\s+continueSettingsSwipe\s*\([^)]*\)\s*\{([\s\S]*?)\n\}/);
   assert.ok(move, "the pointer move handler must remain inspectable");
-  assert.match(html, /function\s+scheduleSettingsSwipeRender[\s\S]{0,500}requestSettingsSwipeFrame/);
+  assert.match(app, /function\s+scheduleSettingsSwipeRender[\s\S]{0,500}requestSettingsSwipeFrame/);
   assert.match(move[1], /scheduleSettingsSwipeRender\(swipe\)/);
   assert.doesNotMatch(move[1], /getBoundingClientRect|settingsSwipeSheetHeight|settingsSwipeCloseDistance/);
   assert.doesNotMatch(move[1], /settingsBackdrop|opacity/);
-  assert.match(html, /const\s+sheetHeight\s*=\s*settingsSwipeSheetHeight\(\)[\s\S]{0,700}closeDistance:\s*settingsSwipeCloseDistance\(sheetHeight\)/);
-  assert.match(html, /style\.setProperty\("transform",\s*`translate3d/);
+  assert.match(app, /const\s+sheetHeight\s*=\s*settingsSwipeSheetHeight\(\)[\s\S]{0,700}closeDistance:\s*settingsSwipeCloseDistance\(sheetHeight\)/);
+  assert.match(app, /style\.setProperty\("transform",\s*`translate3d/);
 });
 
 class FakeClassList {
@@ -381,10 +391,7 @@ class FakeElement {
 }
 
 function instrumentedIndexSource() {
-  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
-  assert.equal(scripts.length, 1, "index.html should keep one inline application script");
-  const source = scripts[0][1];
+  const source = fs.readFileSync(path.join(ROOT, "src/main-app.js"), "utf8");
   const setupAt = source.lastIndexOf("\nsetup();");
   assert.ok(setupAt > 0, "the test harness must stop before application setup");
   return `${source.slice(0, setupAt)}
@@ -434,6 +441,7 @@ function settingsHarness({ reducedMotion = false } = {}) {
     Math,
     Number,
     JSON,
+    UberProgressCore: require("../src/app-core.js"),
     document,
     window: {
       matchMedia: () => ({ matches: reducedMotion }),
@@ -449,7 +457,7 @@ function settingsHarness({ reducedMotion = false } = {}) {
     },
     clearTimeout(id) { timers.delete(id); }
   });
-  vm.runInContext(instrumentedIndexSource(), context, { filename: "index.html" });
+  vm.runInContext(instrumentedIndexSource(), context, { filename: "src/main-app.js" });
   const api = context.__settingsSwipeTestApi;
   const commitCalls = { save: 0, calc: 0, savedEndLimit: "" };
   api.setCommitCallbacks(
@@ -485,13 +493,13 @@ function settingsHarness({ reducedMotion = false } = {}) {
 }
 
 test("closing settings commits an iPhone time input before saving and recalculating", () => {
-  const html = read("index.html");
-  assert.match(html, /function\s+commitSettingsChanges\s*\([^)]*\)[\s\S]{0,500}active\.blur\(\)[\s\S]{0,500}save\(\)[\s\S]{0,200}calc\(\)/);
-  assert.match(html, /if\s*\(\s*!open\s*&&\s*wasOpen\s*\)\s*commitSettingsChanges\(\)/);
-  assert.match(html, /settingsClose"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
-  assert.match(html, /settingsDone"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
-  assert.match(html, /settingsBackdrop"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
-  assert.match(html, /if\s*\(close\)\s*setSettingsOpen\(false\)/);
+  const appSource = read("src/main-app.js");
+  assert.match(appSource, /function\s+commitSettingsChanges\s*\([^)]*\)[\s\S]{0,500}active\.blur\(\)[\s\S]{0,500}save\(\)[\s\S]{0,200}calc\(\)/);
+  assert.match(appSource, /if\s*\(\s*!open\s*&&\s*wasOpen\s*\)\s*commitSettingsChanges\(\)/);
+  assert.match(appSource, /settingsClose"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
+  assert.match(appSource, /settingsDone"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
+  assert.match(appSource, /settingsBackdrop"\)\.onclick\s*=\s*\(\)\s*=>\s*setSettingsOpen\(false\)/);
+  assert.match(appSource, /if\s*\(close\)\s*setSettingsOpen\(false\)/);
 
   const app = settingsHarness();
   const input = app.element("endLimit");

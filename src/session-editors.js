@@ -1,19 +1,25 @@
 (() => {
   "use strict";
 
-  const ENHANCED_CLOCK_KEY = "ubereatsProgressMovementClockV1";
-  const COUNT_MODE = "continuous-v1";
-  const USAGE_MODE = "remaining-v1";
-  const WORK_LIMIT_MS = 720 * 60000;
+  const {
+    CONFIG,
+    STORAGE_KEYS,
+    finite,
+    overlapDurationMs,
+    timestamp,
+    toLocalMinuteInputValue,
+    usedMsFromRemaining
+  } = UberProgressCore;
+  const ENHANCED_CLOCK_KEY = STORAGE_KEYS.enhancedClock;
+  const LEGACY_CLOCK_KEY = STORAGE_KEYS.legacyClock;
+  const COUNT_MODE = CONFIG.countMode;
+  const USAGE_MODE = CONFIG.usageMode;
+  const WORK_LIMIT_MS = CONFIG.workLimitMs;
   const $id = id => document.getElementById(id);
   let breakEditorInitialMinutes = null;
 
-  function finite(value, fallback = 0) {
-    return Number.isFinite(Number(value)) ? Number(value) : fallback;
-  }
-
   function clockUsedMs(remainingMs) {
-    return Math.max(0, Math.min(WORK_LIMIT_MS - finite(remainingMs, WORK_LIMIT_MS), WORK_LIMIT_MS));
+    return usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
   }
 
   function breakOverlapMs(startAt, endAt = Date.now()) {
@@ -25,34 +31,7 @@
       const currentStart = Math.max(startAt, finite(clockState.breakStartedAt, endAt));
       return Math.min(windowMs, stored + Math.max(0, endAt - currentStart));
     }
-    const intervals = clockState.breakSegments.map(segment => {
-      const isTuple = Array.isArray(segment);
-      const rawStart = isTuple ? segment[0] : segment && (segment.startAt ?? segment.startedAt ?? segment.start);
-      const rawEnd = isTuple ? segment[1] : segment && (segment.endAt ?? segment.endedAt ?? segment.end);
-      const segmentStart = finite(rawStart, NaN);
-      const segmentEnd = rawEnd === null || rawEnd === undefined ? endAt : finite(rawEnd, NaN);
-      if (!Number.isFinite(segmentStart) || !Number.isFinite(segmentEnd)) return null;
-      const overlapStart = Math.max(startAt, segmentStart);
-      const overlapEnd = Math.min(endAt, segmentEnd);
-      return overlapEnd > overlapStart ? [overlapStart, overlapEnd] : null;
-    }).filter(Boolean).sort((a, b) => a[0] - b[0]);
-
-    let total = 0;
-    let mergedStart = null;
-    let mergedEnd = null;
-    intervals.forEach(([start, end]) => {
-      if (mergedStart === null) {
-        mergedStart = start;
-        mergedEnd = end;
-      } else if (start <= mergedEnd) {
-        mergedEnd = Math.max(mergedEnd, end);
-      } else {
-        total += mergedEnd - mergedStart;
-        mergedStart = start;
-        mergedEnd = end;
-      }
-    });
-    if (mergedStart !== null) total += mergedEnd - mergedStart;
+    const total = overlapDurationMs(clockState.breakSegments, startAt, endAt);
     const legacyFallback = Math.max(0, finite(clockState.legacyBreakMs, 0));
     return Math.min(windowMs, legacyFallback + total);
   }
@@ -62,45 +41,16 @@
     const windowMs = Math.max(0, endAt - startAt);
     const segments = Array.isArray(clockState.otherCompanySegments) ? clockState.otherCompanySegments : [];
     if (!segments.length) return Math.min(windowMs, Math.max(0, finite(clockState.otherCompanyMs, 0)));
-    const intervals = segments.map(segment => {
-      const rawStart = segment && (segment.startAt ?? segment.startedAt ?? segment.start);
-      const rawEnd = segment && (segment.endAt ?? segment.endedAt ?? segment.end);
-      const segmentStart = finite(rawStart, NaN);
-      const segmentEnd = rawEnd === null || rawEnd === undefined ? endAt : finite(rawEnd, NaN);
-      if (!Number.isFinite(segmentStart) || !Number.isFinite(segmentEnd)) return null;
-      const overlapStart = Math.max(startAt, segmentStart);
-      const overlapEnd = Math.min(endAt, segmentEnd);
-      return overlapEnd > overlapStart ? [overlapStart, overlapEnd] : null;
-    }).filter(Boolean).sort((a, b) => a[0] - b[0]);
-    let total = 0;
-    let mergedStart = null;
-    let mergedEnd = null;
-    intervals.forEach(([start, end]) => {
-      if (mergedStart === null) {
-        mergedStart = start;
-        mergedEnd = end;
-      } else if (start <= mergedEnd) {
-        mergedEnd = Math.max(mergedEnd, end);
-      } else {
-        total += mergedEnd - mergedStart;
-        mergedStart = start;
-        mergedEnd = end;
-      }
-    });
-    if (mergedStart !== null) total += mergedEnd - mergedStart;
+    const total = overlapDurationMs(segments, startAt, endAt);
     return Math.min(windowMs, Math.max(0, finite(clockState.legacyOtherCompanyMs, 0)) + total);
   }
 
   function toLocalInputValue(timestamp) {
-    const date = new Date(timestamp);
-    const pad = value => String(value).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    return toLocalMinuteInputValue(timestamp);
   }
 
   function parseLocalInput(value) {
-    if (!value) return NaN;
-    const timestamp = new Date(value).getTime();
-    return Number.isFinite(timestamp) ? timestamp : NaN;
+    return timestamp(value, NaN);
   }
 
   function saveEnhancedState() {
@@ -147,7 +97,7 @@
       updatedAt: anchorAt
     };
     localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
-    localStorage.setItem(CLOCK_KEY, JSON.stringify({
+    localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
       on: state.on,
       baseRemain: state.remainingMs / 60000,
       baseAt: now

@@ -21,7 +21,7 @@ function localInput(timestamp) {
 }
 
 function instrumentedSessionUi() {
-  const source = fs.readFileSync(path.join(ROOT, "app-session-ui-fix.js"), "utf8");
+  const source = fs.readFileSync(path.join(ROOT, "src/session-editors.js"), "utf8");
   const closeAt = source.lastIndexOf("})();");
   assert.ok(closeAt > 0);
   return source.slice(0, closeAt) + `
@@ -55,6 +55,7 @@ function harness(clockState, now = 500000) {
   const context = vm.createContext({
     console,
     Date: FakeDate,
+    UberProgressCore: require("../src/app-core.js"),
     clockState,
     CLOCK_KEY: "ubereatsProgressClockState",
     localStorage: {
@@ -71,7 +72,7 @@ function harness(clockState, now = 500000) {
     save() { saveCalls += 1; },
     calc() { calcCalls += 1; }
   });
-  vm.runInContext(instrumentedSessionUi(), context, { filename: "app-session-ui-fix.js" });
+  vm.runInContext(instrumentedSessionUi(), context, { filename: "src/session-editors.js" });
   return {
     api: context.__sessionUiTestApi,
     values,

@@ -3,4 +3,6 @@
 - ブランチやPRは作らない。マージするか確認しない
 - 修正が完了したらそのままpushまで行う
 - 既存のlocalStorageキーと保存形式は変更しない
-- コードはミニファイされた現行スタイルを維持する
+- HTML・CSS・JavaScriptの責務を分け、共通計算は`src/app-core.js`へ集約する
+- 変更後は`npm run verify`を実行し、既存動作と保存互換を確認する
+- 配信ファイルを変更したらHTMLとService Workerのキャッシュ版番号を揃える

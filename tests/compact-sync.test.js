@@ -58,10 +58,7 @@ class FakeElement {
 }
 
 function compactScript() {
-  const html = fs.readFileSync(path.join(ROOT, "compact.html"), "utf8");
-  const inline = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
-  assert.equal(inline.length, 1, "compact.html should have one inline application script");
-  return inline[0][1];
+  return fs.readFileSync(path.join(ROOT, "src/compact-app.js"), "utf8");
 }
 
 function runCompact(initial = {}, now = Date.now()) {
@@ -92,6 +89,7 @@ function runCompact(initial = {}, now = Date.now()) {
   const context = vm.createContext({
     console,
     Date: FakeDate,
+    UberProgressCore: require("../src/app-core.js"),
     localStorage: storage,
     navigator: {},
     window,
@@ -102,7 +100,7 @@ function runCompact(initial = {}, now = Date.now()) {
       querySelectorAll: () => []
     }
   });
-  vm.runInContext(compactScript(), context, { filename: "compact.html" });
+  vm.runInContext(compactScript(), context, { filename: "src/compact-app.js" });
   return {
     storage,
     element,
