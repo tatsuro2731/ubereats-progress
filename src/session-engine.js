@@ -215,7 +215,8 @@
 
   function persistEnhancedClock(force = false) {
     const now = nowMs();
-    if (!force && now - lastSavedAt < SAVE_INTERVAL_MS) return;
+    const sessionStartAdjusted = reconcileSessionStartWithUsage(now);
+    if (!force && !sessionStartAdjusted && now - lastSavedAt < SAVE_INTERVAL_MS) return;
     lastSavedAt = now;
     const anchorAt = Math.max(now, finite(clockState.lastTickAt, now));
     clockState.countMode = COUNT_MODE;
@@ -320,6 +321,25 @@
     if (!clockState.sessionStartAt) return 0;
     at = sessionMetricAt(at);
     return Math.max(0, at - clockState.sessionStartAt - sessionBreakMs(at));
+  }
+
+  function reconcileSessionStartWithUsage(at = nowMs()) {
+    if (!clockState.sessionStartAt) return false;
+    const metricAt = sessionMetricAt(at);
+    const usedMs = clockUsedMs();
+    let changed = false;
+
+    // Moving the start earlier can expose an older recorded break segment,
+    // so repeat until the start, break total, and linked usage are stable.
+    for (let attempt = 0; attempt < 205; attempt += 1) {
+      const currentStartAt = finite(clockState.sessionStartAt, metricAt);
+      const requiredStartAt = metricAt - usedMs - sessionBreakMs(metricAt);
+      const nextStartAt = Math.max(1, requiredStartAt);
+      if (nextStartAt >= currentStartAt) break;
+      clockState.sessionStartAt = nextStartAt;
+      changed = true;
+    }
+    return changed;
   }
 
   function operationRate(at = nowMs()) {
@@ -461,6 +481,7 @@
   }
 
   function sessionSnapshot(at) {
+    reconcileSessionStartWithUsage(at);
     const target = Math.max(1, finite(n("target"), 1));
     const done = Math.max(0, finite(n("done"), 0));
     const remainingMs = Math.max(0, finite(clockState.remainingMs, 0));
@@ -658,6 +679,30 @@
     return Number.isFinite(endedAt) ? endedAt : historyTimestamp(item && item.recordedAt, NaN);
   }
 
+  function reconcileHistoryItem(item) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    const startedAt = historyStartAt(item);
+    const endedAt = historyEndAt(item);
+    if (!Number.isFinite(startedAt) || !Number.isFinite(endedAt) || endedAt <= startedAt) return item;
+    const breakMs = Math.max(0, finite(item.breakMs, 0));
+    const usedMs = historyUsedMs(item);
+    const elapsedMs = Math.max(0, endedAt - startedAt - breakMs);
+    if (usedMs <= elapsedMs) return item;
+
+    const adjustedStartAt = Math.max(1, endedAt - breakMs - usedMs);
+    const adjustedElapsedMs = Math.max(0, endedAt - adjustedStartAt - breakMs);
+    const adjusted = {
+      ...item,
+      startedAt: adjustedStartAt,
+      elapsedMs: adjustedElapsedMs,
+      rate: adjustedElapsedMs > 0 ? clamp(usedMs / adjustedElapsedMs * 100, 0, 100) : 0
+    };
+    if (Object.prototype.hasOwnProperty.call(item, "date")) {
+      adjusted.date = new Date(adjustedStartAt).toISOString();
+    }
+    return adjusted;
+  }
+
   function historyEndEditError(item, endedAt, now = nowMs()) {
     if (!Number.isFinite(endedAt)) return "終了日時を入力してください。";
     const startedAt = historyStartAt(item);
@@ -666,6 +711,7 @@
     if (endedAt <= startedAt) return "終了日時は開始日時より後にしてください。";
     const breakMs = Math.max(0, finite(item && item.breakMs, 0));
     if (endedAt - startedAt < breakMs) return "終了日時が早すぎます。開始から休憩時間分を確保してください。";
+    if (endedAt - startedAt - breakMs < historyUsedMs(item)) return "終了日時が早すぎます。記録済みの稼働時間を収めてください。";
     return "";
   }
 
@@ -714,7 +760,8 @@
     }
     const breakMs = Math.max(0, finite(item.breakMs, 0));
     input.value = toLocalMinuteInputValue(endedAt);
-    input.min = toLocalMinuteInputValue(Math.ceil(Math.max(startedAt + 1, startedAt + breakMs) / 60000) * 60000);
+    const earliestEndAt = startedAt + breakMs + historyUsedMs(item);
+    input.min = toLocalMinuteInputValue(Math.ceil(Math.max(startedAt + 1, earliestEndAt) / 60000) * 60000);
     input.max = toLocalMinuteInputValue(nowMs());
     error.textContent = "";
     historyEndEditorState = {
@@ -862,7 +909,15 @@
   function renderHistory() {
     const box = $("workHistoryList");
     if (!box) return;
-    const items = history().slice(0, 5);
+    const storedItems = history();
+    let adjusted = false;
+    const reconciledItems = storedItems.map(item => {
+      const reconciled = reconcileHistoryItem(item);
+      if (reconciled !== item) adjusted = true;
+      return reconciled;
+    });
+    if (adjusted) saveHistory(reconciledItems);
+    const items = reconciledItems.slice(0, 5);
     box.innerHTML = items.length ? items.map((item, index) => {
       const done = Math.max(0, finite(item.done, 0));
       const target = Math.max(0, finite(item.target, 0));
@@ -888,6 +943,7 @@
     const panel = $("workSessionPanel");
     if (!panel) return;
     const at = nowMs();
+    reconcileSessionStartWithUsage(at);
     const ended = Boolean(clockState.sessionEndedAt);
     const totalUsed = clockUsedMs();
     const otherUsed = otherCompanyUsedMs(at, totalUsed);
@@ -1069,7 +1125,7 @@
     const hint = $("countPanel").querySelector(".hint");
     if (desc) desc.textContent = "時間ON中は移動・停車やUber／他社にかかわらず連続で減少します。内部では秒単位で計算し、画面には分単位で表示します。";
     if (hint) hint.textContent = "時間OFFで休憩を自動記録します。他社稼働は時間ON中だけ切り替えられます。−／＋で1分ずつ補正できます。";
-    $("helpText").textContent = "時間ON中は残り稼働時間を連続で減らし、時間OFFへ切り替えると休憩を自動開始します。時間ONへ戻すと休憩は自動終了します。稼働開始前・稼働終了後のOFF時間は休憩に含めません。他社稼働は時間ON中だけON／OFFでき、他社稼働中も残り時間は減ります。履歴ではUber稼働と分けて記録します。案件の有無や移動状態は自動判定しません。";
+    $("helpText").textContent = "時間ON中は残り稼働時間を連続で減らし、時間OFFへ切り替えると休憩を自動開始します。時間ONへ戻すと休憩は自動終了します。稼働開始前・稼働終了後のOFF時間は休憩に含めません。他社稼働は時間ON中だけON／OFFでき、他社稼働中も残り時間は減ります。残り時間の補正で記録済み稼働が経過を上回る場合は、開始時刻を必要分だけ前へ自動調整します。履歴ではUber稼働と分けて記録します。案件の有無や移動状態は自動判定しません。";
   }
 
   loadEnhancedClock();

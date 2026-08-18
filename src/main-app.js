@@ -1053,5 +1053,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=56").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=57").catch(() => {}));
 }

@@ -60,6 +60,7 @@ function instrumentedSource() {
     finishSession,
     sessionBreakMs,
     sessionElapsedMs,
+    reconcileSessionStartWithUsage,
     persistEnhancedClock,
     beginBackgroundGap,
     resumeBackgroundGap,
@@ -74,6 +75,7 @@ function instrumentedSource() {
     historyRate,
     historyStartAt,
     historyEndAt,
+    reconcileHistoryItem,
     historyEndEditError,
     recalculateHistoryEnd,
     getState: () => clockState,
@@ -348,6 +350,73 @@ test("usage and rate stay at zero while remaining time is above 12 hours", () =>
   assert.equal(app.element("workRate").textContent, "0.0%");
 });
 
+test("linked Uber usage backdates the session start when it exceeds non-break elapsed time", () => {
+  const minute = 60000;
+  const now = 1_700_000_000_000;
+  const app = timerHarness({
+    now,
+    enhanced: state({
+      on: true,
+      remainingMs: WORK_LIMIT_MS - 196 * minute,
+      activeMs: 196 * minute,
+      sessionStartAt: now - 185 * minute,
+      lastTickAt: now,
+      updatedAt: now
+    })
+  });
+
+  assert.equal(app.api.getState().sessionStartAt, now - 196 * minute);
+  assert.equal(app.api.sessionElapsedMs(now), 196 * minute);
+  assert.equal(app.api.uberUsedMs(now), 196 * minute);
+  assert.equal(app.element("workUberTime").textContent, "3時間16分");
+  assert.equal(app.element("workElapsedTime").textContent, "3時間16分");
+  assert.equal(app.element("workRate").textContent, "100.0%");
+  assert.equal(JSON.parse(app.storage.getItem(ENHANCED_KEY)).sessionStartAt, now - 196 * minute);
+});
+
+test("session-start reconciliation never moves an already valid start forward", () => {
+  const minute = 60000;
+  const now = 1_700_000_000_000;
+  const originalStartAt = now - 210 * minute;
+  const app = timerHarness({
+    now,
+    enhanced: state({
+      on: true,
+      remainingMs: WORK_LIMIT_MS - 196 * minute,
+      activeMs: 196 * minute,
+      sessionStartAt: originalStartAt,
+      lastTickAt: now,
+      updatedAt: now
+    })
+  });
+
+  assert.equal(app.api.getState().sessionStartAt, originalStartAt);
+  assert.equal(app.api.sessionElapsedMs(now), 210 * minute);
+});
+
+test("live-session reconciliation accounts for a legacy break longer than the original wall time", () => {
+  const hour = 60 * 60000;
+  const now = 1_700_000_000_000;
+  const app = timerHarness({
+    now,
+    enhanced: state({
+      on: true,
+      remainingMs: 0,
+      activeMs: 12 * hour,
+      sessionStartAt: now - 4 * hour,
+      lastTickAt: now,
+      updatedAt: now,
+      breakMs: 40 * hour,
+      breakSegments: [],
+      legacyBreakMs: 40 * hour
+    })
+  });
+
+  assert.equal(app.api.getState().sessionStartAt, now - 52 * hour);
+  assert.equal(app.api.sessionBreakMs(now), 40 * hour);
+  assert.equal(app.api.sessionElapsedMs(now), 12 * hour);
+});
+
 test("history uses canonical consumed time while preserving legacy fallback records", () => {
   const app = timerHarness({ now: 10_000_000 });
   const linked = {
@@ -399,6 +468,52 @@ test("editing a history end time recalculates elapsed time and operation rate on
   assert.equal(original.endedAt, startedAt + 5 * 60 * minute, "the saved object must not be mutated before persistence succeeds");
 });
 
+test("saved history backdates an impossible start without changing its work totals", () => {
+  const minute = 60000;
+  const endedAt = 1_700_000_000_000;
+  const startedAt = endedAt - 185 * minute;
+  const original = {
+    id: "history-inconsistent",
+    date: new Date(startedAt).toISOString(),
+    startedAt,
+    endedAt,
+    usedMs: 196 * minute,
+    uberUsedMs: 196 * minute,
+    otherCompanyMs: 0,
+    breakMs: 0,
+    elapsedMs: 185 * minute,
+    rate: 100
+  };
+
+  const reconciled = timerHarness({ now: endedAt }).api.reconcileHistoryItem(original);
+
+  assert.equal(reconciled.startedAt, endedAt - 196 * minute);
+  assert.equal(reconciled.elapsedMs, 196 * minute);
+  assert.equal(reconciled.usedMs, original.usedMs);
+  assert.equal(reconciled.uberUsedMs, original.uberUsedMs);
+  assert.equal(reconciled.rate, 100);
+  assert.equal(reconciled.date, new Date(endedAt - 196 * minute).toISOString());
+  assert.equal(original.startedAt, startedAt, "history repair must return a new object");
+});
+
+test("history repair also accommodates a legacy break longer than the original wall time", () => {
+  const hour = 60 * 60000;
+  const endedAt = 1_700_000_000_000;
+  const original = {
+    startedAt: endedAt - 4 * hour,
+    endedAt,
+    usedMs: 12 * hour,
+    breakMs: 40 * hour,
+    elapsedMs: 0
+  };
+
+  const reconciled = timerHarness({ now: endedAt }).api.reconcileHistoryItem(original);
+
+  assert.equal(reconciled.startedAt, endedAt - 52 * hour);
+  assert.equal(reconciled.elapsedMs, 12 * hour);
+  assert.equal(reconciled.rate, 100);
+});
+
 test("history end-time editing supports legacy dates and sessions crossing midnight", () => {
   const minute = 60000;
   const startedAt = new Date("2026-07-28T23:30:00+09:00").getTime();
@@ -430,7 +545,8 @@ test("history end-time validation rejects future, pre-start, and break-inconsist
   assert.match(app.api.historyEndEditError(item, now + minute, now), /現在より後/);
   assert.match(app.api.historyEndEditError(item, startedAt, now), /開始日時より後/);
   assert.match(app.api.historyEndEditError(item, startedAt + 39 * minute, now), /休憩時間分/);
-  assert.equal(app.api.historyEndEditError(item, startedAt + 40 * minute, now), "");
+  assert.match(app.api.historyEndEditError(item, startedAt + 40 * minute, now), /記録済みの稼働時間/);
+  assert.equal(app.api.historyEndEditError(item, startedAt + 100 * minute, now), "");
 });
 
 test("normal persistence mirrors enhanced remaining time into regular saved controls", () => {
@@ -510,7 +626,13 @@ test("a stored OFF state inside an active session resumes as an automatic break"
 
 test("the first time ON starts one session and later toggles keep its start", () => {
   const app = timerHarness({ now: 100000 });
-  app.api.setState(state({ on: false, sessionStartAt: null, lastTickAt: 100000 }));
+  app.api.setState(state({
+    on: false,
+    remainingMs: WORK_LIMIT_MS,
+    activeMs: 0,
+    sessionStartAt: null,
+    lastTickAt: 100000
+  }));
 
   app.setNow(200000);
   app.api.enhancedToggleClock();
@@ -522,7 +644,7 @@ test("the first time ON starts one session and later toggles keep its start", ()
   assert.equal(app.api.getState().on, false);
   assert.equal(app.api.getState().breakOn, true);
   assert.equal(app.api.getState().breakStartedAt, 260000);
-  assert.equal(app.api.getState().activeMs, usedMs(540000));
+  assert.equal(app.api.getState().activeMs, 60000);
 
   app.setNow(300000);
   app.api.enhancedToggleClock();
@@ -589,26 +711,29 @@ test("background time is consumed exactly once while the clock is ON", () => {
 });
 
 test("main view adopts an exact compact-clock edit from the storage event", () => {
-  const app = timerHarness({ now: 100000 });
+  const initialNow = 1_700_000_000_000;
+  const externalAt = initialNow + 60000;
+  const expectedStartAt = externalAt - usedMs(321234) - 5 * 60000;
+  const app = timerHarness({ now: initialNow });
   const external = state({
     on: false,
     remainingMs: 321234,
     activeMs: 98765,
-    sessionStartAt: 5000,
+    sessionStartAt: expectedStartAt,
     lastTickAt: undefined,
-    updatedAt: 160000
+    updatedAt: externalAt
   });
   const externalJson = JSON.stringify(external);
 
-  app.setNow(160000);
+  app.setNow(externalAt);
   app.storage.setItem(ENHANCED_KEY, externalJson);
   app.dispatchWindow("storage", { key: ENHANCED_KEY, newValue: externalJson });
 
   assert.equal(app.api.getState().on, false);
   assert.equal(app.api.getState().remainingMs, 321234);
   assert.equal(app.api.getState().activeMs, usedMs(321234));
-  assert.equal(app.api.getState().sessionStartAt, 5000);
-  app.setNow(220000);
+  assert.equal(app.api.getState().sessionStartAt, expectedStartAt);
+  app.setNow(externalAt + 60000);
   app.api.tickClock();
   assert.equal(app.api.getState().remainingMs, 321234, "an imported OFF clock must stay paused");
 });
@@ -666,23 +791,27 @@ test("an explicit edit wins over a newer unpersisted display tick", () => {
 });
 
 test("pageshow reloads a compact edit before resuming a BFCache-restored clock", () => {
-  const app = timerHarness({ now: 100000 });
+  const initialNow = 1_700_000_000_000;
+  const externalAt = initialNow + 50000;
+  const resumedAt = initialNow + 100000;
+  const expectedStartAt = resumedAt - usedMs(250000) - 5 * 60000;
+  const app = timerHarness({ now: initialNow });
   const external = state({
     on: true,
     remainingMs: 300000,
     activeMs: 40000,
-    sessionStartAt: 5000,
+    sessionStartAt: expectedStartAt,
     lastTickAt: undefined,
-    updatedAt: 150000
+    updatedAt: externalAt
   });
 
   app.storage.setItem(ENHANCED_KEY, JSON.stringify(external));
-  app.setNow(200000);
+  app.setNow(resumedAt);
   app.dispatchWindow("pageshow");
 
   assert.equal(app.api.getState().remainingMs, 250000);
   assert.equal(app.api.getState().activeMs, usedMs(250000));
-  assert.equal(app.api.getState().sessionStartAt, 5000);
+  assert.equal(app.api.getState().sessionStartAt, expectedStartAt);
   app.dispatchWindow("pageshow");
   assert.equal(app.api.getState().remainingMs, 250000, "repeated pageshow at the same instant must not double-count");
   assert.equal(app.api.getState().activeMs, usedMs(250000));
@@ -800,6 +929,7 @@ test("manual correction, automatic break, finish, and history keep one linked us
   app.context.adjustRemain(-10);
   assert.equal(app.api.getState().remainingMs, 570 * minute);
   assert.equal(app.api.getState().activeMs, 150 * minute);
+  assert.equal(app.api.getState().sessionStartAt, base - 10 * minute);
   assert.equal(app.api.getState().breakOn, true);
 
   app.setNow(base + 180 * minute);
@@ -816,7 +946,7 @@ test("manual correction, automatic break, finish, and history keep one linked us
   assert.equal(history[0].usedMs, 150 * minute);
   assert.equal(history[0].usageMode, "remaining-v1");
   assert.equal(history[0].activeMs, 150 * minute);
-  assert.equal(history[0].elapsedMs, 140 * minute);
+  assert.equal(history[0].elapsedMs, 150 * minute);
   assert.equal(history[0].breakMs, 40 * minute);
   assert.equal(history[0].rate, 100);
   assert.equal(history[0].actualPaceMinutes, 15);
