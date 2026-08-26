@@ -164,6 +164,27 @@ test("single and double guidance use the same responsive font size", () => {
   );
 });
 
+test("local images referenced by the main stylesheet resolve from its directory", () => {
+  const stylesheet = "styles/main.css";
+  const css = read(stylesheet);
+  const localUrls = [...css.matchAll(/url\(["']([^"']+)["']\)/g)]
+    .map(match => match[1])
+    .filter(value => !/^(?:data:|https?:|\/)/.test(value));
+
+  assert.ok(
+    localUrls.includes("../assets/delivery-scooter.png"),
+    "the single/double guide must reference the delivery scooter relative to styles/main.css"
+  );
+  for (const value of localUrls) {
+    const cleanPath = value.split(/[?#]/)[0];
+    const resolved = path.resolve(ROOT, path.dirname(stylesheet), cleanPath);
+    assert.ok(
+      fs.existsSync(resolved),
+      `${value} must resolve to an existing file from ${stylesheet}`
+    );
+  }
+});
+
 test("the maximum minute-only remaining-time label stays legible and fits from 320px through 440px", () => {
   const source = read("src/session-editors.js");
   const baseColumns = source.match(/\.remainSync\s*\{[^}]*grid-template-columns\s*:\s*([^;]+);[^}]*gap\s*:\s*([^;}]+)/);
