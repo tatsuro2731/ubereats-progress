@@ -176,7 +176,7 @@ test("start-time validation computes the union of overlapping break segments", (
   assert.equal(app.api.breakOverlapMs(100000, 200000), 20500);
 });
 
-test("start-time validation uses linked remaining-clock usage instead of stale GPS active time", () => {
+test("editing a later start time keeps the remaining clock and rebases session usage", () => {
   const minute = 60000;
   const base = 1_700_000_040_000;
   const now = base + 300 * minute;
@@ -207,9 +207,15 @@ test("start-time validation uses linked remaining-clock usage instead of stale G
   const rejected = harness(rejectedState, now);
   rejected.element("startTimeInput").value = localInput(base + 21 * minute);
   rejected.api.applyStartTime();
-  assert.match(rejected.element("startTimeError").textContent, /開始時刻が遅すぎます/);
-  assert.equal(rejectedState.sessionStartAt, base);
-  assert.equal(rejected.values.has(ENHANCED_KEY), false);
+  assert.equal(rejected.element("startTimeError").textContent, "");
+  assert.equal(rejectedState.sessionStartAt, base + 21 * minute);
+  assert.equal(rejectedState.remainingMs, 500 * minute);
+  assert.equal(rejectedState.activeMs, 219 * minute);
+  assert.equal(rejectedState.usageBaselineMs, minute);
+  const saved = JSON.parse(rejected.values.get(ENHANCED_KEY));
+  assert.equal(saved.remainingMs, 500 * minute);
+  assert.equal(saved.activeMs, 219 * minute);
+  assert.equal(saved.usageBaselineMs, minute);
 });
 
 test("editing the start time preserves other-company segments and recalculates their overlap", () => {

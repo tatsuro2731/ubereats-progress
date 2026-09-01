@@ -654,6 +654,53 @@ test("the first time ON starts one session and later toggles keep its start", ()
   assert.equal(app.geolocationRequests(), 0);
 });
 
+test("a new session excludes remaining-clock usage consumed before time ON", () => {
+  const minute = 60000;
+  const app = timerHarness({ now: 100000 });
+  app.api.setState(state({
+    on: false,
+    remainingMs: WORK_LIMIT_MS - 120 * minute,
+    activeMs: 120 * minute,
+    sessionStartAt: null,
+    lastTickAt: 100000
+  }));
+
+  app.setNow(200000);
+  app.api.enhancedToggleClock();
+  assert.equal(app.api.getState().sessionStartAt, 200000);
+  assert.equal(app.api.getState().usageBaselineMs, 120 * minute);
+  assert.equal(app.api.getState().activeMs, 0);
+
+  app.setNow(200000 + 10 * minute);
+  app.api.tickClock();
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - 130 * minute);
+  assert.equal(app.api.getState().activeMs, 10 * minute);
+  assert.equal(app.api.getState().sessionStartAt, 200000);
+});
+
+test("raising remaining time does not discard the session usage baseline", () => {
+  const minute = 60000;
+  const now = 200000;
+  const app = timerHarness({ now });
+  app.api.setState(state({
+    on: true,
+    remainingMs: WORK_LIMIT_MS - 120 * minute,
+    usageBaselineMs: 120 * minute,
+    activeMs: 0,
+    sessionStartAt: now,
+    lastTickAt: now
+  }));
+
+  app.api.setExactRemaining(660);
+  assert.equal(app.api.getState().usageBaselineMs, 120 * minute);
+  assert.equal(app.api.getState().activeMs, 0);
+
+  app.setNow(now + 70 * minute);
+  app.api.tickClock();
+  assert.equal(app.api.getState().usageBaselineMs, 120 * minute);
+  assert.equal(app.api.getState().activeMs, 10 * minute);
+});
+
 test("a break cannot start before the work session has started", () => {
   const app = timerHarness({ now: 100000 });
   app.api.setState(state({

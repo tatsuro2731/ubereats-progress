@@ -30,8 +30,16 @@
   let historyEndEditorState = null;
 
   function nowMs() { return Date.now(); }
-  function clockUsedMs(remainingMs = clockState.remainingMs) {
+  function totalClockUsedMs(remainingMs = clockState.remainingMs) {
     return usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
+  }
+
+  function usageBaselineMs(remainingMs = clockState.remainingMs) {
+    return clamp(finite(clockState && clockState.usageBaselineMs, 0), 0, WORK_LIMIT_MS);
+  }
+
+  function clockUsedMs(remainingMs = clockState.remainingMs) {
+    return Math.max(0, totalClockUsedMs(remainingMs) - usageBaselineMs(remainingMs));
   }
 
   function syncClockUsage() {
@@ -43,6 +51,8 @@
   function defaultEnhancedState() {
     const now = nowMs();
     const remainingMs = Math.max(0, legacyRemain * 60000);
+    const startsSession = Boolean(clockState && clockState.on);
+    const initialBaselineMs = startsSession ? usedMsFromRemaining(remainingMs, WORK_LIMIT_MS) : 0;
     return {
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
@@ -52,8 +62,9 @@
       baseAt: now,
       lastTickAt: now,
       moving: false,
-      activeMs: clockUsedMs(remainingMs),
-      sessionStartAt: clockState && clockState.on ? now : null,
+      activeMs: Math.max(0, usedMsFromRemaining(remainingMs, WORK_LIMIT_MS) - initialBaselineMs),
+      usageBaselineMs: initialBaselineMs,
+      sessionStartAt: startsSession ? now : null,
       sessionEndedAt: null,
       breakOn: false,
       breakStartedAt: null,
@@ -109,6 +120,8 @@
     const otherCompanyStartedAt = otherCompanyOn ? finite(data && data.otherCompanyStartedAt, stateAt) : null;
     const otherCompanyStateAt = !clockOn && breakOn ? breakStartedAt : stateAt;
     const hasOtherCompanySegments = Boolean(data && Array.isArray(data.otherCompanySegments));
+    const rawUsedMs = usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
+    const usageBaselineMs = clamp(finite(data && data.usageBaselineMs, 0), 0, WORK_LIMIT_MS);
     return {
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
@@ -118,7 +131,8 @@
       baseAt: now,
       lastTickAt: resumeAt,
       moving: false,
-      activeMs: clockUsedMs(remainingMs),
+      activeMs: Math.max(0, rawUsedMs - usageBaselineMs),
+      usageBaselineMs,
       sessionStartAt,
       sessionEndedAt,
       breakOn,
@@ -188,6 +202,7 @@
       on: clockState.on,
       remainingMs: clockState.remainingMs,
       activeMs: clockState.activeMs,
+      usageBaselineMs: usageBaselineMs(),
       sessionStartAt: clockState.sessionStartAt,
       sessionEndedAt: clockState.sessionEndedAt || null,
       breakOn: clockState.breakOn,
@@ -415,7 +430,10 @@
     } else {
       closeActiveBreak(now);
       clockState.on = true;
-      if (!clockState.sessionStartAt) clockState.sessionStartAt = now;
+      if (!clockState.sessionStartAt) {
+        clockState.sessionStartAt = now;
+        clockState.usageBaselineMs = totalClockUsedMs();
+      }
     }
     clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
     clockState.backgroundGap = null;
@@ -446,7 +464,10 @@
     if (clockState.sessionEndedAt || !clockState.on) return;
     tickClock();
     const now = nowMs();
-    if (!clockState.sessionStartAt) clockState.sessionStartAt = now;
+    if (!clockState.sessionStartAt) {
+      clockState.sessionStartAt = now;
+      clockState.usageBaselineMs = totalClockUsedMs();
+    }
     closeActiveBreak(now);
     if (!Array.isArray(clockState.otherCompanySegments)) clockState.otherCompanySegments = [];
     if (clockState.otherCompanyOn) {
@@ -614,7 +635,7 @@
     const storedUsed = finite(item && item.usedMs, NaN);
     if (Number.isFinite(storedUsed) && storedUsed >= 0) return clamp(storedUsed, 0, WORK_LIMIT_MS);
     const remainingMs = finite(item && item.remainingMs, NaN);
-    if (Number.isFinite(remainingMs) && remainingMs >= 0) return clockUsedMs(remainingMs);
+    if (Number.isFinite(remainingMs) && remainingMs >= 0) return usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
     return clamp(finite(item && item.activeMs, 0), 0, WORK_LIMIT_MS);
   }
 
@@ -1192,6 +1213,7 @@
       lastTickAt: now,
       moving: false,
       activeMs: 0,
+      usageBaselineMs: 0,
       sessionStartAt: null,
       sessionEndedAt: null,
       breakOn: false,

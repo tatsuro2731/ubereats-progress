@@ -18,8 +18,16 @@
   const $id = id => document.getElementById(id);
   let breakEditorInitialMinutes = null;
 
-  function clockUsedMs(remainingMs) {
+  function totalClockUsedMs(remainingMs) {
     return usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
+  }
+
+  function usageBaselineMs(remainingMs) {
+    return Math.max(0, Math.min(finite(clockState && clockState.usageBaselineMs, 0), WORK_LIMIT_MS));
+  }
+
+  function clockUsedMs(remainingMs) {
+    return Math.max(0, totalClockUsedMs(remainingMs) - usageBaselineMs(remainingMs));
   }
 
   function breakOverlapMs(startAt, endAt = Date.now()) {
@@ -73,6 +81,7 @@
       on: Boolean(clockState.on),
       remainingMs,
       activeMs: clockState.activeMs,
+      usageBaselineMs: usageBaselineMs(remainingMs),
       sessionStartAt: clockState.sessionStartAt || null,
       sessionEndedAt: clockState.sessionEndedAt || null,
       breakOn: Boolean(clockState.breakOn),
@@ -157,8 +166,7 @@
     const activeMs = clockUsedMs(remainingMs);
     const elapsedMs = Math.max(0, now - timestamp - breakOverlapMs(timestamp, now));
     if (activeMs > elapsedMs) {
-      error.textContent = "開始時刻が遅すぎます。記録済みの稼働時間を収められません。";
-      return;
+      clockState.usageBaselineMs = Math.min(WORK_LIMIT_MS, usageBaselineMs(remainingMs) + activeMs - elapsedMs);
     }
     clockState.sessionStartAt = timestamp;
     saveEnhancedState();
