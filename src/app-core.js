@@ -41,11 +41,16 @@
     return clamp(limit - remaining, 0, limit);
   }
 
+  function sessionUsedMsFromRemaining(remainingMs, baselineMs = 0) {
+    return Math.max(0, usedMsFromRemaining(remainingMs) - clamp(finite(baselineMs, 0), 0, CONFIG.workLimitMs));
+  }
+
   function calculateProgress({
     target,
     done,
     currentRemainingMinutes,
     effectiveRemainingMinutes = currentRemainingMinutes,
+    actualUsedMinutes,
     workLimitMinutes = CONFIG.workLimitMinutes
   }) {
     const normalizedTarget = Math.max(1, finite(target, 1));
@@ -55,19 +60,20 @@
     const workLimit = Math.max(0, finite(workLimitMinutes, CONFIG.workLimitMinutes));
     const remainingOrders = Math.max(normalizedTarget - normalizedDone, 0);
     const usedMinutes = Math.max(0, workLimit - currentRemaining);
+    const measuredUsedMinutes = clamp(finite(actualUsedMinutes, usedMinutes), 0, usedMinutes);
     const availableBudgetMinutes = usedMinutes + effectiveRemaining;
     const targetPaceMinutes = availableBudgetMinutes / normalizedTarget;
     const requiredMinutes = remainingOrders * targetPaceMinutes;
     const slackMinutes = effectiveRemaining - requiredMinutes;
     const neededPaceMinutes = remainingOrders > 0 ? effectiveRemaining / remainingOrders : 0;
-    const actualPaceMinutes = normalizedDone > 0 && usedMinutes > 0 ? usedMinutes / normalizedDone : NaN;
+    const actualPaceMinutes = normalizedDone > 0 && measuredUsedMinutes > 0 ? measuredUsedMinutes / normalizedDone : NaN;
     const minutesToTarget = Number.isFinite(actualPaceMinutes) ? actualPaceMinutes * remainingOrders : NaN;
     const completionRate = clamp(normalizedDone / normalizedTarget * 100, 0, 100);
     const attainableCount = Number.isFinite(actualPaceMinutes) && actualPaceMinutes > 0
       ? normalizedDone + Math.floor(effectiveRemaining / actualPaceMinutes)
       : NaN;
     const projectedCount = Number.isFinite(actualPaceMinutes) && actualPaceMinutes > 0
-      ? availableBudgetMinutes / actualPaceMinutes
+      ? normalizedDone + effectiveRemaining / actualPaceMinutes
       : NaN;
     const scheduledDoneNow = targetPaceMinutes > 0 ? usedMinutes / targetPaceMinutes : 0;
 
@@ -78,6 +84,7 @@
       currentRemainingMinutes: currentRemaining,
       effectiveRemainingMinutes: effectiveRemaining,
       usedMinutes,
+      actualUsedMinutes: measuredUsedMinutes,
       availableBudgetMinutes,
       targetPaceMinutes,
       requiredMinutes,
@@ -192,6 +199,18 @@
     return Math.max(0, total);
   }
 
+  function breakDurationMs(state, startAt, endAt = Date.now()) {
+    if (!state) return 0;
+    const hasSegments = Array.isArray(state.breakSegments);
+    const segments = hasSegments ? state.breakSegments : [];
+    const legacyMs = Math.max(0, finite(state.legacyBreakMs, 0), hasSegments ? 0 : finite(state.breakMs, 0));
+    const excludedMs = clamp(finite(state.legacyBreakExcludedMs, 0), 0, legacyMs);
+    const ranges = !segments.length && state.breakOn && state.breakStartedAt
+      ? [{ startAt: state.breakStartedAt, endAt: null }]
+      : segments;
+    return legacyMs - excludedMs + overlapDurationMs(ranges, startAt, endAt);
+  }
+
   function normalizeSegments(value, { active = false, activeStartedAt = null, at = Date.now(), maxSegments = 200 } = {}) {
     const normalizedAt = finite(at, Date.now());
     const segments = (Array.isArray(value) ? value : []).map(segment => {
@@ -243,12 +262,14 @@
     finite,
     clamp,
     usedMsFromRemaining,
+    sessionUsedMsFromRemaining,
     calculateProgress,
     progressTone,
     clockLabel,
     resolveEndLimit,
     activeConstraint,
     overlapDurationMs,
+    breakDurationMs,
     normalizeSegments,
     formatDurationMs,
     toLocalMinuteInputValue,

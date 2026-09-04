@@ -4,11 +4,13 @@
   const {
     CONFIG,
     STORAGE_KEYS,
+    breakDurationMs,
     clamp,
     finite,
     formatDurationMs,
     normalizeSegments,
     overlapDurationMs,
+    sessionUsedMsFromRemaining,
     timestamp,
     toLocalMinuteInputValue: coreToLocalMinuteInputValue,
     usedMsFromRemaining
@@ -39,7 +41,7 @@
   }
 
   function clockUsedMs(remainingMs = clockState.remainingMs) {
-    return Math.max(0, totalClockUsedMs(remainingMs) - usageBaselineMs(remainingMs));
+    return sessionUsedMsFromRemaining(remainingMs, usageBaselineMs(remainingMs));
   }
 
   function syncClockUsage() {
@@ -71,6 +73,7 @@
       breakMs: 0,
       breakSegments: [],
       legacyBreakMs: 0,
+      legacyBreakExcludedMs: 0,
       otherCompanyOn: false,
       otherCompanyStartedAt: null,
       otherCompanyMs: 0,
@@ -140,6 +143,7 @@
       breakMs: Math.max(0, finite(data && data.breakMs, 0)),
       breakSegments: normalizeBreakSegments(data && data.breakSegments, breakOn, breakStartedAt, stateAt),
       legacyBreakMs: hasBreakSegments ? Math.max(0, finite(data && data.legacyBreakMs, 0)) : Math.max(0, finite(data && data.breakMs, 0)),
+      legacyBreakExcludedMs: Math.max(0, finite(data && data.legacyBreakExcludedMs, 0)),
       otherCompanyOn,
       otherCompanyStartedAt,
       otherCompanyMs: Math.max(0, finite(data && data.otherCompanyMs, 0)),
@@ -213,6 +217,7 @@
         endAt: segment.endAt === null ? null : segment.endAt
       })) : [],
       legacyBreakMs: Math.max(0, finite(clockState.legacyBreakMs, 0)),
+      legacyBreakExcludedMs: Math.max(0, finite(clockState.legacyBreakExcludedMs, 0)),
       otherCompanyOn: Boolean(clockState.otherCompanyOn),
       otherCompanyStartedAt: clockState.otherCompanyStartedAt || null,
       otherCompanyMs: Math.max(0, finite(clockState.otherCompanyMs, 0)),
@@ -308,8 +313,7 @@
   function sessionBreakMs(at = nowMs()) {
     at = sessionMetricAt(at);
     const sessionStart = clockState.sessionStartAt ? finite(clockState.sessionStartAt, at) : at;
-    const segmentMs = overlapDurationMs(clockState.breakSegments, sessionStart, at);
-    return Math.max(0, finite(clockState.legacyBreakMs, 0)) + segmentMs;
+    return breakDurationMs(clockState, sessionStart, at);
   }
 
   function segmentDurationMs(segments, at = nowMs()) {
@@ -812,14 +816,14 @@
       return;
     }
     const item = items[targetIndex];
+    if (input.value === toLocalMinuteInputValue(state.initialAt)) {
+      closeHistoryEndEditor();
+      return;
+    }
     const endedAt = historyTimestamp(input.value, NaN);
     const validationError = historyEndEditError(item, endedAt);
     if (validationError) {
       error.textContent = validationError;
-      return;
-    }
-    if (input.value === toLocalMinuteInputValue(state.initialAt)) {
-      closeHistoryEndEditor();
       return;
     }
     items[targetIndex] = recalculateHistoryEnd(item, endedAt);
@@ -1221,6 +1225,7 @@
       breakMs: 0,
       breakSegments: [],
       legacyBreakMs: 0,
+      legacyBreakExcludedMs: 0,
       otherCompanyOn: false,
       otherCompanyStartedAt: null,
       otherCompanyMs: 0,

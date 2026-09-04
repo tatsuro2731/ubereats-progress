@@ -63,6 +63,22 @@ test("an earlier end limit changes only the effective delivery budget", () => {
   assert.equal(result.neededPaceMinutes, 10);
 });
 
+test("edited work changes actual forecasts while preserving progress and end-limit formulas", () => {
+  const inputs = { target: 40, done: 20, currentRemainingMinutes: 480, effectiveRemainingMinutes: 60 };
+  const original = calculateProgress(inputs);
+  const edited = calculateProgress({ ...inputs, actualUsedMinutes: 120 });
+  for (const key of ["usedMinutes", "availableBudgetMinutes", "targetPaceMinutes", "requiredMinutes", "slackMinutes", "neededPaceMinutes", "completionRate", "scheduledDoneNow"]) {
+    assert.equal(edited[key], original[key], `${key} must retain the existing delivery-budget meaning`);
+  }
+  assert.equal(edited.actualPaceMinutes, 6);
+  assert.equal(edited.minutesToTarget, 120);
+  assert.equal(edited.attainableCount, 30);
+  assert.equal(edited.projectedCount, 30);
+  const unmeasured = calculateProgress({ ...inputs, actualUsedMinutes: 0 });
+  assert.ok(Number.isNaN(unmeasured.actualPaceMinutes));
+  assert.ok(Number.isNaN(unmeasured.projectedCount));
+});
+
 test("progress tone keeps 18 minutes orange and changes at 19", () => {
   assert.equal(progressTone(-18, 10), "late");
   assert.equal(progressTone(-19, 10), "bad");

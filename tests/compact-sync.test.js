@@ -133,6 +133,33 @@ test("a fresh compact visit starts at zero deliveries with the full 12 hours", (
   assert.equal(saved.remainM, "0");
 });
 
+test("compact edits and goal stopping preserve corrected session work and break exclusions", () => {
+  const minute = 60000;
+  const now = new Date(2026, 8, 4, 14, 0).getTime();
+  const enhanced = {
+    countMode: COUNT_MODE, usageMode: USAGE_MODE, on: true,
+    remainingMs: 480 * minute, activeMs: 120 * minute, usageBaselineMs: 120 * minute,
+    sessionStartAt: now - 120 * minute, updatedAt: now,
+    breakOn: false, breakSegments: [], legacyBreakMs: 60 * minute, legacyBreakExcludedMs: 60 * minute
+  };
+  const app = runCompact({
+    [DATA_KEY]: JSON.stringify({ target: "40", done: "20", remainH: "8", remainM: "0" }),
+    [ENHANCED_KEY]: JSON.stringify(enhanced)
+  }, now);
+  app.element("remainM").value = "1";
+  app.element("remainM").dispatch("change");
+  const edited = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(edited.activeMs, 119 * minute);
+  assert.equal(edited.usageBaselineMs, 120 * minute);
+  assert.equal(edited.legacyBreakExcludedMs, 60 * minute);
+  app.element("done").value = "40";
+  app.element("done").dispatch("change");
+  const stopped = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(stopped.activeMs, 119 * minute);
+  assert.equal(stopped.legacyBreakExcludedMs, 60 * minute);
+  assert.equal(stopped.on, false);
+});
+
 test("compact delay tone stays orange through 18 minutes and turns red at 19", () => {
   const app = runCompact();
   app.element("target").value = "40";
@@ -492,6 +519,9 @@ test("ended sessions reject compact time edits until reset", () => {
     activeMs: (3 * 60 + 45) * 60000,
     sessionStartAt: 10000,
     sessionEndedAt: 90000,
+    usageBaselineMs: 60000,
+    legacyBreakMs: 1000,
+    legacyBreakExcludedMs: 1000,
     breakOn: false,
     otherCompanyOn: false,
     otherCompanyStartedAt: null,
@@ -526,6 +556,8 @@ test("ended sessions reject compact time edits until reset", () => {
   assert.equal(reset.on, false);
   assert.equal(reset.sessionStartAt, null);
   assert.equal(reset.sessionEndedAt, null);
+  assert.equal(reset.usageBaselineMs, 0);
+  assert.equal(reset.legacyBreakExcludedMs, 0);
   assert.equal(reset.otherCompanyOn, false);
   assert.equal(reset.otherCompanyStartedAt, null);
   assert.equal(reset.otherCompanyMs, 0);

@@ -4,10 +4,12 @@
   const {
     CONFIG,
     STORAGE_KEYS,
+    breakDurationMs,
     finite,
     overlapDurationMs,
     timestamp,
     toLocalMinuteInputValue,
+    sessionUsedMsFromRemaining,
     usedMsFromRemaining
   } = UberProgressCore;
   const ENHANCED_CLOCK_KEY = STORAGE_KEYS.enhancedClock;
@@ -27,21 +29,11 @@
   }
 
   function clockUsedMs(remainingMs) {
-    return Math.max(0, totalClockUsedMs(remainingMs) - usageBaselineMs(remainingMs));
+    return sessionUsedMsFromRemaining(remainingMs, usageBaselineMs(remainingMs));
   }
 
   function breakOverlapMs(startAt, endAt = Date.now()) {
-    if (!clockState) return 0;
-    const windowMs = Math.max(0, endAt - startAt);
-    if (!Array.isArray(clockState.breakSegments) || !clockState.breakSegments.length) {
-      const stored = Math.max(0, finite(clockState.breakMs, 0), finite(clockState.legacyBreakMs, 0));
-      if (!clockState.breakOn || !clockState.breakStartedAt) return Math.min(windowMs, stored);
-      const currentStart = Math.max(startAt, finite(clockState.breakStartedAt, endAt));
-      return Math.min(windowMs, stored + Math.max(0, endAt - currentStart));
-    }
-    const total = overlapDurationMs(clockState.breakSegments, startAt, endAt);
-    const legacyFallback = Math.max(0, finite(clockState.legacyBreakMs, 0));
-    return Math.min(windowMs, legacyFallback + total);
+    return breakDurationMs(clockState, startAt, endAt);
   }
 
   function otherCompanyOverlapMs(startAt, endAt = Date.now()) {
@@ -92,6 +84,7 @@
         endAt: segment.endAt === null ? null : segment.endAt
       })) : undefined,
       legacyBreakMs: Math.max(0, finite(clockState.legacyBreakMs, 0)),
+      legacyBreakExcludedMs: Math.max(0, finite(clockState.legacyBreakExcludedMs, 0)),
       otherCompanyOn: Boolean(clockState.otherCompanyOn),
       otherCompanyStartedAt: clockState.otherCompanyStartedAt || null,
       otherCompanyMs: Math.max(0, finite(clockState.otherCompanyMs, 0)),
@@ -163,11 +156,14 @@
     }
     if (typeof remain === "function") remain();
     const remainingMs = Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000));
-    const activeMs = clockUsedMs(remainingMs);
-    const elapsedMs = Math.max(0, now - timestamp - breakOverlapMs(timestamp, now));
-    if (activeMs > elapsedMs) {
-      clockState.usageBaselineMs = Math.min(WORK_LIMIT_MS, usageBaselineMs(remainingMs) + activeMs - elapsedMs);
-    }
+    const windowMs = Math.max(0, now - timestamp);
+    // Retain the original manual total so an earlier start can restore it.
+    // Freeze the excluded part at the edit, rather than letting it grow on each tick.
+    const originalBreakMs = breakDurationMs({ ...clockState, legacyBreakExcludedMs: 0 }, timestamp, now);
+    clockState.legacyBreakExcludedMs = Math.max(0, originalBreakMs - windowMs);
+    const elapsedMs = Math.max(0, windowMs - breakOverlapMs(timestamp, now));
+    // A manual start replaces the previous estimate in either direction, including v59 data.
+    clockState.usageBaselineMs = Math.max(0, totalClockUsedMs(remainingMs) - elapsedMs);
     clockState.sessionStartAt = timestamp;
     saveEnhancedState();
     closeEditor();
@@ -224,6 +220,7 @@
 
     const continues = Boolean(clockState.breakOn);
     clockState.legacyBreakMs = desiredMs;
+    clockState.legacyBreakExcludedMs = 0;
     clockState.breakMs = desiredMs;
     clockState.breakSegments = continues ? [{ startAt: at, endAt: null }] : [];
     clockState.breakStartedAt = continues ? at : null;

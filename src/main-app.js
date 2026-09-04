@@ -4,6 +4,7 @@ const {
   activeConstraint: resolveActiveConstraint,
   calculateProgress,
   progressTone,
+  sessionUsedMsFromRemaining,
   resolveEndLimit
 } = UberProgressCore;
 const WORK_LIMIT_MINUTES = CONFIG.workLimitMinutes;
@@ -883,6 +884,9 @@ function calc() {
     done,
     currentRemainingMinutes: currentRemain,
     effectiveRemainingMinutes: active.m,
+    actualUsedMinutes: clockState.sessionStartAt
+      ? sessionUsedMsFromRemaining(clockState.remainingMs, clockState.usageBaselineMs) / 60000
+      : undefined,
     workLimitMinutes: WORK_LIMIT_MINUTES
   });
   const left = progress.remainingOrders;
@@ -890,7 +894,7 @@ function calc() {
   if (left === 0 && wasCounting) stopClock(currentRemain);
 
   const effectiveRemain = active.m;
-  const used = progress.usedMinutes;
+  const used = progress.actualUsedMinutes;
   const targetPace = progress.targetPaceMinutes;
   const margin = progress.slackMinutes;
   const neededPace = progress.neededPaceMinutes;
@@ -1053,5 +1057,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=59").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=60").catch(() => {}));
 }

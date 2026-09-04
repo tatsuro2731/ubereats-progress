@@ -264,7 +264,7 @@ test("the enhanced timer is continuous while ON and never requests location", ()
   assert.match(enhancements, /id="workUberTime">0時間00分<\/strong>/);
   assert.match(enhancements, /id="workOtherCompanyTime">0時間00分<\/strong>/);
   assert.match(enhancements, /他社稼働中も残り時間をカウントしています/);
-  assert.match(compact, /activeMs:\s*usedMsFromRemaining\(remainingMs\)/);
+  assert.match(compact, /activeMs:\s*sessionUsedMsFromRemaining\(remainingMs,\s*data\.usageBaselineMs\)/);
   assert.doesNotMatch(enhancements, /navigator\.geolocation|watchPosition|clearWatch/);
   assert.doesNotMatch(enhancements, /GPS|位置情報/);
   assert.match(enhancements, /案件の有無や移動状態は自動判定しません/);

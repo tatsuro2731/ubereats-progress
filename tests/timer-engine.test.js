@@ -32,6 +32,7 @@ class FakeElement {
     this.dataset = {};
     this.firstChild = { nodeValue: "" };
     this.style = {};
+    this.parentElement = { style: {} };
     this.classList = { add() {}, remove() {}, toggle() {} };
   }
   appendChild() {}
@@ -78,6 +79,8 @@ function instrumentedSource() {
     reconcileHistoryItem,
     historyEndEditError,
     recalculateHistoryEnd,
+    openHistoryEndEditor,
+    applyHistoryEndEdit,
     getState: () => clockState,
     setState: value => { clockState = value; }
   };
@@ -188,15 +191,23 @@ function timerHarness(options = {}) {
     },
     adjustRemain() {}
   });
+  if (options.fullMain) {
+    const mainSource = fs.readFileSync(path.join(ROOT, "src/main-app.js"), "utf8");
+    vm.runInContext(mainSource.replace("\nsetup();", ""), context, { filename: "src/main-app.js" });
+    vm.runInContext('cards = ["remaining", "eta", "actualPace", "need", "safe", "project12"];', context);
+  }
   vm.runInContext(instrumentedSource(), context, { filename: "src/session-engine.js" });
+  const editorSource = fs.readFileSync(path.join(ROOT, "src/session-editors.js"), "utf8");
+  const editorCloseAt = editorSource.lastIndexOf("})();");
   vm.runInContext(
-    fs.readFileSync(path.join(ROOT, "src/session-editors.js"), "utf8"),
+    editorSource.slice(0, editorCloseAt) + '\n globalThis.__editorTestApi = { applyStartTime, setBreakDuration };\n' + editorSource.slice(editorCloseAt),
     context,
     { filename: "src/session-editors.js" }
   );
 
   return {
     api: context.__timerTestApi,
+    editor: context.__editorTestApi,
     context,
     storage,
     confirmMessages,
@@ -237,6 +248,105 @@ function state(overrides = {}) {
     ...overrides
   };
 }
+
+function editSessionStart(app, at) {
+  app.element("startTimeInput").value = require("../src/app-core.js").toLocalMinuteInputValue(at);
+  app.editor.applyStartTime();
+  assert.equal(app.element("startTimeError").textContent, "");
+}
+
+test("repeated start edits restore work after reload without altering the remaining clock", () => {
+  const minute = 60000;
+  const start = new Date(2026, 8, 4, 10, 0).getTime();
+  const now = start + 240 * minute;
+  const app = timerHarness({ now, enhanced: state({ remainingMs: 480 * minute, sessionStartAt: start, updatedAt: now }) });
+  editSessionStart(app, start + 120 * minute);
+  assert.equal(app.api.clockUsedMs(), 120 * minute);
+  const saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  const restored = timerHarness({ now, enhanced: saved });
+  editSessionStart(restored, start);
+  assert.equal(restored.api.clockUsedMs(), 240 * minute);
+  assert.equal(restored.api.operationRate(), 100);
+  assert.equal(restored.api.getState().remainingMs, 480 * minute);
+  assert.equal(restored.api.sessionSnapshot(now).usedMs, 240 * minute);
+});
+
+test("a later start remains selected after a corrected break, reload, and resumed work", () => {
+  const minute = 60000;
+  const start = new Date(2026, 8, 4, 8, 0).getTime();
+  const correctedAt = start + 300 * minute;
+  const app = timerHarness({ now: correctedAt, enhanced: state({
+    on: false, remainingMs: 540 * minute, sessionStartAt: start, updatedAt: correctedAt,
+    breakOn: true, breakStartedAt: start + 180 * minute,
+    breakSegments: [{ startAt: start + 180 * minute, endAt: null }]
+  }) });
+  assert.equal(app.editor.setBreakDuration(60 * minute, correctedAt).ok, true);
+  app.setNow(correctedAt + 60 * minute);
+  const selected = correctedAt + 30 * minute;
+  editSessionStart(app, selected);
+  app.api.tickClock();
+  assert.equal(app.api.getState().sessionStartAt, selected);
+  assert.equal(app.api.sessionBreakMs(), 30 * minute);
+  assert.equal(app.api.clockUsedMs(), 0);
+  const restored = timerHarness({ now: app.now(), enhanced: JSON.parse(app.storage.getItem(ENHANCED_KEY)) });
+  restored.api.enhancedToggleClock();
+  restored.setNow(restored.now() + 10 * minute);
+  restored.api.tickClock();
+  assert.equal(restored.api.getState().sessionStartAt, selected);
+  assert.equal(restored.api.sessionBreakMs(), 30 * minute);
+  assert.equal(restored.api.clockUsedMs(), 10 * minute);
+  assert.equal(restored.api.operationRate(), 100);
+  editSessionStart(restored, start);
+  assert.equal(restored.api.sessionBreakMs(), 120 * minute, "moving back restores the original manual break total");
+  assert.equal(restored.api.clockUsedMs(), 190 * minute);
+});
+
+test("main pace, forecast, achievement summary and history use the same edited work time", () => {
+  const minute = 60000;
+  const start = new Date(2026, 8, 4, 10, 0).getTime();
+  const now = start + 240 * minute;
+  const app = timerHarness({ now, fullMain: true,
+    enhanced: state({ remainingMs: 480 * minute, sessionStartAt: start, updatedAt: now }),
+    regular: { target: "40", done: "20", remainH: "8", remainM: "0" }
+  });
+  editSessionStart(app, start + 120 * minute);
+  assert.match(app.element("metrics").innerHTML, /6\.0分/);
+  assert.match(app.element("metrics").innerHTML, /16:00予測/);
+  assert.match(app.element("metrics").innerHTML, /100\.0件/);
+  assert.equal(app.element("mainValue").textContent, "2時間0分余裕", "12-hour progress must stay unchanged");
+  assert.equal(app.api.sessionSnapshot(now).actualPaceMinutes, 6);
+  app.element("target").value = "20";
+  app.context.calc();
+  assert.equal(app.element("todaySummaryWork").textContent, "2時間00分");
+  assert.equal(app.element("todaySummaryPace").textContent, "6.00分/件");
+  assert.equal(app.api.getState().on, false);
+  app.api.finishSession();
+  const entry = JSON.parse(app.storage.getItem(HISTORY_KEY))[0];
+  assert.equal(entry.usedMs, 120 * minute);
+  assert.equal(entry.actualPaceMinutes, 6);
+});
+
+test("saving an unchanged history end retains its original seconds and closes the editor", () => {
+  const minute = 60000;
+  const start = new Date(2026, 8, 4, 10, 0).getTime();
+  const end = start + 240 * minute + 30000;
+  const app = timerHarness({ now: end, enhanced: state({
+    remainingMs: 480 * minute - 30000, sessionStartAt: start, updatedAt: end
+  }) });
+  app.api.finishSession();
+  const before = app.storage.getItem(HISTORY_KEY);
+  app.element("historyEndEditorLayer").hidden = true;
+  app.api.openHistoryEndEditor(0, null);
+  app.api.applyHistoryEndEdit();
+  assert.equal(app.element("historyEndError").textContent, "");
+  assert.equal(app.element("historyEndEditorLayer").hidden, true);
+  assert.equal(app.storage.getItem(HISTORY_KEY), before);
+  app.api.openHistoryEndEditor(0, null);
+  app.element("historyEndInput").value = require("../src/app-core.js").toLocalMinuteInputValue(end - minute);
+  app.api.applyHistoryEndEdit();
+  assert.match(app.element("historyEndError").textContent, /終了日時が早すぎます/);
+  assert.equal(app.storage.getItem(HISTORY_KEY), before);
+});
 
 test("±1 minute keeps the existing seconds exactly", () => {
   const initial = state({ on: false, remainingMs: 10 * 60000 + 30500, lastTickAt: 1_000_000 });
@@ -1036,6 +1146,7 @@ test("reset clears every timer, break, and background field in memory and storag
     breakMs: 50000,
     breakSegments: [{ startAt: 250000, endAt: null }],
     legacyBreakMs: 2000,
+    legacyBreakExcludedMs: 1000,
     backgroundGap: { hiddenAt: 290000, movingBefore: true, activeMsAtHidden: 99999, resumeAt: null },
     lastBackfillMs: 3000,
     lastBackfillAt: 295000
@@ -1053,6 +1164,7 @@ test("reset clears every timer, break, and background field in memory and storag
   assert.equal(reset.breakOn, false);
   assert.equal(reset.breakStartedAt, null);
   assert.equal(reset.breakMs, 0);
+  assert.equal(reset.legacyBreakExcludedMs, 0);
   assert.equal(reset.breakSegments.length, 0);
   assert.equal(reset.otherCompanyOn, false);
   assert.equal(reset.otherCompanyStartedAt, null);
@@ -1068,6 +1180,7 @@ test("reset clears every timer, break, and background field in memory and storag
   assert.equal(persisted.remainingMs, 720 * 60000);
   assert.equal(persisted.activeMs, 0);
   assert.deepEqual(persisted.breakSegments, []);
+  assert.equal(persisted.legacyBreakExcludedMs, 0);
   assert.equal(persisted.otherCompanyOn, false);
   assert.deepEqual(persisted.otherCompanySegments, []);
   assert.equal(persisted.backgroundGap, null);

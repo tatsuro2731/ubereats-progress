@@ -4,7 +4,7 @@ const {
   calculateProgress,
   overlapDurationMs,
   progressTone,
-  usedMsFromRemaining: coreUsedMsFromRemaining
+  sessionUsedMsFromRemaining
 } = UberProgressCore;
 const LIMIT_MINUTES = CONFIG.workLimitMinutes;
 const ORANGE_DELAY_LIMIT_MINUTES = CONFIG.orangeDelayLimitMinutes;
@@ -14,7 +14,6 @@ const LEGACY_CLOCK_KEY = STORAGE_KEYS.legacyClock;
 const ENHANCED_CLOCK_KEY = STORAGE_KEYS.enhancedClock;
 const COUNT_MODE = CONFIG.countMode;
 const USAGE_MODE = CONFIG.usageMode;
-const LIMIT_MS = CONFIG.workLimitMs;
 const PACE_MODE_KEY_PREFIX = STORAGE_KEYS.paceModePrefix;
 const $ = (id) => document.getElementById(id);
 
@@ -44,10 +43,6 @@ function setDefaultValues() {
 function n(id) {
   const value = parseFloat($(id).value);
   return Number.isFinite(value) ? value : 0;
-}
-
-function usedMsFromRemaining(remainingMs) {
-  return coreUsedMsFromRemaining(remainingMs, LIMIT_MS);
 }
 
 function fmtMinutes(mins) {
@@ -134,7 +129,7 @@ function effectiveEnhancedClock(enhanced, now = Date.now()) {
   const remainingMs = enhanced.remainingMs - consumedMs;
   return {
     remainingMs,
-    activeMs: usedMsFromRemaining(remainingMs),
+    activeMs: sessionUsedMsFromRemaining(remainingMs, data.usageBaselineMs),
     exhausted: Boolean(counting && consumedMs >= enhanced.remainingMs)
   };
 }
@@ -179,7 +174,7 @@ function migrateEnhancedClock(enhanced, now = Date.now()) {
     on: flags.on,
     remainingMs: enhanced.remainingMs,
     moving: false,
-    activeMs: usedMsFromRemaining(enhanced.remainingMs),
+    activeMs: sessionUsedMsFromRemaining(enhanced.remainingMs, enhanced.data.usageBaselineMs),
     breakOn: flags.breakOn,
     breakStartedAt: flags.breakStartedAt,
     otherCompanyOn: flags.otherCompanyOn,
@@ -247,7 +242,8 @@ function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
     on,
     remainingMs,
     moving: false,
-    activeMs: usedMsFromRemaining(remainingMs),
+    activeMs: sessionUsedMsFromRemaining(remainingMs, resetEnded ? 0 : previous.usageBaselineMs),
+    usageBaselineMs: resetEnded ? 0 : Math.max(0, Number(previous.usageBaselineMs) || 0),
     sessionStartAt,
     sessionEndedAt: resetEnded ? null : (previous.sessionEndedAt || null),
     breakOn,
@@ -255,6 +251,7 @@ function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
     breakMs: resetEnded ? 0 : Math.max(0, Number(previous.breakMs) || 0),
     breakSegments,
     legacyBreakMs: resetEnded ? 0 : Math.max(0, Number(previous.legacyBreakMs) || 0),
+    legacyBreakExcludedMs: resetEnded ? 0 : Math.max(0, Number(previous.legacyBreakExcludedMs) || 0),
     otherCompanyOn: !resetEnded && on && Boolean(previous.otherCompanyOn),
     otherCompanyStartedAt: !resetEnded && on && previous.otherCompanyOn ? (previous.otherCompanyStartedAt || now) : null,
     otherCompanyMs: resetEnded ? 0 : Math.max(0, Number(previous.otherCompanyMs) || 0),
@@ -305,7 +302,7 @@ function stopEnhancedClockAtGoal() {
     if (openSegment) openSegment.endAt = endedAt;
     else otherCompanySegments.push({ startAt: startedAt, endAt: endedAt });
   }
-  const activeMs = usedMsFromRemaining(effective.remainingMs);
+  const activeMs = sessionUsedMsFromRemaining(effective.remainingMs, previous.usageBaselineMs);
   const legacyOtherCompanyMs = Math.max(0, Number(previous.legacyOtherCompanyMs) || 0);
   const otherCompanyMs = Math.min(
     activeMs,
@@ -482,5 +479,5 @@ if (typeof window.setInterval === "function") {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=59").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=60").catch(() => {}));
 }
