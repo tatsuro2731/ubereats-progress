@@ -109,6 +109,58 @@
     apply();
   }
 
+  function setupDashboardLayout() {
+    const dock = doc.getElementById("operationDock");
+    if (!dock) return;
+    const overview = doc.getElementById("dashboardOverview");
+    const metrics = doc.getElementById("metrics");
+    let pending = false;
+    const schedule = () => {
+      if (pending) return;
+      pending = true;
+      root.requestAnimationFrame(fit);
+    };
+    function fit() {
+      pending = false;
+      const dockHeight = Math.ceil(dock.getBoundingClientRect().height);
+      doc.documentElement.style.setProperty("--operation-dock-height", `${dockHeight}px`);
+      if (!overview || !metrics) return;
+      // Do not move the cards underneath a drag, or compress the reorder handles.
+      if (metrics.classList.contains("reorderMode")) {
+        overview.style.removeProperty("max-height");
+        return;
+      }
+      const scrollTop = overview.scrollTop;
+      overview.style.removeProperty("max-height");
+      const viewport = root.visualViewport;
+      const height = viewport && viewport.scale === 1
+        ? Math.min(root.innerHeight, viewport.height) : root.innerHeight;
+      const bottom = height - dockHeight - 8;
+      // Measure document coordinates so scrolling to the history cannot change density.
+      for (const density of ["comfortable", "compact", "dense"]) {
+        doc.body.dataset.dashboardDensity = density;
+        if (metrics.getBoundingClientRect().bottom + root.scrollY <= bottom) break;
+      }
+      const cardRect = metrics.getBoundingClientRect();
+      if (cardRect.bottom + root.scrollY > bottom) {
+        // Very short screens / enlarged text: keep both rows readable, and let only
+        // the overview scroll instead of hiding cards behind the operation dock.
+        const overviewTop = overview.getBoundingClientRect().top + root.scrollY;
+        overview.style.setProperty("max-height", `${Math.max(44, Math.floor(bottom - overviewTop - cardRect.height))}px`);
+      }
+      overview.scrollTop = scrollTop;
+    }
+    if (root.ResizeObserver) {
+      const observer = new root.ResizeObserver(schedule);
+      [dock, overview, metrics, doc.getElementById("hero")].filter(Boolean).forEach(element => observer.observe(element));
+    }
+    root.addEventListener("resize", schedule);
+    root.addEventListener("pageshow", schedule);
+    if (root.visualViewport) root.visualViewport.addEventListener("resize", schedule);
+    doc.addEventListener("visibilitychange", () => { if (!doc.hidden) schedule(); });
+    schedule();
+  }
+
   function setupControls() {
     doc.querySelectorAll("[data-theme-mode]").forEach(button => {
       button.addEventListener("click", () => save({ ...settings, mode: button.dataset.themeMode }));
@@ -130,14 +182,7 @@
       });
     }
     apply();
-    // Reserve the actual dock height, including enlarged text and safe-area padding.
-    const dock = doc.getElementById("operationDock");
-    if (dock && root.ResizeObserver) {
-      const observer = new root.ResizeObserver(() => {
-        doc.documentElement.style.setProperty("--operation-dock-height", `${Math.ceil(dock.getBoundingClientRect().height)}px`);
-      });
-      observer.observe(dock);
-    }
+    setupDashboardLayout();
   }
 
   read();

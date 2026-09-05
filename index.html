@@ -13,12 +13,13 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=61"></script>
-  <link rel="stylesheet" href="styles/main.css?v=61">
-  <link rel="stylesheet" href="styles/appearance.css?v=61">
+  <script src="src/appearance.js?v=62"></script>
+  <link rel="stylesheet" href="styles/main.css?v=62">
+  <link rel="stylesheet" href="styles/appearance.css?v=62">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
+  <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="配達の進捗と案件時間の目安">
   <div class="header"><h1>Uber配達進捗</h1><div class="headerActions"><div id="constraintTag" class="tag">12時間制限基準</div><button id="settingsOpen" class="settingsOpen" type="button" aria-label="設定を開く" aria-haspopup="dialog" aria-controls="settingsDialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.61.7 1.03 1.33 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg></button></div></div>
   <div class="sessionStatus"><span id="countDot" class="dot stop"></span><span id="countStatus">時間OFF・未開始</span></div>
   <div id="hero" class="hero">
@@ -28,6 +29,7 @@
     </div>
     <div class="heroProgressLine"><div id="heroProgressTrack" class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="heroProgressFill" class="progressFill"></span></div><span id="heroPercent">0%</span></div>
     <div class="caption">目標ペースに対して</div><div id="mainValue" class="main">-</div><div class="guideCaption">案件時間の目安</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div><button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button>
+  </div>
   </div>
   <div id="cardOrderToolbar" class="cardOrderToolbar" hidden><div class="cardOrderMessage"><strong>小カードを並び替え中</strong><small>カード下部の≡を長押しして移動</small></div><button id="cardOrderDone" class="cardOrderDone" type="button">完了</button></div>
   <div id="metrics" class="metrics"></div>
@@ -84,9 +86,9 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=61"></script>
-<script src="src/main-app.js?v=61"></script>
-<script src="src/session-engine.js?v=61"></script>
-<script src="src/session-editors.js?v=61"></script>
+<script src="src/app-core.js?v=62"></script>
+<script src="src/main-app.js?v=62"></script>
+<script src="src/session-engine.js?v=62"></script>
+<script src="src/session-editors.js?v=62"></script>
 </body>
 </html>

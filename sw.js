@@ -1,5 +1,5 @@
-const CACHE="ubereats-progress-v61";
-const ASSETS=["./?v=61","index.html?v=61","styles/main.css?v=61","styles/appearance.css?v=61","src/appearance.js?v=61","assets/ui-icons.svg?v=61","src/app-core.js?v=61","src/main-app.js?v=61","src/session-engine.js?v=61","src/session-editors.js?v=61","compact.html?v=61","styles/compact.css?v=61","src/compact-app.js?v=61","manifest.webmanifest","apple-touch-icon.png","assets/favicon-32.png","assets/icon-192.png","assets/icon-512.png","assets/delivery-scooter.png"];
+const CACHE="ubereats-progress-v62";
+const ASSETS=["./?v=62","index.html?v=62","styles/main.css?v=62","styles/appearance.css?v=62","src/appearance.js?v=62","assets/ui-icons.svg?v=62","src/app-core.js?v=62","src/main-app.js?v=62","src/session-engine.js?v=62","src/session-editors.js?v=62","compact.html?v=62","styles/compact.css?v=62","src/compact-app.js?v=62","manifest.webmanifest","apple-touch-icon.png","assets/favicon-32.png","assets/icon-192.png","assets/icon-512.png","assets/delivery-scooter.png"];
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
