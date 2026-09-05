@@ -393,11 +393,13 @@
     const ended = Boolean(clockState.sessionEndedAt);
     const counting = clockState.on && !clockState.breakOn && !ended;
     $("countRemain").textContent = `残り ${remainingText(clockState.remainingMs)}`;
-    $("countStatus").textContent = status.text;
+    $("countStatus").textContent = ended ? "稼働終了・保存済み"
+      : counting ? (clockState.otherCompanyOn ? "時間ON・他社稼働中" : "時間ON・計測中")
+      : clockState.breakOn ? "時間OFF・休憩中" : "時間OFF・未開始";
     $("countEndClock").textContent = exhaustionText();
     $("countEndClock").classList.toggle("run", counting);
     button.classList.toggle("off", clockState.on);
-    button.firstChild.nodeValue = ended ? "稼働終了済み" : clockState.on ? "時間OFF" : "時間ON";
+    button.firstChild.nodeValue = ended ? "稼働終了済み" : clockState.on ? "時間をOFF" : "時間をON";
     sub.textContent = ended ? "履歴に保存済み" : clockState.on ? status.sub : clockState.breakOn ? "休憩中" : "開始する";
     button.disabled = ended;
     button.setAttribute("aria-disabled", String(ended));
@@ -981,7 +983,8 @@
     $("workRate").textContent = `${operationRate(at).toFixed(1)}%`;
     $("workBreakTime").textContent = durationText(sessionBreakMs(at));
     const otherCompanyDisabled = !clockState.on || !clockState.sessionStartAt || ended;
-    $("otherCompanyToggle").textContent = clockState.otherCompanyOn ? "他社稼働OFF" : "他社稼働ON";
+    $("otherCompanyToggle").textContent = clockState.otherCompanyOn ? "他社稼働 ON" : "他社稼働 OFF";
+    $("otherCompanyToggle").setAttribute("aria-pressed", String(clockState.otherCompanyOn));
     $("otherCompanyToggle").classList.toggle("active", clockState.otherCompanyOn);
     $("otherCompanyToggle").disabled = otherCompanyDisabled;
     $("otherCompanyToggle").setAttribute("aria-disabled", String(otherCompanyDisabled));
@@ -1031,6 +1034,9 @@
     panel.tabIndex = -1;
     panel.innerHTML = `
       <div class="workSessionHead"><div><h2 class="workSessionTitle">稼働計測</h2><div class="movementDetail">時間ONをUber／他社、時間OFFを休憩として記録します</div></div><div class="workSessionStart">開始時刻<strong id="workStartTime">未開始</strong></div></div>
+      <div class="workSessionActions"><button id="otherCompanyToggle" class="otherCompanyToggle" type="button" aria-pressed="false">他社稼働 OFF</button><button id="finishWork" class="finishWork" type="button">稼働終了</button></div>
+      <div id="workSessionNotice" class="workSessionNotice" role="status" aria-live="polite" hidden></div>
+      <details class="sessionDetails"><summary>稼働の内訳・履歴</summary>
       <div class="workSessionGrid">
         <div class="workSessionStat mainStat primary"><span>Uber稼働</span><strong id="workUberTime">0時間00分</strong></div>
         <div class="workSessionStat mainStat otherStat"><span>他社稼働</span><strong id="workOtherCompanyTime">0時間00分</strong></div>
@@ -1039,10 +1045,10 @@
         <div class="workSessionStat"><span>実稼働率</span><strong id="workRate">0.0%</strong></div>
       </div>
       <strong hidden id="workActiveTime">0時間00分</strong>
-      <div class="workSessionActions"><button id="otherCompanyToggle" class="otherCompanyToggle" type="button">他社稼働ON</button><button id="finishWork" class="finishWork" type="button">稼働終了</button></div>
-      <div id="workSessionNotice" class="workSessionNotice" role="status" aria-live="polite" hidden></div>
-      <div class="workHistory"><h3 id="workHistoryTitle" class="workHistoryTitle" tabindex="-1">最近の履歴</h3><div id="workHistoryList" role="list"></div></div>`;
+      <div class="workHistory"><h3 id="workHistoryTitle" class="workHistoryTitle" tabindex="-1">最近の履歴</h3><div id="workHistoryList" role="list"></div></div></details>`;
     $("todaySummary").before(panel);
+    const otherDock = $("otherCompanyDock");
+    if (otherDock) otherDock.appendChild($("otherCompanyToggle"));
     $("otherCompanyToggle").onclick = toggleOtherCompany;
     $("finishWork").onclick = event => requestSessionFinish(event.currentTarget);
     $("workHistoryList").onclick = event => {
@@ -1177,6 +1183,14 @@
   toggleClock = enhancedToggleClock;
   renderClock = function() { renderEnhancedClock(); };
   countEndLabel = function() { return exhaustionText(); };
+  window.uberProgressSessionMetrics = function() {
+    const at = nowMs();
+    return {
+      started: Boolean(clockState.sessionStartAt),
+      elapsedText: durationText(sessionElapsedMs(at)),
+      rate: operationRate(at)
+    };
+  };
 
   injectUi();
   $("countToggle").onclick = enhancedToggleClock;

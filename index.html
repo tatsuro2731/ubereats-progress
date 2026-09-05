@@ -6,31 +6,43 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Uber配達進捗">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#020812">
+  <meta name="theme-color" content="#f0f7f3">
   <meta name="description" content="Uber Eats配達の目標件数に対する進捗を確認するツール">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=10">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <link rel="stylesheet" href="styles/main.css?v=60">
+  <script src="src/appearance.js?v=61"></script>
+  <link rel="stylesheet" href="styles/main.css?v=61">
+  <link rel="stylesheet" href="styles/appearance.css?v=61">
 </head>
-<body>
+<body class="progressApp mainView">
 <div id="appRoot" class="wrap">
   <div class="header"><h1>Uber配達進捗</h1><div class="headerActions"><div id="constraintTag" class="tag">12時間制限基準</div><button id="settingsOpen" class="settingsOpen" type="button" aria-label="設定を開く" aria-haspopup="dialog" aria-controls="settingsDialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.61.7 1.03 1.33 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg></button></div></div>
-  <div id="hero" class="hero"><div class="caption">現在の進捗</div><div id="mainValue" class="main">-</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div><button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button></div>
+  <div class="sessionStatus"><span id="countDot" class="dot stop"></span><span id="countStatus">時間OFF・未開始</span></div>
+  <div id="hero" class="hero">
+    <div class="heroProgress">
+      <div class="heroProgressCopy"><div class="heroProgressLabel">完了件数</div><div class="heroCount"><strong id="heroDone">0</strong><span id="heroTarget">/ 46</span></div><div id="heroRemaining" class="heroRemaining">残り46件</div></div>
+      <div class="heroCounter" role="group" aria-label="完了件数の変更"><button id="minus" class="minus" type="button" aria-label="完了件数を1件減らす。長押しで連続して減らす" title="長押しで連続変更">−</button><button id="plus" class="plus" type="button" aria-label="完了件数を1件増やす。長押しで連続して増やす" title="長押しで連続変更">＋</button></div>
+    </div>
+    <div class="heroProgressLine"><div id="heroProgressTrack" class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="heroProgressFill" class="progressFill"></span></div><span id="heroPercent">0%</span></div>
+    <div class="caption">目標ペースに対して</div><div id="mainValue" class="main">-</div><div class="guideCaption">案件時間の目安</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div><button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button>
+  </div>
   <div id="cardOrderToolbar" class="cardOrderToolbar" hidden><div class="cardOrderMessage"><strong>小カードを並び替え中</strong><small>カード下部の≡を長押しして移動</small></div><button id="cardOrderDone" class="cardOrderDone" type="button">完了</button></div>
   <div id="metrics" class="metrics"></div>
   <div id="cardOrderLive" class="cardOrderLive" aria-live="polite"></div>
-  <div class="card actionsCard"><div class="actions"><button id="minus" class="minus" type="button" aria-label="完了件数を1件減らす。長押しで連続して減らす" title="長押しで連続変更">−1件</button><button id="countToggle" class="toggleBtn countDockToggle" type="button">時間ON<span id="countSub" class="toggleSub">進める</span></button><button id="plus" class="plus" type="button" aria-label="完了件数を1件増やす。長押しで連続して増やす" title="長押しで連続変更">＋1件</button></div></div>
+  <div id="operationDock" class="operationDock">
   <div class="card countCard">
-    <div class="countHead"><div class="countTitle">残り時間カウント</div><div id="countEndClock" class="countEndClock" title="連続してカウントした場合に残り時間が0になる時刻">使い切り -</div><button id="helpBtn" class="help" type="button" aria-expanded="false" aria-controls="helpText">?</button></div>
+    <div class="countHead"><div class="countTitle">残り稼働時間</div><div id="countEndClock" class="countEndClock" title="連続してカウントした場合に残り時間が0になる時刻">使い切り -</div><button id="helpBtn" class="help" type="button" aria-label="時間計測の説明" aria-expanded="false" aria-controls="helpText">?</button></div>
     <div id="countPanel" class="countPanel">
-      <div class="countTop"><div class="status"><span id="countDot" class="dot stop"></span><span id="countStatus">停止中</span></div><div class="remainSync" role="group" aria-label="Uberの残り稼働時間に1分ずつ合わせる"><button id="remainMinus" class="remainStep" type="button" aria-label="残り稼働時間を1分減らす。長押しで連続して減らす" title="長押しで連続変更">−1分</button><div id="countRemain" class="remainBig">残り 0時間00分</div><button id="remainPlus" class="remainStep" type="button" aria-label="残り稼働時間を1分増やす。長押しで連続して増やす" title="長押しで連続変更">＋1分</button></div></div>
+      <div class="countTop"><div class="remainSync" role="group" aria-label="Uberの残り稼働時間に1分ずつ合わせる"><button id="remainMinus" class="remainStep" type="button" aria-label="残り稼働時間を1分減らす。長押しで連続して減らす" title="長押しで連続変更">−1分</button><div id="countRemain" class="remainBig">残り 0時間00分</div><button id="remainPlus" class="remainStep" type="button" aria-label="残り稼働時間を1分増やす。長押しで連続して増やす" title="長押しで連続変更">＋1分</button></div></div>
       <div class="desc">ON中は自動で減少。−／＋はタップで1分、長押しで連続して合わせられます。</div>
       <div class="hint">Uber側の残り時間が進んでいる時は時間ON、止まっている時は時間OFF。−／＋で1分ずつ補正できます。</div>
       <div id="helpText" class="helpText" hidden>時間OFFで休憩を自動開始し、時間ONで自動終了します。他社稼働は時間ON中だけ切り替えられます。</div>
     </div>
+  </div>
+  <div class="card actionsCard"><div class="actions"><div id="otherCompanyDock" class="otherCompanyDock"></div><button id="countToggle" class="toggleBtn countDockToggle" type="button">時間ON<span id="countSub" class="toggleSub">進める</span></button></div></div>
   </div>
   <section id="todaySummary" class="todaySummary" aria-labelledby="todaySummaryTitle" hidden>
     <div class="todaySummaryHead"><span class="todaySummaryIcon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"></path><path d="M6 5H4v2a4 4 0 0 0 4 4m10-6h2v2a4 4 0 0 1-4 4M12 12v5m-3 3h6"></path></svg></span><div class="todaySummaryCopy"><h2 id="todaySummaryTitle" class="todaySummaryTitle">今日のまとめ</h2><p id="todaySummaryLead" class="todaySummaryLead">目標を達成しました</p></div><span class="todaySummaryBadge">目標達成</span></div>
@@ -45,6 +57,12 @@
       <div class="settingsSheetHeader"><div class="settingsTitleGroup"><h2 id="settingsTitle" class="settingsSheetTitle">設定</h2><p class="settingsSheetSubtitle">進捗と表示を調整</p></div><button id="settingsClose" class="settingsClose" type="button" aria-label="設定を閉じる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
     </div>
     <div class="settingsScroll">
+      <section class="settingsSection appearanceSection" aria-labelledby="appearanceTitle">
+        <div class="settingsSectionHead"><div><h3 id="appearanceTitle" class="settingsSectionTitle">画面の明るさ</h3><p class="settingsSectionNote">時間帯で自動切替、または手動で固定</p></div></div>
+        <div class="themeModes" role="group" aria-label="表示テーマ"><button type="button" data-theme-mode="auto" aria-pressed="true">自動</button><button type="button" data-theme-mode="light" aria-pressed="false">ライト</button><button type="button" data-theme-mode="dark" aria-pressed="false">ダーク</button></div>
+        <div class="themeSchedule"><div><label for="themeLightStart">ライト開始</label><input id="themeLightStart" type="time" value="06:00" required></div><div><label for="themeDarkStart">ダーク開始</label><input id="themeDarkStart" type="time" value="18:00" required></div></div>
+        <p id="themeScheduleNote" class="settingHint" role="status">端末の時刻で 06:00 にライト、18:00 にダークへ切り替わります。</p>
+      </section>
       <div class="cardOrderSetting"><button id="cardOrderToggle" class="cardOrderToggle" type="button" aria-pressed="false"><span class="cardOrderIcon" aria-hidden="true">≡</span><span class="cardOrderCopy"><strong id="cardOrderLabel">カードを並び替える</strong><small>ドラッグで順番を変更・自動保存</small></span><span class="cardOrderChevron" aria-hidden="true">›</span></button></div>
       <section class="settingsSection progressSection" aria-labelledby="progressSettingsTitle">
         <div class="settingsSectionHead"><span class="settingsSectionIcon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"></path></svg></span><div><h3 id="progressSettingsTitle" class="settingsSectionTitle">進捗設定</h3><p class="settingsSectionNote">今日の目標と稼働条件</p></div></div>
@@ -66,9 +84,9 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=60"></script>
-<script src="src/main-app.js?v=60"></script>
-<script src="src/session-engine.js?v=60"></script>
-<script src="src/session-editors.js?v=60"></script>
+<script src="src/app-core.js?v=61"></script>
+<script src="src/main-app.js?v=61"></script>
+<script src="src/session-engine.js?v=61"></script>
+<script src="src/session-editors.js?v=61"></script>
 </body>
 </html>

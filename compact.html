@@ -6,15 +6,17 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="配達進捗" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#020812" />
+  <meta name="theme-color" content="#f0f7f3" />
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=10" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=10" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10" />
   <link rel="manifest" href="manifest.webmanifest?v=10" />
   <title>配達進捗｜コンパクト</title>
-  <link rel="stylesheet" href="styles/compact.css?v=60">
+  <script src="src/appearance.js?v=61"></script>
+  <link rel="stylesheet" href="styles/compact.css?v=61">
+  <link rel="stylesheet" href="styles/appearance.css?v=61">
 </head>
-<body>
+<body class="progressApp compactView">
   <div class="wrap">
     <div class="header">
       <h1>配達進捗</h1>
@@ -22,16 +24,17 @@
     </div>
 
     <div id="hero" class="hero">
-      <div class="caption">現在の進捗</div>
+      <div class="heroProgress"><div class="heroProgressCopy"><div class="heroProgressLabel">完了件数</div><div class="heroCount"><strong id="heroDone">0</strong><span id="heroTarget">/ 46</span></div></div></div>
+      <div class="caption">目標ペースに対して</div>
       <div id="slackMain" class="mainValue">-</div>
       <div id="slackOrders" class="subValue">-</div>
       <div id="miniSummary" class="miniSummary">-</div>
     </div>
 
     <div class="chips">
-      <div class="chip"><div class="k">残り件数</div><div id="remainingOrders" class="v">-</div></div>
-      <div class="chip togglePace" data-pace-card="need" role="button" tabindex="0" aria-label="必要ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k">必要ペース</div><div id="neededPace" class="v">-</div></div>
-      <div class="chip togglePace" data-pace-card="targetPace" role="button" tabindex="0" aria-label="目標ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k">目標ペース</div><div id="targetPace" class="v">-</div></div>
+      <div class="chip"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=61#remaining"></use></svg>残り件数</div><div id="remainingOrders" class="v">-</div></div>
+      <div class="chip togglePace" data-pace-card="need" role="button" tabindex="0" aria-label="必要ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=61#need"></use></svg>必要ペース</div><div id="neededPace" class="v">-</div></div>
+      <div class="chip togglePace" data-pace-card="targetPace" role="button" tabindex="0" aria-label="目標ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=61#targetPace"></use></svg>目標ペース</div><div id="targetPace" class="v">-</div></div>
     </div>
 
     <div class="card actionsCard">
@@ -79,9 +82,10 @@
       </details>
     </div>
 
+    <div class="compactAppearance"><label for="compactThemeMode">画面の明るさ</label><select id="compactThemeMode"><option value="auto">時間帯で自動</option><option value="light">ライト</option><option value="dark">ダーク</option></select><p class="settingHint">切替時刻は通常版の設定で変更できます。</p></div>
     <div class="footer">入力値は端末内に保存されます。通常版と同じ保存データを使います。</div>
   </div>
-<script src="src/app-core.js?v=60"></script>
-<script src="src/compact-app.js?v=60"></script>
+<script src="src/app-core.js?v=61"></script>
+<script src="src/compact-app.js?v=61"></script>
 </body>
 </html>

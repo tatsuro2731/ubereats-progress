@@ -4,7 +4,7 @@
   "private": true,
   "description": "Uber Eats 配達進捗を確認する静的 PWA",
   "scripts": {
-    "check": "node --check src/app-core.js && node --check src/main-app.js && node --check src/compact-app.js && node --check src/session-engine.js && node --check src/session-editors.js && node --check sw.js",
+    "check": "node --check src/app-core.js && node --check src/appearance.js && node --check src/main-app.js && node --check src/compact-app.js && node --check src/session-engine.js && node --check src/session-editors.js && node --check sw.js",
     "test": "node --test tests/*.test.js",
     "verify": "npm run check && npm test"
   },

@@ -1,0 +1,348 @@
+/* Approved mint/charcoal interface. Legacy layout contracts remain in the base sheets. */
+:root, :root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f0f7f3;
+  --card: #ffffff;
+  --card2: #e7f2eb;
+  --line: #d5e5dc;
+  --text: #17251e;
+  --muted: #52685c;
+  --good: #087047;
+  --warn: #087047;
+  --late: #a9510d;
+  --bad: #bd3241;
+  --input: #f8fbf9;
+  --green: #087047;
+  --blue: #087047;
+  --accent: #087047;
+  --primary-text: #ffffff;
+  --hero-surface: #edf7f1;
+  --shadow: 0 2px 7px rgb(20 54 35 / 4%);
+  --dock-shadow: 0 -5px 22px rgb(20 54 35 / 7%);
+  --operation-dock-height: 180px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111815;
+  --card: #1d2722;
+  --card2: #26342c;
+  --line: #3d5346;
+  --text: #f3f6f4;
+  --muted: #b9c8bf;
+  --good: #78deaf;
+  --warn: #78deaf;
+  --late: #ffc184;
+  --bad: #ff8e98;
+  --input: #18211c;
+  --green: #78deaf;
+  --blue: #78deaf;
+  --accent: #78deaf;
+  --primary-text: #102b1e;
+  --hero-surface: #1d2722;
+  --shadow: 0 2px 7px rgb(0 0 0 / 8%);
+  --dock-shadow: 0 -5px 22px rgb(0 0 0 / 18%);
+}
+html[data-theme] { background: var(--bg); scroll-padding-bottom: calc(var(--operation-dock-height) + 24px); }
+body.progressApp {
+  background: var(--bg);
+  color: var(--text);
+  padding: max(12px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+body.progressApp [hidden] { display: none !important; }
+body.progressApp .wrap { max-width: 620px; }
+body.mainView .wrap { padding-bottom: calc(var(--operation-dock-height) + 20px); }
+body.progressApp .header {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  margin: 0 0 9px;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.progressApp .header h1 { font-size: clamp(19px, 4.9vw, 24px); letter-spacing: -.025em; text-shadow: none; }
+body.progressApp .headerActions { gap: 7px; }
+body.progressApp .tag {
+  background: transparent; border: 0; padding: 0; color: var(--muted);
+  font-size: 12px; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+body.progressApp .settingsOpen, body.progressApp .settingsClose {
+  width: 44px; height: 44px; border-radius: 13px;
+  color: var(--text); background: var(--card); border: 1px solid var(--line); box-shadow: none;
+}
+body.progressApp .sessionStatus {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 30px;
+  padding: 5px 10px; margin: 0 0 12px; border-radius: 99px;
+  background: var(--card2); color: var(--good); font-size: 13px; font-weight: 700;
+}
+body.progressApp .sessionStatus:has(.stop) { color: var(--muted); }
+body.progressApp .dot { width: 9px; height: 9px; box-shadow: none; background: var(--good); }
+body.progressApp .dot.stop { background: var(--muted); box-shadow: none; }
+body.progressApp .hero,
+body.progressApp .hero.good, body.progressApp .hero.warn,
+body.progressApp .hero.late, body.progressApp .hero.bad {
+  margin: 0 0 12px; padding: 16px; border: 1px solid var(--line); border-radius: 18px;
+  background: var(--hero-surface); box-shadow: var(--shadow); overflow: visible;
+}
+body.progressApp .hero::before { display: none; }
+.heroProgress { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
+.heroProgressCopy { min-width: 0; }
+.heroProgressLabel { color: var(--muted); font-size: 14px; font-weight: 650; }
+.heroCount { display: flex; align-items: baseline; gap: 7px; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.heroCount strong { font-size: clamp(40px, 11vw, 56px); font-weight: 800; letter-spacing: -.045em; }
+.heroCount > span { color: var(--muted); font-size: clamp(22px, 5.8vw, 28px); font-weight: 650; }
+.heroRemaining { color: var(--muted); font-size: 13px; margin-top: 3px; }
+.heroCounter { display: flex; flex: 0 0 auto; gap: 8px; }
+body.progressApp .heroCounter button {
+  min-width: 48px; min-height: 48px; padding: 5px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); color: var(--text); font-size: 29px; font-weight: 650; box-shadow: none;
+}
+body.progressApp .heroCounter .plus { color: var(--primary-text); background: var(--good); border-color: var(--good); }
+.heroProgressLine { display: flex; align-items: center; gap: 9px; margin: 12px 0 16px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+body.progressApp .progressTrack { flex: 1; height: 7px; margin-top: 0; border: none; background: var(--line); box-shadow: none; }
+body.progressApp .progressFill { background: var(--good); box-shadow: none; }
+body.progressApp .caption { margin: 0; text-align: left; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: 0; }
+body.progressApp .main, body.progressApp .mainValue {
+  margin: 5px 0 16px; font-size: clamp(38px, 11.5vw, 68px); line-height: 1.15;
+  font-weight: 800; letter-spacing: -.035em; text-shadow: none; font-variant-numeric: tabular-nums;
+}
+body.progressApp .timeUnit { font-size: .47em; font-weight: 750; margin: 0 .05em; letter-spacing: 0; }
+body.progressApp .slackState { display: inline-block; margin-left: .28em; font-size: .42em; font-weight: 700; letter-spacing: 0; }
+body.progressApp .goodTxt, body.progressApp .warnTxt { color: var(--good); }
+body.progressApp .lateTxt { color: var(--late); }
+body.progressApp .badTxt { color: var(--bad); }
+.guideCaption { color: var(--muted); text-align: left; font-size: 12px; font-weight: 600; }
+body.progressApp .sub { margin: 5px 0 0; }
+body.progressApp .limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 0; }
+body.progressApp .lim, body.progressApp .lim.recovery {
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  min-height: 66px; padding: 10px 8px; border: 0; border-radius: 12px;
+  background: var(--card2); color: var(--text); box-shadow: none; text-align: left; white-space: normal;
+}
+body.progressApp .bikes { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 3px; margin: 0; }
+body.progressApp .bike {
+  display: block; flex: 0 0 26px; width: 26px; height: 24px; margin: 0;
+  color: var(--text); background: none; mask: none; -webkit-mask: none; filter: none; opacity: 1;
+}
+body.progressApp .bikes .bike + .bike { margin-left: 0; }
+.guideCopy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.guideLabel { font-size: 12px; font-weight: 650; }
+.guideValue { font-size: clamp(16px, 4.8vw, 24px); font-weight: 750; line-height: 1.2; }
+.guideUnit { font-size: .62em; font-weight: 600; }
+.guideAlternative { font-size: 12px; line-height: 1.4; }
+body.progressApp .recoveryCopy strong { white-space: normal; font-size: 13px; line-height: 1.3; }
+body.progressApp .recoveryCopy small { color: var(--muted); white-space: normal; font-size: 12px; }
+body.progressApp .mini, body.progressApp .miniSummary { color: var(--muted); font-size: 12px; margin-top: 10px; font-weight: 500; }
+body.progressApp .baselinePace { padding: 5px 8px; background: transparent; color: var(--muted); border: 0; box-shadow: none; font-size: 12px; }
+body.progressApp .baselinePace strong { color: var(--text); font-size: 12px; }
+body.progressApp .metrics { gap: 9px; margin-bottom: 12px; }
+body.progressApp .metric, body.progressApp .chip {
+  --metric-accent: var(--good);
+  padding: 12px 10px; min-height: 104px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card); color: var(--text); box-shadow: var(--shadow); overflow: visible;
+}
+body.progressApp .metric::before { display: none; }
+body.progressApp .metric .k, body.progressApp .chip .k {
+  display: flex; align-items: center; gap: 7px; min-height: 24px; padding: 0;
+  color: var(--muted); font-size: 14px; font-weight: 650; line-height: 1.35; white-space: normal;
+}
+.metricIconSlot { display: inline-grid; flex: 0 0 24px; width: 24px; height: 24px; place-items: center; }
+body.progressApp .metricIcon { display: block; flex: 0 0 auto; width: 22px; height: 22px; color: var(--text); overflow: visible; }
+body.progressApp .metric[data-card-id="workRate"] .metricIcon { width: 19px; height: 19px; }
+body.progressApp .metric[data-card-id="eta"] .metricIcon { width: 21px; height: 21px; }
+.paceSwitchIcon { display: block; width: 15px; height: 15px; flex: 0 0 15px; margin-left: auto; color: var(--muted); }
+body.progressApp .metric .v, body.progressApp .chip .v {
+  margin-top: 8px; color: var(--text); font-size: clamp(22px, 6vw, 30px); font-weight: 750;
+  font-variant-numeric: tabular-nums; line-height: 1.2; letter-spacing: -.025em; white-space: normal; overflow-wrap: anywhere;
+}
+body.progressApp .metric .note { margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+body.progressApp .metric.paceToggle .note { display: none; }
+body.progressApp .metrics[data-card-count="4"] .metric { min-height: 110px; padding: 13px 11px; }
+body.progressApp .metrics[data-card-count="4"] .metric .v { font-size: clamp(28px, 8vw, 38px); }
+body.progressApp .metric[data-card-id="constraint"] .v,
+body.progressApp .metric[data-card-id="elapsed"] .v { font-size: clamp(18px, 4.7vw, 25px); }
+body.progressApp .progressGoal, body.progressApp .paceSuffix { color: var(--muted); font-size: .55em; font-weight: 550; vertical-align: baseline; }
+body.progressApp .progressPercent { color: var(--muted); }
+body.progressApp .metric[data-card-id="remaining"] .progressTrack { margin-top: 9px; }
+body.progressApp .metrics.reorderMode .metric { padding-bottom: 62px; }
+body.progressApp .dragHandle { color: var(--text); background: var(--card2); border-color: var(--line); box-shadow: none; }
+body.progressApp .metric.dropTarget { border-color: var(--good); box-shadow: 0 0 0 2px var(--good); }
+
+/* One fixed dock; its measured height reserves space at every text size. */
+body.progressApp .operationDock {
+  position: fixed; inset: auto 0 0; z-index: 40; padding: 10px 14px max(12px, env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--line); box-shadow: var(--dock-shadow);
+}
+body.progressApp .operationDock .countCard, body.progressApp .operationDock .actionsCard {
+  position: static; max-width: 620px; margin: 0 auto; padding: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+}
+body.progressApp .countHead { gap: 8px; margin-bottom: 5px; }
+body.progressApp .countTitle { color: var(--muted); font-size: 13px; font-weight: 650; }
+body.progressApp .countEndClock, body.progressApp .countEndClock.run { padding: 0; color: var(--muted); background: transparent; border: 0; box-shadow: none; font-size: 12px; }
+body.progressApp .help { min-width: 32px; width: 32px; height: 32px; background: var(--card2); color: var(--muted); border: 0; box-shadow: none; }
+body.progressApp .countPanel, body.progressApp .countPanel.run { padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+body.progressApp .countTop { display: block; }
+body.progressApp .remainSync {
+  display: grid; width: 100%; max-width: none; min-width: 0; margin: 0;
+  grid-template-columns: minmax(0, 1fr) 52px 52px; gap: 7px; align-items: center;
+}
+body.progressApp .remainSync .remainBig {
+  grid-column: 1; grid-row: 1; margin: 0; padding: 0; overflow: visible;
+  font-size: clamp(24px, 6.7vw, 30px); line-height: 1.2; letter-spacing: -.045em;
+  text-align: left; font-weight: 750; color: var(--text); white-space: nowrap;
+}
+body.progressApp .remainSync #remainMinus { grid-column: 2; grid-row: 1; }
+body.progressApp .remainSync #remainPlus { grid-column: 3; grid-row: 1; }
+body.progressApp .remainStep { width: 100%; min-height: 44px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--card2); color: var(--text); font-size: 13px; box-shadow: none; }
+body.progressApp .operationDock .desc, body.progressApp .operationDock .hint, body.progressApp .operationDock .movementDetail { display: none; }
+body.progressApp .helpText {
+  position: absolute; left: 14px; right: 14px; bottom: calc(100% + 6px); max-width: 620px; max-height: 40dvh;
+  overflow: auto; margin: 0 auto; padding: 14px; background: var(--card); color: var(--text); border: 1px solid var(--line);
+  box-shadow: var(--dock-shadow); font-size: 14px; line-height: 1.65;
+}
+body.progressApp .operationDock .actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 9px; margin-top: 10px; }
+body.progressApp .otherCompanyDock { display: flex; min-width: 0; }
+body.progressApp .otherCompanyDock button,
+body.progressApp .operationDock .countDockToggle {
+  width: 100%; min-height: 52px; margin: 0; padding: 10px 7px; border: 1px solid var(--good); border-radius: 12px;
+  background: var(--good); color: var(--primary-text); box-shadow: none; text-shadow: none; font-size: 17px; line-height: 1.2;
+}
+body.progressApp .otherCompanyDock button { background: transparent; color: var(--good); font-size: 14px; }
+body.progressApp .otherCompanyDock button.active { background: var(--card2); }
+body.progressApp .countDockToggle .toggleSub { display: none; }
+body.progressApp button:disabled { opacity: .5; cursor: default; box-shadow: none; }
+body.progressApp button:focus-visible, body.progressApp a:focus-visible, body.progressApp .paceToggle:focus-visible,
+body.progressApp input:focus-visible, body.progressApp select:focus-visible { outline: 2px solid var(--good); outline-offset: 3px; }
+
+/* Secondary details and every modal share the same two palettes. */
+body.progressApp .card, body.progressApp .workSessionPanel, body.progressApp .todaySummary {
+  padding: 14px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+}
+body.progressApp .workSessionHead { gap: 8px; }
+body.progressApp .workSessionTitle { font-size: 15px; color: var(--text); }
+body.progressApp .workSessionHead .movementDetail { display: none; }
+body.progressApp .workSessionStart { background: transparent; color: var(--muted); border: 0; padding: 0; }
+body.progressApp .workSessionStart > span { color: var(--muted); font-size: 12px; }
+body.progressApp .workSessionStart strong { color: var(--text); font-size: 13px; }
+body.progressApp .editStartTime, body.progressApp .editBreakTime { min-height: 36px; color: var(--good); background: var(--card2); border: 1px solid var(--line); border-radius: 9px; font-size: 12px; box-shadow: none; }
+body.progressApp .sessionDetails { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+body.progressApp .sessionDetails > summary { min-height: 36px; color: var(--muted); font-size: 14px; cursor: pointer; }
+body.progressApp .workSessionGrid { margin-top: 10px; }
+body.progressApp .workSessionStat, body.progressApp .workSessionStat.primary, body.progressApp .workSessionStat.otherStat,
+body.progressApp .todaySummaryStat, body.progressApp .workHistoryItem { background: var(--input); border-color: var(--line); }
+body.progressApp .workSessionStat strong, body.progressApp .workSessionStat.primary strong, body.progressApp .workSessionStat.otherStat strong,
+body.progressApp .workHistoryMain strong, body.progressApp .todaySummaryStat strong { color: var(--text); }
+body.progressApp .workSessionStat span, body.progressApp .movementDetail, body.progressApp .workHistoryMain small,
+body.progressApp .workHistoryMeta, body.progressApp .workHistoryEmpty, body.progressApp .todaySummaryLead { color: var(--muted); font-size: 12px; }
+body.progressApp .workSessionActions { display: flex; justify-content: flex-end; margin-top: 0; }
+body.progressApp .workSessionActions .finishWork { min-height: 40px; padding: 7px 10px; background: transparent; color: var(--bad); border: 0; box-shadow: none; font-size: 13px; }
+body.progressApp .workSessionNotice { color: var(--good); background: var(--card2); border-color: var(--line); font-size: 13px; }
+body.progressApp .workHistory { border-color: var(--line); }
+body.progressApp .workHistoryTitle, body.progressApp .todaySummaryTitle { color: var(--text); font-size: 16px; }
+body.progressApp .workHistoryEdit { color: var(--good); background: var(--card2); border-color: var(--line); font-size: 12px; }
+body.progressApp .workHistoryDelete { color: var(--bad); background: var(--card); border-color: var(--line); font-size: 12px; }
+body.progressApp .todaySummaryIcon, body.progressApp .todaySummaryBadge { background: var(--card2); color: var(--good); border-color: var(--line); box-shadow: none; }
+body.progressApp .settingsSheet, body.progressApp .workConfirmDialog,
+body.progressApp .historyEndEditorDialog, body.progressApp .startTimeEditor, body.progressApp .breakTimeEditor {
+  background: var(--card); color: var(--text); border-color: var(--line); box-shadow: 0 16px 55px rgb(0 0 0 / 24%);
+}
+body.progressApp .settingsSheetHeader, body.progressApp .settingsFooter { background: var(--card); border-color: var(--line); box-shadow: none; }
+body.progressApp .settingsHandle { background: var(--line); box-shadow: none; }
+body.progressApp .settingsSheetTitle, body.progressApp .settingsSectionTitle,
+body.progressApp .workConfirmDialog h3, body.progressApp .startTimeEditor h3, body.progressApp .breakTimeEditor h3 { color: var(--text); }
+body.progressApp .settingsSheetSubtitle, body.progressApp .settingsSectionNote, body.progressApp .settingHint,
+body.progressApp .workConfirmDialog p, body.progressApp .startTimeEditor p, body.progressApp .breakTimeEditor p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+body.progressApp .settingsSection, body.progressApp .settingsSheet .selBox,
+body.progressApp .cardOrderToolbar, body.progressApp .settingsSheet .cardOrderToggle,
+body.progressApp .workConfirmSummary > div { background: var(--input); border-color: var(--line); box-shadow: none; }
+body.progressApp .settingsSectionIcon, body.progressApp .cardOrderIcon { color: var(--good); background: var(--card2); border-color: var(--line); box-shadow: none; }
+body.progressApp .cardOrderCopy strong, body.progressApp .cardOrderMessage strong, body.progressApp .settingsResetCopy strong,
+body.progressApp .workConfirmSummary strong { color: var(--text); }
+body.progressApp .cardOrderCopy small, body.progressApp .cardOrderMessage small, body.progressApp .cardOrderChevron,
+body.progressApp .settingsResetCopy small, body.progressApp .cardChoiceHelp, body.progressApp .workConfirmSummary span { color: var(--muted); font-size: 12px; }
+body.progressApp label, body.progressApp .settingsSheet label, body.progressApp .breakTimeFields label { color: var(--muted); font-size: 14px; }
+body.progressApp input, body.progressApp select, body.progressApp .settingsSheet input[type="time"],
+body.progressApp .settingsSheet select, body.progressApp .startTimeEditor input,
+body.progressApp .historyEndEditorDialog input, body.progressApp .breakTimeFields select {
+  background: var(--card); color: var(--text); border-color: var(--line); color-scheme: inherit; box-shadow: none;
+  font-size: 16px; min-height: 48px; border-radius: 12px;
+}
+body.progressApp .settingsSheet .selBox label { font-size: 12px; }
+body.progressApp .settingsSheet .selBox select { font-size: 14px; }
+body.progressApp .cardCountSegment, body.progressApp .themeModes { background: var(--card2); border: 1px solid var(--line); border-radius: 13px; padding: 4px; box-shadow: none; }
+body.progressApp .cardCountOption { color: var(--muted); }
+body.progressApp .cardCountOption.active, body.progressApp .themeModes button.active,
+body.progressApp .settingsDone, body.progressApp .cardOrderDone,
+body.progressApp .applyStartTime, body.progressApp .applyBreakTime, body.progressApp .applyHistoryEnd {
+  background: var(--good); color: var(--primary-text); border-color: var(--good); box-shadow: none;
+}
+body.progressApp .cardCountOption strong { font-size: 14px; }
+body.progressApp .cardCountOption small { font-size: 12px; }
+body.progressApp .endState { color: var(--good); background: var(--card2); border-color: var(--line); font-size: 12px; }
+body.progressApp .clearEnd, body.progressApp .settingsSheet .clearEnd,
+body.progressApp .startTimeEditorActions button, body.progressApp .breakTimeEditorActions button,
+body.progressApp .workConfirmActions button, body.progressApp .resetBtn, body.progressApp .linkBtn {
+  background: var(--card2); color: var(--text); border-color: var(--line); box-shadow: none; font-size: 14px;
+}
+body.progressApp .startTimeEditorActions .applyStartTime, body.progressApp .breakTimeEditorActions .applyBreakTime,
+body.progressApp .historyEndEditorActions .applyHistoryEnd { background: var(--good); color: var(--primary-text); border-color: var(--good); }
+body.progressApp .settingsSheet .reset { color: var(--bad); background: var(--card); border-color: var(--line); font-size: 13px; }
+body.progressApp .workConfirmActions .workConfirmSubmit, body.progressApp .workConfirmActions .workConfirmSubmit.delete { background: var(--bad); color: var(--card); border-color: var(--bad); }
+body.progressApp .startTimeError, body.progressApp .breakTimeError, body.progressApp .historyEndError { color: var(--bad); font-size: 13px; }
+.themeModes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.themeModes button { min-height: 44px; padding: 8px 4px; border-radius: 10px; background: transparent; color: var(--muted); font-size: 14px; }
+.themeSchedule { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.themeSchedule > div { min-width: 0; }
+.compactAppearance { padding: 14px; margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+body.compactView .chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body.compactView .chip { padding: 11px 8px; }
+body.compactView .chip .k { flex-wrap: wrap; }
+body.compactView .actionsCard { background: var(--card); border-color: var(--line); box-shadow: var(--dock-shadow); }
+body.compactView .minusBtn, body.compactView .plusBtn { background: var(--card2); color: var(--text); border-color: var(--line); box-shadow: none; }
+body.compactView .plusBtn { background: var(--good); color: var(--primary-text); }
+body.compactView .detailItem { background: var(--input); border-color: var(--line); }
+body.compactView .detailItem .k, body.compactView .footer, body.compactView .formula, body.compactView summary { color: var(--muted); }
+body.compactView .detailItem .v { color: var(--text); }
+@media (max-width: 440px) {
+  body.progressApp { padding-left: 12px; padding-right: 12px; }
+  body.progressApp .hero { padding: 13px; }
+  body.progressApp .metrics:not([data-card-count="4"]) .metric .k { gap: 5px; font-size: 12px; flex-wrap: wrap; }
+  body.progressApp .metrics:not([data-card-count="4"]) .metric .paceSwitchIcon { width: 13px; height: 13px; flex-basis: 13px; }
+  body.progressApp .metrics:not([data-card-count="4"]) .metric .v { font-size: clamp(19px, 5.7vw, 25px); }
+  body.progressApp .metrics:not([data-card-count="4"]) .metric .note { font-size: 12px; }
+  body.progressApp .remainSync .remainBig { font-size: clamp(23px, 6.6vw, 29px); }
+}
+@media (max-width: 370px) {
+  body.progressApp { padding-left: 9px; padding-right: 9px; }
+  body.progressApp .header .tag { max-width: 80px; white-space: normal; font-size: 12px; text-align: right; }
+  body.progressApp .hero { padding: 11px; }
+  body.progressApp .heroCounter button { min-width: 44px; min-height: 44px; }
+  body.progressApp .limits { gap: 6px; }
+  body.progressApp .lim, body.progressApp .lim.recovery { flex-direction: column; gap: 4px; padding: 8px 5px; text-align: center; }
+  body.progressApp .guideCopy, body.progressApp .recoveryCopy { align-items: center; }
+  body.progressApp .guideValue { font-size: 20px; }
+  body.progressApp .metrics[data-card-count="4"] .metric { padding: 10px 8px; }
+  body.progressApp .metrics[data-card-count="4"] .metric .k { gap: 5px; font-size: 12px; }
+  body.progressApp .operationDock { padding-left: 10px; padding-right: 10px; }
+  body.progressApp .remainSync { grid-template-columns: minmax(0, 1fr) 44px 44px; gap: 5px; }
+  body.progressApp .remainSync .remainBig { grid-column: 1; grid-row: 1; font-size: 23px; }
+  body.progressApp .remainSync #remainMinus { grid-column: 2; grid-row: 1; }
+  body.progressApp .remainSync #remainPlus { grid-column: 3; grid-row: 1; }
+  body.progressApp .countEndClock { font-size: 12px; }
+  body.progressApp .workSessionStart strong { font-size: 12px; }
+}
+@media (max-height: 550px) and (orientation: landscape) {
+  body.progressApp .operationDock { padding-top: 5px; }
+  body.progressApp .countHead { margin-bottom: 0; }
+  body.progressApp .operationDock .actions { margin-top: 5px; }
+  body.progressApp .operationDock .countDockToggle, body.progressApp .otherCompanyDock button { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.progressApp *, body.progressApp *::before, body.progressApp *::after { transition: none; scroll-behavior: auto; }
+}

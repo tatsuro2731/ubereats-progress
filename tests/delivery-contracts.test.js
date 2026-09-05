@@ -105,7 +105,7 @@ test("the service worker cache revision and assets match direct script URLs", ()
     ...[...page.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi)].map(match => match[1]),
     ...[...page.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1])
   ]).map(normalizedAsset);
-  assert.equal(pageAssets.length, 8);
+  assert.equal(pageAssets.length, 12, "both pages load the shared appearance script and stylesheet");
   for (const source of pageAssets) {
     assert.ok(assets.includes(source), `${source} must be pre-cached exactly as referenced`);
   }
@@ -259,7 +259,7 @@ test("the enhanced timer is continuous while ON and never requests location", ()
   assert.match(enhancements, /clockState\.on\s*=\s*false\s*;\s*startActiveBreak\(now\)/);
   assert.match(enhancements, /clockState\.on\s*=\s*true[\s\S]{0,120}closeActiveBreak|closeActiveBreak\(now\)[\s\S]{0,120}clockState\.on\s*=\s*true/);
   assert.match(enhancements, /clockState\.on\s*&&\s*clockState\.otherCompanyOn/);
-  assert.match(enhancements, /id="otherCompanyToggle"[^>]*>他社稼働ON<\/button>/);
+  assert.match(enhancements, /id="otherCompanyToggle"[^>]*aria-pressed="false"[^>]*>他社稼働 OFF<\/button>/);
   assert.doesNotMatch(enhancements, /id="breakToggle"|>休憩開始<\/button>|>休憩終了<\/button>/);
   assert.match(enhancements, /id="workUberTime">0時間00分<\/strong>/);
   assert.match(enhancements, /id="workOtherCompanyTime">0時間00分<\/strong>/);

@@ -12,6 +12,9 @@
 | `compact.html` | コンパクト版の固定マークアップと読込順 |
 | `styles/main.css` | 通常版の基本表示・設定画面・レスポンシブ表示 |
 | `styles/compact.css` | コンパクト版の表示 |
+| `styles/appearance.css` | 共通ライト／ダーク配色、カードと固定操作エリア |
+| `src/appearance.js` | 独立したテーマ設定、端末時刻による切替と画面復帰 |
+| `assets/ui-icons.svg` | 意味別アイコンと同サイズのバイク用SVGスプライト |
 | `src/app-core.js` | 定数、保存キー、進捗計算、終了上限、区間集計、日時・時間整形 |
 | `src/main-app.js` | 通常版の入力、カード、設定、画面描画、旧時計互換 |
 | `src/compact-app.js` | コンパクト版の入力・描画と通常版との同期 |
@@ -22,7 +25,7 @@
 
 ## 読込順
 
-通常版は次の順で読み込みます。
+両画面ともhead内で`appearance.js`を読み、初回描画前にテーマを適用します。配達処理は通常版で次の順に読み込みます。
 
 1. `app-core.js`
 2. `main-app.js`

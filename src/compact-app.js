@@ -391,6 +391,8 @@ function calc(shouldSave = true) {
   const completionRate = progress.completionRate;
 
   setTone(slackMinutes, perOrder, remainingOrders);
+  $("heroDone").textContent = String(done);
+  $("heroTarget").textContent = `/ ${target}`;
 
   if (remainingOrders === 0) {
     $("slackMain").textContent = "目標達成";
@@ -479,5 +481,5 @@ if (typeof window.setInterval === "function") {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=60").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=61").catch(() => {}));
 }

@@ -311,9 +311,9 @@ test("main pace, forecast, achievement summary and history use the same edited w
   });
   editSessionStart(app, start + 120 * minute);
   assert.match(app.element("metrics").innerHTML, /6\.0分/);
-  assert.match(app.element("metrics").innerHTML, /16:00予測/);
+  assert.match(app.element("metrics").innerHTML, /data-card-id="eta"[\s\S]*?<div class="v">16:00<\/div>/);
   assert.match(app.element("metrics").innerHTML, /100\.0件/);
-  assert.equal(app.element("mainValue").textContent, "2時間0分余裕", "12-hour progress must stay unchanged");
+  assert.equal(app.element("mainValue").innerHTML.replace(/<[^>]+>/g, ""), "2時間0分余裕", "12-hour progress must stay unchanged");
   assert.equal(app.api.sessionSnapshot(now).actualPaceMinutes, 6);
   app.element("target").value = "20";
   app.context.calc();
@@ -1226,11 +1226,11 @@ test("time ON other-company control records its category without pausing the cou
   }));
 
   app.api.renderEnhancedClock();
-  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働ON");
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働 OFF");
   app.api.toggleOtherCompany();
   assert.equal(app.api.getState().otherCompanyOn, true);
   assert.equal(app.api.getState().breakOn, false);
-  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働OFF");
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働 ON");
 
   app.setNow(now + 60000);
   app.api.tickClock();
@@ -1288,7 +1288,7 @@ test("time changes end breaks automatically and close other-company work before 
   assert.equal(app.api.getState().on, true);
   assert.equal(app.api.getState().breakOn, false);
   assert.equal(app.api.getState().otherCompanyOn, false);
-  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働ON");
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働 OFF");
 
   app.api.toggleOtherCompany();
   assert.equal(app.api.getState().otherCompanyOn, true);
@@ -1298,7 +1298,7 @@ test("time changes end breaks automatically and close other-company work before 
   assert.equal(app.api.getState().otherCompanyOn, false);
   assert.equal(app.api.getState().breakOn, true);
   assert.equal(app.api.getState().breakStartedAt, now + 120000);
-  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働ON");
+  assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働 OFF");
   assert.equal(app.element("otherCompanyToggle").disabled, true);
 });
 
