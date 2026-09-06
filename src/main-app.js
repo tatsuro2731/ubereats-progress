@@ -612,7 +612,7 @@ function setTone(margin, left) {
 }
 
 function bikeIcon(count) {
-  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=62#scooter"></use></svg>';
+  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=63#scooter"></use></svg>';
   return `<span class="bikes" aria-hidden="true">${icon.repeat(count)}</span>`;
 }
 
@@ -656,7 +656,7 @@ function limits(targetPace, margin) {
 }
 
 function metricIcon(id) {
-  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=62#${id}"></use></svg></span>`;
+  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=63#${id}"></use></svg></span>`;
 }
 
 function slackMarkup(minutes) {
@@ -672,18 +672,23 @@ function renderClock(remaining) {
   const sub = $("countSub");
   const dot = $("countDot");
   const panel = $("countPanel");
+  $("countStatusDetail").textContent = clockState.on ? "時間ON" : "時間OFF";
+  $("sessionStatus").dataset.state = clockState.on ? "working" : "break";
+  $("operationDock").dataset.state = clockState.on ? "working" : "break";
+  button.setAttribute("aria-pressed", String(clockState.on));
+  button.setAttribute("aria-label", clockState.on ? "稼働中。時間ON。タップで休憩" : "停止中。時間OFF。タップで開始");
   if (clockState.on) {
-    $("countStatus").textContent = "カウント中";
+    $("countStatus").textContent = "稼働中";
     button.classList.add("off");
-    button.firstChild.nodeValue = "時間OFF";
-    sub.textContent = "止める";
+    button.firstChild.nodeValue = "稼働中";
+    sub.textContent = "時間ON・タップで休憩";
     dot.classList.remove("stop");
     panel.classList.add("run");
   } else {
     $("countStatus").textContent = "停止中";
     button.classList.remove("off");
-    button.firstChild.nodeValue = "時間ON";
-    sub.textContent = "進める";
+    button.firstChild.nodeValue = "停止中";
+    sub.textContent = "時間OFF・タップで開始";
     dot.classList.add("stop");
     panel.classList.remove("run");
   }
@@ -747,7 +752,7 @@ function drawCards(values) {
     const toggle = isPaceToggleCard(id) && !cardOrderMode;
     const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     const handle = cardOrderMode ? `<button class="dragHandle" type="button" aria-label="${item.k}を移動" title="長押しして移動">≡</button>` : "";
-    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=62#swap"></use></svg>' : "";
+    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=63#swap"></use></svg>' : "";
     return `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
   }).join("");
 }
@@ -1096,5 +1101,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=62").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=63").catch(() => {}));
 }

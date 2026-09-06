@@ -13,15 +13,15 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=62"></script>
-  <link rel="stylesheet" href="styles/main.css?v=62">
-  <link rel="stylesheet" href="styles/appearance.css?v=62">
+  <script src="src/appearance.js?v=63"></script>
+  <link rel="stylesheet" href="styles/main.css?v=63">
+  <link rel="stylesheet" href="styles/appearance.css?v=63">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
   <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="配達の進捗と案件時間の目安">
   <div class="header"><h1>Uber配達進捗</h1><div class="headerActions"><div id="constraintTag" class="tag">12時間制限基準</div><button id="settingsOpen" class="settingsOpen" type="button" aria-label="設定を開く" aria-haspopup="dialog" aria-controls="settingsDialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.61.7 1.03 1.33 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg></button></div></div>
-  <div class="sessionStatus"><span id="countDot" class="dot stop"></span><span id="countStatus">時間OFF・未開始</span></div>
+  <div id="sessionStatus" class="sessionStatus" data-state="idle" role="status" aria-live="polite" aria-atomic="true"><span class="sessionStatusBadge"><span id="countDot" class="dot stop" aria-hidden="true"></span><span id="countStatus">開始前</span></span><span id="countStatusDetail" class="sessionStatusDetail">時間OFF</span></div>
   <div id="hero" class="hero">
     <div class="heroProgress">
       <div class="heroProgressCopy"><div class="heroProgressLabel">完了件数</div><div class="heroCount"><strong id="heroDone">0</strong><span id="heroTarget">/ 46</span></div><div id="heroRemaining" class="heroRemaining">残り46件</div></div>
@@ -34,7 +34,7 @@
   <div id="cardOrderToolbar" class="cardOrderToolbar" hidden><div class="cardOrderMessage"><strong>小カードを並び替え中</strong><small>カード下部の≡を長押しして移動</small></div><button id="cardOrderDone" class="cardOrderDone" type="button">完了</button></div>
   <div id="metrics" class="metrics"></div>
   <div id="cardOrderLive" class="cardOrderLive" aria-live="polite"></div>
-  <div id="operationDock" class="operationDock">
+  <div id="operationDock" class="operationDock" data-state="idle">
   <div class="card countCard">
     <div class="countHead"><div class="countTitle">残り稼働時間</div><div id="countEndClock" class="countEndClock" title="連続してカウントした場合に残り時間が0になる時刻">使い切り -</div><button id="helpBtn" class="help" type="button" aria-label="時間計測の説明" aria-expanded="false" aria-controls="helpText">?</button></div>
     <div id="countPanel" class="countPanel">
@@ -44,7 +44,7 @@
       <div id="helpText" class="helpText" hidden>時間OFFで休憩を自動開始し、時間ONで自動終了します。他社稼働は時間ON中だけ切り替えられます。</div>
     </div>
   </div>
-  <div class="card actionsCard"><div class="actions"><div id="otherCompanyDock" class="otherCompanyDock"></div><button id="countToggle" class="toggleBtn countDockToggle" type="button">時間ON<span id="countSub" class="toggleSub">進める</span></button></div></div>
+  <div class="card actionsCard"><div class="actions"><div id="otherCompanyDock" class="otherCompanyDock"></div><button id="countToggle" class="toggleBtn countDockToggle" type="button" aria-pressed="false" aria-label="開始前。時間OFF。タップで稼働を開始する">開始前<span id="countSub" class="toggleSub">時間OFF・タップで開始</span></button></div></div>
   </div>
   <section id="todaySummary" class="todaySummary" aria-labelledby="todaySummaryTitle" hidden>
     <div class="todaySummaryHead"><span class="todaySummaryIcon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"></path><path d="M6 5H4v2a4 4 0 0 0 4 4m10-6h2v2a4 4 0 0 1-4 4M12 12v5m-3 3h6"></path></svg></span><div class="todaySummaryCopy"><h2 id="todaySummaryTitle" class="todaySummaryTitle">今日のまとめ</h2><p id="todaySummaryLead" class="todaySummaryLead">目標を達成しました</p></div><span class="todaySummaryBadge">目標達成</span></div>
@@ -86,9 +86,9 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=62"></script>
-<script src="src/main-app.js?v=62"></script>
-<script src="src/session-engine.js?v=62"></script>
-<script src="src/session-editors.js?v=62"></script>
+<script src="src/app-core.js?v=63"></script>
+<script src="src/main-app.js?v=63"></script>
+<script src="src/session-engine.js?v=63"></script>
+<script src="src/session-editors.js?v=63"></script>
 </body>
 </html>

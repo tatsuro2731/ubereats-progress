@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>画面操作確認 — Uber配達進捗</title>
+  <link rel="stylesheet" href="./preview.css">
+</head>
+<body>
+  <header>
+    <h1>画面操作確認</h1>
+    <label>表示幅
+      <select id="preview-width">
+        <option value="320">320 px</option>
+        <option value="393" selected>393 px</option>
+        <option value="440">440 px</option>
+      </select>
+    </label>
+    <label>表示高さ
+      <select id="preview-height">
+        <option value="568">568 px</option>
+        <option value="740">740 px</option>
+        <option value="852" selected>852 px</option>
+        <option value="956">956 px</option>
+      </select>
+    </label>
+    <label><input id="show-compact" type="checkbox">コンパクト版を並べて表示</label>
+  </header>
+  <p id="preview-note">開発用の確認画面です。実際のページを選択した幅・高さで表示します。端末固有のセーフエリアやPWAの検証は実機で行ってください。</p>
+  <main>
+    <iframe id="app-preview" title="通常版のアプリ画面"></iframe>
+    <iframe id="compact-preview" title="コンパクト版のアプリ画面" hidden></iframe>
+  </main>
+  <script type="module" src="./preview.js"></script>
+</body>
+</html>

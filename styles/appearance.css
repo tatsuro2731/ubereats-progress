@@ -20,6 +20,18 @@
   --shadow: 0 2px 7px rgb(20 54 35 / 4%);
   --dock-shadow: 0 -5px 22px rgb(20 54 35 / 7%);
   --operation-dock-height: 180px;
+  --working-surface: #dff2e6;
+  --working-fill: #136f3e;
+  --working-text: #ffffff;
+  --working-detail: #245d3c;
+  --working-dot: #baffd2;
+  --working-line: #b7dec7;
+  --break-surface: #fff0d9;
+  --break-fill: #f0b461;
+  --break-text: #3d260c;
+  --break-detail: #755020;
+  --break-dot: #76501d;
+  --break-line: #efd2a4;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -41,6 +53,13 @@
   --hero-surface: #1d2722;
   --shadow: 0 2px 7px rgb(0 0 0 / 8%);
   --dock-shadow: 0 -5px 22px rgb(0 0 0 / 18%);
+  --working-surface: #233f2e;
+  --working-fill: #177d45;
+  --working-detail: #c1edcf;
+  --working-line: #345c42;
+  --break-surface: #3c2d1d;
+  --break-detail: #f4d0a0;
+  --break-line: #6c5030;
 }
 html[data-theme] { background: var(--bg); scroll-padding-bottom: calc(var(--operation-dock-height) + 24px); }
 body.progressApp {
@@ -81,13 +100,30 @@ body.progressApp .settingsOpen, body.progressApp .settingsClose {
   color: var(--text); background: var(--card); border: 1px solid var(--line); box-shadow: none;
 }
 body.progressApp .sessionStatus {
-  display: inline-flex; align-items: center; gap: 7px; min-height: 30px;
-  padding: 5px 10px; margin: 0 0 12px; border-radius: 99px;
-  background: var(--card2); color: var(--good); font-size: 13px; font-weight: 700;
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 100%; min-height: 40px;
+  padding: 4px 10px 4px 4px; margin: 0 0 10px; border-radius: 14px;
+  background: var(--state-surface); color: var(--state-detail); font-weight: 700;
 }
-body.progressApp .sessionStatus:has(.stop) { color: var(--muted); }
+body.progressApp .sessionStatus, body.progressApp .operationDock {
+  --state-surface: var(--card2); --state-fill: var(--card); --state-text: var(--text);
+  --state-detail: var(--muted); --state-dot: var(--muted); --state-line: var(--line);
+}
+body.progressApp :is(.sessionStatus, .operationDock)[data-state="working"] {
+  --state-surface: var(--working-surface); --state-fill: var(--working-fill); --state-text: var(--working-text);
+  --state-detail: var(--working-detail); --state-dot: var(--working-dot); --state-line: var(--working-line);
+}
+body.progressApp :is(.sessionStatus, .operationDock)[data-state="break"] {
+  --state-surface: var(--break-surface); --state-fill: var(--break-fill); --state-text: var(--break-text);
+  --state-detail: var(--break-detail); --state-dot: var(--break-dot); --state-line: var(--break-line);
+}
+body.progressApp .sessionStatusBadge {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 5px 10px; border-radius: 10px;
+  background: var(--state-fill); color: var(--state-text); font-size: 18px; line-height: 1.2; font-weight: 800; white-space: nowrap;
+}
+body.progressApp .sessionStatusDetail { font-size: 12px; line-height: 1.3; font-weight: 650; }
 body.progressApp .dot { width: 9px; height: 9px; box-shadow: none; background: var(--good); }
 body.progressApp .dot.stop { background: var(--muted); box-shadow: none; }
+body.progressApp .sessionStatus .dot { flex: 0 0 9px; background: var(--state-dot); box-shadow: none; }
 body.progressApp .hero,
 body.progressApp .hero.good, body.progressApp .hero.warn,
 body.progressApp .hero.late, body.progressApp .hero.bad {
@@ -181,7 +217,7 @@ body.progressApp .metric.dropTarget { border-color: var(--good); box-shadow: 0 0
 /* One fixed dock; its measured height reserves space at every text size. */
 body.progressApp .operationDock {
   position: fixed; inset: auto 0 0; z-index: 40; padding: 10px 14px max(12px, env(safe-area-inset-bottom));
-  background: var(--card); border-top: 1px solid var(--line); box-shadow: var(--dock-shadow);
+  background: var(--state-surface); border-top: 1px solid var(--state-line); box-shadow: var(--dock-shadow);
 }
 body.progressApp .operationDock .countCard, body.progressApp .operationDock .actionsCard {
   position: static; max-width: 620px; margin: 0 auto; padding: 0;
@@ -220,7 +256,14 @@ body.progressApp .operationDock .countDockToggle {
 }
 body.progressApp .otherCompanyDock button { background: transparent; color: var(--good); font-size: 14px; }
 body.progressApp .otherCompanyDock button.active { background: var(--card2); }
-body.progressApp .countDockToggle .toggleSub { display: none; }
+body.progressApp .operationDock .countDockToggle {
+  min-height: 56px; padding: 7px; background: var(--state-fill); color: var(--state-text);
+  border-color: var(--state-line); font-size: 20px; font-weight: 800;
+}
+body.progressApp .operationDock .countDockToggle .toggleSub {
+  display: block; margin-top: 3px; font-size: 11px; line-height: 1.3; font-weight: 600; opacity: 1;
+}
+body.progressApp .operationDock .countDockToggle:disabled { opacity: 1; filter: none; }
 body.progressApp button:disabled { opacity: .5; cursor: default; box-shadow: none; }
 body.progressApp button:focus-visible, body.progressApp a:focus-visible, body.progressApp .paceToggle:focus-visible,
 body.progressApp input:focus-visible, body.progressApp select:focus-visible { outline: 2px solid var(--good); outline-offset: 3px; }
@@ -345,7 +388,8 @@ body.compactView .detailItem .v { color: var(--text); }
 /* Fit the overview and both card rows above the measured dock. These rules follow
    the theme overrides so short-screen spacing cannot be overridden by the palette. */
 body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .header { margin-bottom: 5px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .sessionStatus { margin-bottom: 7px; min-height: 26px; padding-block: 3px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .sessionStatus { margin-bottom: 7px; min-height: 34px; padding-block: 3px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .sessionStatusBadge { min-height: 28px; padding-block: 3px; font-size: 17px; }
 body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .hero { padding: 10px 12px; margin-bottom: 8px; }
 body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .heroCount strong { font-size: clamp(34px, 10vw, 44px); }
 body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .heroProgressLine { margin: 6px 0 7px; }

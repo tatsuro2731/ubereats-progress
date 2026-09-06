@@ -30,6 +30,7 @@ class FakeElement {
     this.innerHTML = "";
     this.hidden = false;
     this.dataset = {};
+    this.attributes = {};
     this.firstChild = { nodeValue: "" };
     this.style = {};
     this.parentElement = { style: {} };
@@ -38,7 +39,7 @@ class FakeElement {
   appendChild() {}
   before() {}
   querySelector() { return null; }
-  setAttribute() {}
+  setAttribute(name, value) { this.attributes[name] = String(value); }
   addEventListener() {}
   focus() {}
 }
@@ -743,11 +744,23 @@ test("the first time ON starts one session and later toggles keep its start", ()
     sessionStartAt: null,
     lastTickAt: 100000
   }));
+  app.api.renderEnhancedClock();
+  assert.equal(app.element("countStatus").textContent, "開始前");
+  assert.equal(app.element("countStatusDetail").textContent, "時間OFF");
+  assert.equal(app.element("sessionStatus").dataset.state, "idle");
+  assert.equal(app.element("operationDock").dataset.state, "idle");
 
   app.setNow(200000);
   app.api.enhancedToggleClock();
   assert.equal(app.api.getState().on, true);
   assert.equal(app.api.getState().sessionStartAt, 200000);
+  assert.equal(app.element("countStatus").textContent, "稼働中");
+  assert.equal(app.element("countStatusDetail").textContent, "時間ON");
+  assert.equal(app.element("countToggle").firstChild.nodeValue, "稼働中");
+  assert.equal(app.element("countSub").textContent, "時間ON・タップで休憩");
+  assert.equal(app.element("countToggle").attributes["aria-pressed"], "true");
+  assert.equal(app.element("sessionStatus").dataset.state, "working");
+  assert.equal(app.element("operationDock").dataset.state, "working");
 
   app.setNow(260000);
   app.api.enhancedToggleClock();
@@ -755,12 +768,21 @@ test("the first time ON starts one session and later toggles keep its start", ()
   assert.equal(app.api.getState().breakOn, true);
   assert.equal(app.api.getState().breakStartedAt, 260000);
   assert.equal(app.api.getState().activeMs, 60000);
+  assert.equal(app.element("countStatus").textContent, "休憩中");
+  assert.equal(app.element("countStatusDetail").textContent, "時間OFF");
+  assert.equal(app.element("countToggle").firstChild.nodeValue, "休憩中");
+  assert.equal(app.element("countSub").textContent, "時間OFF・タップで再開");
+  assert.equal(app.element("countToggle").attributes["aria-pressed"], "false");
+  assert.equal(app.element("sessionStatus").dataset.state, "break");
+  assert.equal(app.element("operationDock").dataset.state, "break");
 
   app.setNow(300000);
   app.api.enhancedToggleClock();
   assert.equal(app.api.getState().sessionStartAt, 200000);
   assert.equal(app.api.getState().breakOn, false);
   assert.equal(app.api.sessionBreakMs(), 40000);
+  assert.equal(app.element("countStatus").textContent, "稼働中");
+  assert.equal(app.element("sessionStatus").dataset.state, "working");
   assert.equal(app.geolocationRequests(), 0);
 });
 
@@ -1052,6 +1074,13 @@ test("ending a session records once and freezes the continuous clock", () => {
   assert.equal(finished.sessionEndedAt, 200000);
   assert.equal(finished.activeMs, usedMs(finished.remainingMs));
   assert.equal(history[0].activeMs, history[0].usedMs);
+  assert.equal(history[0].endedFromState, "counting", "presentation labels must not change the persisted history mode");
+  assert.equal(app.element("countStatus").textContent, "稼働終了");
+  assert.equal(app.element("countStatusDetail").textContent, "時間OFF・保存済み");
+  assert.equal(app.element("sessionStatus").dataset.state, "ended");
+  assert.equal(app.element("operationDock").dataset.state, "ended");
+  assert.equal(app.element("countToggle").disabled, true);
+  assert.equal(app.element("countToggle").attributes["aria-pressed"], "false");
 
   app.setNow(400000);
   app.api.tickClock();
@@ -1203,7 +1232,7 @@ test("switching time OFF automatically records a break and ON ends it", () => {
   assert.equal(app.api.getState().breakOn, true);
   assert.equal(app.api.getState().breakStartedAt, now + 60000);
   assert.equal(app.api.getState().otherCompanyOn, false);
-  assert.equal(app.element("countSub").textContent, "休憩中");
+  assert.equal(app.element("countSub").textContent, "時間OFF・タップで再開");
   assert.equal(app.element("otherCompanyToggle").disabled, true);
 
   app.setNow(now + 120000);
@@ -1231,6 +1260,10 @@ test("time ON other-company control records its category without pausing the cou
   assert.equal(app.api.getState().otherCompanyOn, true);
   assert.equal(app.api.getState().breakOn, false);
   assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働 ON");
+  assert.equal(app.element("countStatus").textContent, "稼働中");
+  assert.equal(app.element("countStatusDetail").textContent, "時間ON・他社稼働");
+  assert.equal(app.element("sessionStatus").dataset.state, "working");
+  assert.equal(app.element("operationDock").dataset.state, "working");
 
   app.setNow(now + 60000);
   app.api.tickClock();

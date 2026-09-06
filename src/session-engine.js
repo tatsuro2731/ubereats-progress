@@ -367,11 +367,14 @@
   }
 
   function currentStatus() {
-    if (clockState.sessionEndedAt) return { text: "稼働終了", sub: "履歴に保存済み", mode: "ended" };
-    if (clockState.on && clockState.otherCompanyOn) return { text: "他社稼働中", sub: "残り時間も計測中", mode: "otherCompany" };
-    if (clockState.breakOn) return { text: "休憩中", sub: "休憩中", mode: "break" };
-    if (!clockState.on) return { text: "停止中", sub: "開始する", mode: "off" };
-    return { text: "カウント中", sub: "止める", mode: "counting" };
+    // Keep mode values unchanged: history stores them as endedFromState.
+    if (clockState.sessionEndedAt) return { text: "稼働終了", sub: "時間OFF・保存済み", mode: "ended", state: "ended", action: "" };
+    if (clockState.on && clockState.otherCompanyOn) return { text: "稼働中", sub: "時間ON・他社稼働", mode: "otherCompany", state: "working", action: "タップで休憩" };
+    if (clockState.breakOn) return { text: "休憩中", sub: "時間OFF", mode: "break", state: "break", action: "タップで再開" };
+    if (!clockState.on) return clockState.sessionStartAt
+      ? { text: "停止中", sub: "時間OFF", mode: "off", state: "break", action: "タップで再開" }
+      : { text: "開始前", sub: "時間OFF", mode: "off", state: "idle", action: "タップで開始" };
+    return { text: "稼働中", sub: "時間ON", mode: "counting", state: "working", action: "タップで休憩" };
   }
 
   function exhaustionText(at = nowMs()) {
@@ -393,14 +396,18 @@
     const ended = Boolean(clockState.sessionEndedAt);
     const counting = clockState.on && !clockState.breakOn && !ended;
     $("countRemain").textContent = `残り ${remainingText(clockState.remainingMs)}`;
-    $("countStatus").textContent = ended ? "稼働終了・保存済み"
-      : counting ? (clockState.otherCompanyOn ? "時間ON・他社稼働中" : "時間ON・計測中")
-      : clockState.breakOn ? "時間OFF・休憩中" : "時間OFF・未開始";
+    // This is a live region; announce state changes, not every timer tick.
+    if ($("countStatus").textContent !== status.text) $("countStatus").textContent = status.text;
+    if ($("countStatusDetail").textContent !== status.sub) $("countStatusDetail").textContent = status.sub;
+    $("sessionStatus").dataset.state = status.state;
+    $("operationDock").dataset.state = status.state;
     $("countEndClock").textContent = exhaustionText();
     $("countEndClock").classList.toggle("run", counting);
     button.classList.toggle("off", clockState.on);
-    button.firstChild.nodeValue = ended ? "稼働終了済み" : clockState.on ? "時間をOFF" : "時間をON";
-    sub.textContent = ended ? "履歴に保存済み" : clockState.on ? status.sub : clockState.breakOn ? "休憩中" : "開始する";
+    button.firstChild.nodeValue = status.text;
+    sub.textContent = ended ? status.sub : `${counting ? "時間ON" : "時間OFF"}・${status.action}`;
+    button.setAttribute("aria-pressed", String(counting));
+    button.setAttribute("aria-label", `${status.text}。${status.sub}。${ended ? "履歴に保存済み" : status.action}`);
     button.disabled = ended;
     button.setAttribute("aria-disabled", String(ended));
     ["remainMinus", "remainPlus", "remainH", "remainM"].forEach(id => {
