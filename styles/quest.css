@@ -1,0 +1,34 @@
+body.progressApp .appTabs { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; background:var(--card2); border-radius:13px; margin:0 0 12px; }
+body.progressApp .appTabs button { min-height:44px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-size:16px; font-weight:700; box-shadow:none; }
+body.progressApp .appTabs button[aria-selected="true"] { background:var(--card); color:var(--accent); }
+body.mainView.questMode .wrap { padding-bottom:max(20px,env(safe-area-inset-bottom)); }
+.questView { font-size:16px; line-height:1.55; }
+.questView h2,.questView h3,.questView h4 { margin:0; color:var(--text); }
+.questView h2 { font-size:19px; }.questView h3 { font-size:17px; }.questView h4 { font-size:16px; }
+.questView p { margin:8px 0 12px; }.questView button,.questView input,.questView select { font:inherit; }
+.questToolbar,.questBetween { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.questCard { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:17px; padding:16px; margin:12px 0; min-width:0; }
+.questView .questPrimary,.questView .questSecondary,.questView .questTextButton { min-height:44px; border-radius:11px; padding:10px 13px; box-shadow:none; cursor:pointer; touch-action:manipulation; font-size:14px; }
+.questView .questPrimary { background:var(--accent); color:var(--primary-text); border:1px solid transparent; font-weight:700; }
+.questView .questSecondary { background:var(--card); color:var(--text); border:1px solid var(--line); }
+.questView .questTextButton { background:transparent; border:0; color:var(--accent); }
+.questView button:disabled { opacity:.5; cursor:default; }
+.questView .questField { display:grid; gap:6px; min-width:0; color:var(--muted); font-size:14px; margin-bottom:12px; }
+.questView input,.questView select { display:block; width:100%; min-width:0; max-width:100%; min-height:44px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--text); background:var(--input); font-size:16px; box-sizing:border-box; }
+.questView .questFormPair { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 12px; }
+.questMuted,.questLabel { color:var(--muted); font-size:14px; }
+.questView .questBigCount { display:flex; gap:8px; align-items:baseline; font-variant-numeric:tabular-nums; }
+.questBigCount strong { font-size:46px; font-weight:800; line-height:1.25; letter-spacing:-.03em; }.questBigCount span { font-size:20px; color:var(--muted); }
+.questTrack { height:8px; border-radius:5px; background:var(--card2); margin:14px 0; overflow:hidden; }.questTrack span { height:100%; display:block; background:var(--accent); border-radius:5px; width:0; }
+.questMainText { font-size:21px; font-weight:750; color:var(--accent); }
+.questTiers { margin-top:16px; border-top:1px solid var(--line); }.questTier { display:flex; gap:12px; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid var(--line); font-size:14px; }.questTier strong { display:block; font-size:18px; }.questTier em { font-style:normal; color:var(--muted); }.questTier[data-reached="true"] em { color:var(--accent); }
+.questEarned { padding-top:13px; font-size:14px; }.questEarned strong { font-size:18px; font-variant-numeric:tabular-nums; }
+.questSuggested { font-size:26px; line-height:1.6; }.questWorkDays { display:flex; flex-wrap:wrap; gap:6px; }.questWorkDays label { display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:9px; padding:8px; min-height:44px; cursor:pointer; font-size:14px; }.questWorkDays input { width:18px; height:18px; min-height:18px; accent-color:var(--accent); }
+.questView details summary { min-height:44px; padding:10px 0; cursor:pointer; font-size:14px; }.questView .questInlineField { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--muted); }.questInlineField select { width:auto; }
+.questMoney { font-size:32px; line-height:1.6; font-weight:750; letter-spacing:-.025em; font-variant-numeric:tabular-nums; }.questRevenueLine { font-size:14px; padding:4px 0; }.questSalesForm { margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }.questSalesForm .questField { margin-bottom:8px; }
+.questConfigForm .questBetween { margin-bottom:12px; }.questConfigForm h4 { font-size:15px; }.questTierInput { border-bottom:1px solid var(--line); padding:8px 0; margin-bottom:8px; }.questTierInput .questBetween { margin-bottom:4px; }.questTierInput .questFormPair .questField { margin-bottom:6px; }
+.questError { color:var(--bad); font-size:14px; font-weight:650; }.questLive { color:var(--accent); min-height:22px; font-size:14px; }
+body.progressApp .questBrief { display:flex; justify-content:space-between; flex-wrap:wrap; gap:3px 10px; width:100%; text-align:left; min-height:44px; padding:8px 12px; margin:0 0 8px; background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:12px; box-shadow:none; font-size:14px; }
+.questBrief span:last-child { color:var(--muted); font-size:13px; }
+.compactQuestLink { display:block; background:var(--card); color:var(--text); border:1px solid var(--line); padding:12px; border-radius:12px; margin-top:12px; font-size:14px; text-decoration:none; }
+@media(max-width:359px) { .questCard { padding:13px; }.questBigCount strong { font-size:40px; }.questView .questFormPair { gap:0 8px; }.questToolbar { gap:6px; } }

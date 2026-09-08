@@ -13,15 +13,22 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=63"></script>
-  <link rel="stylesheet" href="styles/main.css?v=63">
-  <link rel="stylesheet" href="styles/appearance.css?v=63">
+  <script src="src/appearance.js?v=64"></script>
+  <link rel="stylesheet" href="styles/main.css?v=64">
+  <link rel="stylesheet" href="styles/appearance.css?v=64">
+  <link rel="stylesheet" href="styles/quest.css?v=64">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
-  <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="配達の進捗と案件時間の目安">
   <div class="header"><h1>Uber配達進捗</h1><div class="headerActions"><div id="constraintTag" class="tag">12時間制限基準</div><button id="settingsOpen" class="settingsOpen" type="button" aria-label="設定を開く" aria-haspopup="dialog" aria-controls="settingsDialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.61.7 1.03 1.33 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg></button></div></div>
   <div id="sessionStatus" class="sessionStatus" data-state="idle" role="status" aria-live="polite" aria-atomic="true"><span class="sessionStatusBadge"><span id="countDot" class="dot stop" aria-hidden="true"></span><span id="countStatus">開始前</span></span><span id="countStatusDetail" class="sessionStatusDetail">時間OFF</span></div>
+  <nav class="appTabs" role="tablist" aria-label="表示する画面">
+    <button id="progressTab" type="button" role="tab" aria-controls="progressView" aria-selected="true">進捗</button>
+    <button id="questTab" type="button" role="tab" aria-controls="questView" aria-selected="false">クエスト</button>
+  </nav>
+  <section id="progressView" role="tabpanel" aria-labelledby="progressTab">
+  <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="配達の進捗と案件時間の目安">
+  <button id="questBrief" class="questBrief" type="button" hidden><span id="questBriefCount"></span><span id="questBriefNext"></span></button>
   <div id="hero" class="hero">
     <div class="heroProgress">
       <div class="heroProgressCopy"><div class="heroProgressLabel">完了件数</div><div class="heroCount"><strong id="heroDone">0</strong><span id="heroTarget">/ 46</span></div><div id="heroRemaining" class="heroRemaining">残り46件</div></div>
@@ -49,6 +56,47 @@
   <section id="todaySummary" class="todaySummary" aria-labelledby="todaySummaryTitle" hidden>
     <div class="todaySummaryHead"><span class="todaySummaryIcon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"></path><path d="M6 5H4v2a4 4 0 0 0 4 4m10-6h2v2a4 4 0 0 1-4 4M12 12v5m-3 3h6"></path></svg></span><div class="todaySummaryCopy"><h2 id="todaySummaryTitle" class="todaySummaryTitle">今日のまとめ</h2><p id="todaySummaryLead" class="todaySummaryLead">目標を達成しました</p></div><span class="todaySummaryBadge">目標達成</span></div>
     <div class="todaySummaryGrid"><div class="todaySummaryStat primary"><span>完了件数</span><strong id="todaySummaryDone">-</strong></div><div class="todaySummaryStat"><span>稼働時間</span><strong id="todaySummaryWork">-</strong></div><div class="todaySummaryStat"><span>平均ペース</span><strong id="todaySummaryPace">-</strong></div><div class="todaySummaryStat"><span>1時間あたり</span><strong id="todaySummaryHourly">-</strong></div></div>
+  </section>
+  </section>
+  <section id="questView" class="questView" role="tabpanel" aria-labelledby="questTab" hidden>
+    <div class="questToolbar"><h2>日跨ぎクエスト</h2><button id="questNew" type="button" class="questSecondary">新しく登録</button></div>
+    <p id="questError" class="questError" role="alert" hidden></p>
+    <div id="questEmpty" class="questCard"><h3>クエストを登録する</h3><p>期間・必要件数・報酬を登録すると、いつもの件数操作でクエストも進みます。</p><button id="questFirst" type="button" class="questPrimary">クエストを登録</button></div>
+    <div id="questContent" hidden>
+      <label class="questField questPeriodPicker" for="questSelect">クエスト期間<select id="questSelect"></select></label>
+      <div class="questCard">
+        <div class="questBetween"><span id="questPeriod"></span><button id="questEdit" class="questTextButton" type="button">設定を編集</button></div>
+        <p id="questPhase" class="questMuted"></p>
+        <div class="questLabel">期間中の完了件数</div><div class="questBigCount"><strong id="questTotal">0</strong><span id="questGoal"></span></div>
+        <div id="questProgress" class="questTrack" role="progressbar" aria-label="クエスト目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="questFill"></span></div>
+        <div id="questRemaining" class="questMainText"></div><div id="questNext" class="questMuted"></div>
+        <div id="questTiers" class="questTiers"></div>
+        <div class="questBetween questEarned"><span>達成済み報酬（記録上）</span><strong id="questEarned"></strong></div>
+      </div>
+      <div class="questCard"><div class="questBetween"><div><div class="questLabel">均等に進めるなら、今日</div><strong id="questSuggested" class="questSuggested"></strong><div id="questSuggestedNote" class="questMuted"></div></div><button id="questApplyTarget" class="questPrimary" type="button">今日の目標に使う</button></div>
+        <details><summary>稼働する日を変更</summary><div id="questWorkDays" class="questWorkDays"></div><p class="questMuted">休みにする日のチェックを外してください。</p></details>
+      </div>
+      <div class="questCard">
+        <div class="questBetween"><h3 id="questSalesTitle">今日の見込み売上</h3><label class="questInlineField" for="questSalesDay">表示日<select id="questSalesDay"></select></label></div>
+        <div id="questSalesTotal" class="questMoney">未入力</div>
+        <div class="questBetween questRevenueLine"><span>配達売上</span><span id="questBaseSales"></span></div><div class="questBetween questRevenueLine"><span id="questAllocationLabel">クエスト配分（見込み）</span><span id="questAllocation"></span></div>
+        <p id="questRateNote" class="questMuted"></p>
+        <form id="questSalesForm" class="questSalesForm"><label class="questField" for="questSalesInput">配達売上（クエスト報酬を除く・円）<input id="questSalesInput" type="number" min="0" max="9999999" step="1" inputmode="numeric" required></label><button class="questSecondary" type="submit">売上を保存</button></form>
+      </div>
+      <details id="questAlignDetails" class="questCard"><summary>公式アプリの件数に合わせる</summary><form id="questAlignForm"><p class="questMuted">Uberの完了件数だけを入力してください。他社分は含めません。</p><div class="questFormPair"><label class="questField" for="questAlignTotal">期間中の累計件数<input id="questAlignTotal" type="number" min="0" max="99999" step="1" inputmode="numeric" required></label><label class="questField" for="questAlignToday">うち今日の件数<input id="questAlignToday" type="number" min="0" max="99999" step="1" inputmode="numeric" required></label></div><p id="questDayBoundary" class="questMuted"></p><button class="questSecondary" type="submit">件数を合わせる</button></form></details>
+    </div>
+    <form id="questConfigForm" class="questCard questConfigForm" hidden>
+      <div class="questBetween"><h3 id="questFormTitle">クエストを登録</h3><button id="questCancel" class="questTextButton" type="button">閉じる</button></div>
+      <label class="questField" for="questTemplate">期間のひな形<select id="questTemplate"><option value="weekday">月〜木</option><option value="weekend">金〜日</option><option value="custom">自由に設定</option></select></label>
+      <div class="questFormPair"><label class="questField" for="questStartDate">開始日<input id="questStartDate" type="date" required></label><label class="questField" for="questStartTime">開始時刻<input id="questStartTime" type="time" required></label><label class="questField" for="questEndDate">終了日<input id="questEndDate" type="date" required></label><label class="questField" for="questEndTime">終了時刻<input id="questEndTime" type="time" required></label></div>
+      <p class="questMuted">日時は日本時間です。Uberに表示される開始・終了時刻に合わせてください。</p>
+      <div class="questBetween"><h4>段階ごとの件数と報酬</h4><button id="questAddTier" class="questTextButton" type="button">段階を追加</button></div><div id="questTierInputs"></div>
+      <p class="questMuted">例：120件＋追加10件なら、必要件数は120・130件。報酬は各段階でもらえる追加額を入力します。</p>
+      <label class="questField" for="questGoalInput">狙う段階<select id="questGoalInput"></select></label>
+      <div id="questInitialCounts"><div class="questFormPair"><label class="questField" for="questInitialTotal">現在のクエスト累計<input id="questInitialTotal" type="number" min="0" max="99999" step="1" inputmode="numeric" required></label><label class="questField" for="questInitialToday">うち今日の件数<input id="questInitialToday" type="number" min="0" max="99999" step="1" inputmode="numeric" required></label></div><p class="questMuted">未開始なら両方0件。すでに配達済みの場合は、公式アプリの件数を入力してください。</p></div>
+      <p id="questConfigError" class="questError" role="alert" hidden></p><button class="questPrimary" type="submit">保存する</button>
+    </form>
+    <p id="questLive" class="questLive" role="status" aria-live="polite"></p>
   </section>
 </div>
 <div id="settingsLayer" class="settingsLayer" hidden>
@@ -86,9 +134,11 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=63"></script>
-<script src="src/main-app.js?v=63"></script>
-<script src="src/session-engine.js?v=63"></script>
-<script src="src/session-editors.js?v=63"></script>
+<script src="src/app-core.js?v=64"></script>
+<script src="src/quest-store.js?v=64"></script>
+<script src="src/main-app.js?v=64"></script>
+<script src="src/session-engine.js?v=64"></script>
+<script src="src/session-editors.js?v=64"></script>
+<script src="src/quest-ui.js?v=64"></script>
 </body>
 </html>

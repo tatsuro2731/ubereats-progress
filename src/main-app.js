@@ -338,11 +338,11 @@ function adjustRemain(delta) {
 }
 
 function adjustDone(delta) {
-  const current = n("done");
+  const current = typeof UberQuestStore !== "undefined" ? UberQuestStore.currentDone() : n("done");
   const value = Math.max(0, Math.min(current + delta, 80));
   if (value === current) return;
   $("done").value = String(value);
-  save();
+  save({ countChange: true });
   calc();
 }
 
@@ -437,12 +437,12 @@ function fillCards(value) {
   return result.slice(0, 6);
 }
 
-function save() {
+function save(options = {}) {
   cards = fillCards(cards);
   const endLimitTime = $("endLimit").value;
   let previous = {};
   try { previous = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch (_) {}
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+  const data = {
     ...(previous && typeof previous === "object" ? previous : {}),
     target: $("target").value,
     done: $("done").value,
@@ -453,7 +453,12 @@ function save() {
     displayCount: String(cardCount),
     cardCount: String(cardCount),
     displayCards: cards
-  }));
+  };
+  if (typeof UberQuestStore !== "undefined") {
+    if (!UberQuestStore.saveProgress(data, options)) { load(); return false; }
+  } else localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (typeof UberQuestStore !== "undefined") $("done").value = String(UberQuestStore.currentDone());
+  return true;
 }
 
 function load() {
@@ -612,7 +617,7 @@ function setTone(margin, left) {
 }
 
 function bikeIcon(count) {
-  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=63#scooter"></use></svg>';
+  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=64#scooter"></use></svg>';
   return `<span class="bikes" aria-hidden="true">${icon.repeat(count)}</span>`;
 }
 
@@ -656,7 +661,7 @@ function limits(targetPace, margin) {
 }
 
 function metricIcon(id) {
-  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=63#${id}"></use></svg></span>`;
+  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=64#${id}"></use></svg></span>`;
 }
 
 function slackMarkup(minutes) {
@@ -752,7 +757,7 @@ function drawCards(values) {
     const toggle = isPaceToggleCard(id) && !cardOrderMode;
     const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     const handle = cardOrderMode ? `<button class="dragHandle" type="button" aria-label="${item.k}を移動" title="長押しして移動">≡</button>` : "";
-    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=63#swap"></use></svg>' : "";
+    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=64#swap"></use></svg>' : "";
     return `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
   }).join("");
 }
@@ -986,7 +991,7 @@ function calc() {
 }
 
 function setup() {
-  addOptions($("target"), 10, 80, "件");
+  addOptions($("target"), 1, 80, "件");
   addOptions($("done"), 0, 80, "件");
   addOptions($("remainH"), 0, 12, "時間");
   addOptions($("remainM"), 0, 59, "分", 1, true);
@@ -1023,7 +1028,7 @@ function setup() {
   ["target", "done", "remainH", "remainM", "endLimit"].forEach(id => {
     $(id).addEventListener("change", () => {
       if (id === "remainH" || id === "remainM") syncClock();
-      save();
+      save({ countChange: id === "done" });
       calc();
     });
   });
@@ -1081,6 +1086,7 @@ function setup() {
   enableHoldRepeat("plus", () => adjustDone(1));
   $("reset").onclick = () => {
     if (!confirm("完了件数と残り時間をリセットしますか？")) return;
+    if (typeof UberQuestStore !== "undefined" && !UberQuestStore.resetCounter()) return;
     $("done").value = "0";
     $("remainH").value = "12";
     $("remainM").value = "0";
@@ -1101,5 +1107,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=63").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=64").catch(() => {}));
 }

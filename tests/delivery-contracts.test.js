@@ -105,7 +105,13 @@ test("the service worker cache revision and assets match direct script URLs", ()
     ...[...page.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi)].map(match => match[1]),
     ...[...page.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1])
   ]).map(normalizedAsset);
-  assert.equal(pageAssets.length, 12, "both pages load the shared appearance script and stylesheet");
+  assert.equal(pageAssets.length, 18, "both pages load shared appearance and quest assets");
+  for (const page of [html, compact]) {
+    assert.match(page, /src\/quest-store\.js/);
+    assert.match(page, /src\/quest-ui\.js/);
+    assert.match(page, /styles\/quest\.css/);
+    assert.ok(page.indexOf("src/app-core.js") < page.indexOf("src/quest-store.js"));
+  }
   for (const source of pageAssets) {
     assert.ok(assets.includes(source), `${source} must be pre-cached exactly as referenced`);
   }

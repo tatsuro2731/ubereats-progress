@@ -256,6 +256,144 @@
     return Number.isFinite(parsed) ? parsed : fallback;
   }
 
+  // Quest records are separate from the published progress/clock storage contract.
+  const QUEST_STORAGE_KEY = "ubereatsProgressQuestV1";
+  const DAY_MS = 86400000;
+  function questDayKey(at, boundaryMinutes = 0) {
+    return new Date(Number(at) + (540 - boundaryMinutes) * 60000).toISOString().slice(0, 10);
+  }
+  function questDayStart(day, boundaryMinutes = 0) {
+    return Date.parse(`${day}T00:00:00+09:00`) + boundaryMinutes * 60000;
+  }
+  function questDateKeys(quest) {
+    const dates = [];
+    for (let at = questDayStart(questDayKey(quest.startAt, quest.boundaryMinutes), quest.boundaryMinutes); at < quest.endAt && dates.length < 36; at += DAY_MS) {
+      dates.push(questDayKey(at, quest.boundaryMinutes));
+    }
+    return dates;
+  }
+  function createQuestState(done = 0, at = Date.now()) {
+    return { version: 1, counter: { done, epoch: 0, startedAt: at }, sequence: 0, entries: [], quests: [], selectedId: null };
+  }
+  function changeQuestCount(state, nextDone, { reset = false, at = Date.now() } = {}) {
+    const next = { ...state, counter: { ...state.counter }, entries: state.entries.map(entry => ({ ...entry })) };
+    const done = Math.max(0, Math.floor(finite(nextDone)));
+    if (reset) {
+      next.counter = { ...next.counter, done, epoch: next.counter.epoch + 1, startedAt: at };
+      return next;
+    }
+    let delta = done - next.counter.done;
+    if (delta > 0) {
+      next.entries.push({ id: ++next.sequence, epoch: next.counter.epoch, at, quantity: delta });
+    } else if (delta < 0) {
+      // Undo deliveries at their original time, including corrections after midnight/deadline.
+      for (let index = next.entries.length - 1; index >= 0 && delta < 0; index -= 1) {
+        const entry = next.entries[index];
+        if (entry.epoch !== next.counter.epoch || entry.quantity <= 0) continue;
+        const undo = Math.min(entry.quantity, -delta);
+        entry.quantity -= undo;
+        delta += undo;
+      }
+      if (delta < 0) next.entries.push({ id: ++next.sequence, epoch: next.counter.epoch, at: next.counter.startedAt, quantity: delta });
+    }
+    next.counter.done = done;
+    return next;
+  }
+  function validateQuest(quest, quests = []) {
+    if (!quest || typeof quest !== "object" || Array.isArray(quest)) return "クエストの設定を確認してください。";
+    if (!Number.isFinite(quest.startAt) || !Number.isFinite(quest.endAt) || quest.endAt <= quest.startAt) return "終了日時を開始日時より後にしてください。";
+    if (!Number.isFinite(new Date(quest.startAt).getTime()) || !Number.isFinite(new Date(quest.endAt).getTime())) return "開始・終了日時を確認してください。";
+    if (quest.endAt - quest.startAt > 35 * DAY_MS) return "期間は35日以内で指定してください。";
+    if (!Array.isArray(quest.tiers) || !quest.tiers.length || quest.tiers.length > 5) return "報酬の段階は1〜5段階で登録してください。";
+    let previous = 0;
+    for (const tier of quest.tiers) {
+      if (!tier || typeof tier !== "object") return "報酬の段階を確認してください。";
+      if (!Number.isInteger(tier.target) || tier.target <= previous || tier.target > 9999) return "必要件数を1〜9999件の範囲で、前の段階より多くしてください。";
+      if (!Number.isInteger(tier.reward) || tier.reward < 0 || tier.reward > 9999999) return "報酬は0〜9,999,999円の整数で入力してください。";
+      previous = tier.target;
+    }
+    if (!Number.isInteger(quest.goalIndex) || quest.goalIndex < 0 || quest.goalIndex >= quest.tiers.length) return "狙う段階を選んでください。";
+    if (!Number.isInteger(quest.boundaryMinutes) || quest.boundaryMinutes < 0 || quest.boundaryMinutes >= 1440) return "開始時刻を確認してください。";
+    if (quests.some(other => other.id !== quest.id && other.startAt < quest.endAt && other.endAt > quest.startAt)) return "登録済みのクエストと期間が重なっています。既存のクエストを編集してください。";
+    return "";
+  }
+  function questDailyCounts(quest, entries) {
+    const counts = Object.fromEntries(questDateKeys(quest).map(day => [day, finite(quest.adjustments && quest.adjustments[day])]));
+    for (const entry of entries) {
+      if (entry.at < quest.startAt || entry.at >= quest.endAt) continue;
+      const day = questDayKey(entry.at, quest.boundaryMinutes);
+      counts[day] = (counts[day] || 0) + finite(entry.quantity);
+    }
+    return counts;
+  }
+  function alignQuestCounts(quest, entries, total, today, at = Date.now()) {
+    if (![total, today].every(value => Number.isInteger(value) && value >= 0 && value <= 99999) || today > total) throw new Error("累計と今日の件数を確認してください。今日の件数は累計以下にします。");
+    const counts = questDailyCounts(quest, entries);
+    const day = questDayKey(at, quest.boundaryMinutes);
+    const dates = Object.keys(counts);
+    const includesToday = dates.includes(day) && at >= quest.startAt;
+    if (!includesToday && today !== 0) throw new Error("期間外のクエストの今日分は0件にしてください。");
+    const earlier = dates.filter(value => value < day);
+    if (total !== today && !earlier.length) throw new Error("初日の累計件数は、今日の件数と同じにしてください。");
+    const adjustments = { ...quest.adjustments };
+    const setCount = (key, wanted) => {
+      adjustments[key] = finite(adjustments[key]) + wanted - finite(counts[key]);
+      counts[key] = wanted;
+    };
+    for (const key of dates) if (counts[key] < 0) setCount(key, 0);
+    if (includesToday) setCount(day, today);
+    let difference = total - Object.values(counts).reduce((sum, value) => sum + value, 0);
+    const unverifiedDays = new Set(quest.unverifiedDays || []);
+    // A cumulative import cannot establish which of several past days contained deliveries.
+    if (difference !== 0 && earlier.length > 1) earlier.forEach(key => unverifiedDays.add(key));
+    if (includesToday) unverifiedDays.delete(day);
+    if (difference > 0 && earlier.length) setCount(earlier.at(-1), counts[earlier.at(-1)] + difference);
+    else if (difference < 0) {
+      for (const key of earlier.reverse()) {
+        const remove = Math.min(counts[key], -difference);
+        setCount(key, counts[key] - remove);
+        difference += remove;
+        if (!difference) break;
+      }
+    }
+    return { ...quest, adjustments, unverifiedDays: [...unverifiedDays].sort() };
+  }
+  function calculateQuest(quest, entries, at = Date.now(), displayDay) {
+    const raw = questDailyCounts(quest, entries);
+    const counts = Object.fromEntries(Object.entries(raw).map(([day, count]) => [day, Math.max(0, count)]));
+    const dates = Object.keys(counts).sort();
+    const day = questDayKey(at, quest.boundaryMinutes);
+    const shownDay = displayDay && dates.includes(displayDay) ? displayDay : dates.includes(day) ? day : at < quest.startAt ? dates[0] : dates.at(-1);
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    const goal = quest.tiers[quest.goalIndex].target;
+    const plannedReward = quest.tiers.slice(0, quest.goalIndex + 1).reduce((sum, tier) => sum + tier.reward, 0);
+    const earnedReward = quest.tiers.reduce((sum, tier) => sum + (total >= tier.target ? tier.reward : 0), 0);
+    const phase = at < quest.startAt ? "upcoming" : at >= quest.endAt ? "ended" : "active";
+    // After the deadline use only rewards actually reached in the recorded count.
+    const reachedIndex = quest.tiers.reduce((index, tier, current) => total >= tier.target ? current : index, -1);
+    const allocationIndex = Math.max(quest.goalIndex, reachedIndex);
+    const allocationGoal = phase === "ended" ? total : quest.tiers[allocationIndex].target;
+    const allocationReward = phase === "ended" ? earnedReward : quest.tiers.slice(0, allocationIndex + 1).reduce((sum, tier) => sum + tier.reward, 0);
+    const rate = allocationGoal > 0 ? allocationReward / allocationGoal : 0;
+    let previous = 0;
+    let allocation = 0;
+    for (const key of dates) {
+      const current = Math.min(allocationGoal, previous + counts[key]);
+      if (key === shownDay) allocation = Math.round(current * rate) - Math.round(previous * rate);
+      previous = current;
+    }
+    const remaining = Math.max(0, goal - total);
+    const remainingDays = [...new Set(quest.workDays || dates)].filter(key => dates.includes(key) && key >= day).length;
+    const worksToday = (quest.workDays || dates).includes(day);
+    const dailyTarget = Math.ceil(Math.max(0, goal - total + (counts[day] || 0)) / Math.max(1, remainingDays));
+    const additionalToday = phase === "active" && worksToday && remainingDays ? Math.max(0, dailyTarget - (counts[day] || 0)) : null;
+    const nextTier = quest.tiers.find(tier => tier.target > total) || null;
+    const salesValue = quest.sales && quest.sales[shownDay];
+    const sales = Number.isInteger(salesValue) && salesValue >= 0 ? salesValue : null;
+    const shownDayVerified = !(quest.unverifiedDays || []).includes(shownDay);
+    return { dates, day, shownDay, shownDayVerified, counts, total, today: counts[day] || 0, shownCount: shownDayVerified ? counts[shownDay] || 0 : null, goal, plannedReward, earnedReward, phase, rate, allocationGoal, allocationReward, allocation: shownDayVerified ? allocation : null, remaining, remainingDays, worksToday, additionalToday, suggestedToday: additionalToday === null ? null : dailyTarget, nextTier, sales, estimatedSales: sales === null || !shownDayVerified ? null : sales + allocation };
+  }
+
   return Object.freeze({
     CONFIG,
     STORAGE_KEYS,
@@ -273,6 +411,16 @@
     normalizeSegments,
     formatDurationMs,
     toLocalMinuteInputValue,
-    timestamp
+    timestamp,
+    QUEST_STORAGE_KEY,
+    questDayKey,
+    questDayStart,
+    questDateKeys,
+    createQuestState,
+    changeQuestCount,
+    validateQuest,
+    questDailyCounts,
+    alignQuestCounts,
+    calculateQuest
   });
 });

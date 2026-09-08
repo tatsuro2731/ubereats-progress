@@ -27,7 +27,7 @@ function addOptions(select, start, end, suffix = "", step = 1, pad = false) {
 }
 
 function setupOptions() {
-  addOptions($("target"), 10, 80, "件");
+  addOptions($("target"), 1, 80, "件");
   addOptions($("done"), 0, 80, "件");
   addOptions($("remainH"), 0, 12, "時間");
   addOptions($("remainM"), 0, 59, "分", 1, true);
@@ -78,7 +78,7 @@ function signed(value, unit, decimals = 1) {
   return `${sign}${value.toFixed(decimals)}${unit}`;
 }
 
-function save() {
+function save(options = {}) {
   let previous = {};
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -91,7 +91,10 @@ function save() {
     remainH: $("remainH").value,
     remainM: $("remainM").value
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (typeof UberQuestStore !== "undefined") {
+    if (!UberQuestStore.saveProgress(data, options)) { load(); return false; }
+  } else localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  return true;
 }
 
 function load() {
@@ -361,7 +364,8 @@ function setTone(slackMinutes, perOrder, remainingOrders) {
   sub.classList.add(tone === "warn" ? "goodTxt" : `${tone}Txt`);
 }
 
-function calc(shouldSave = true) {
+function calc(shouldSave = true, countChange = false) {
+  if (shouldSave && !countChange && typeof UberQuestStore !== "undefined") $("done").value = String(UberQuestStore.currentDone());
   const target = Math.max(n("target"), 1);
   const done = Math.max(n("done"), 0);
   let remainMinutes = Math.max(n("remainH") * 60 + n("remainM"), 0);
@@ -412,7 +416,7 @@ function calc(shouldSave = true) {
   $("scheduleDelta").textContent = signed(deltaVsSchedule, "件", 2);
   $("completionRate").textContent = `${completionRate.toFixed(1)}%`;
 
-  if (shouldSave) save();
+  if (shouldSave) save({ countChange });
 }
 
 setupOptions();
@@ -420,7 +424,7 @@ setDefaultValues();
 load();
 showEnhancedRemaining();
 
-["target", "done"].forEach(id => $(id).addEventListener("change", calc));
+["target", "done"].forEach(id => $(id).addEventListener("change", () => calc(true, id === "done")));
 ["remainH", "remainM"].forEach(id => $(id).addEventListener("change", () => {
   if (!syncEnhancedRemainingFromControls()) {
     calc(false);
@@ -439,19 +443,20 @@ document.querySelectorAll("[data-pace-card]").forEach(card => {
 });
 
 $("plus").addEventListener("click", () => {
-  const next = Math.min(n("done") + 1, 80);
+  const next = Math.min((typeof UberQuestStore !== "undefined" ? UberQuestStore.currentDone() : n("done")) + 1, 80);
   $("done").value = String(next);
-  calc();
+  calc(true, true);
 });
 
 $("minus").addEventListener("click", () => {
-  const next = Math.max(n("done") - 1, 0);
+  const next = Math.max((typeof UberQuestStore !== "undefined" ? UberQuestStore.currentDone() : n("done")) - 1, 0);
   $("done").value = String(next);
-  calc();
+  calc(true, true);
 });
 
 $("reset").addEventListener("click", () => {
   if (!confirm("完了件数と残り時間をリセットしますか？")) return;
+  if (typeof UberQuestStore !== "undefined" && !UberQuestStore.resetCounter()) return;
   $("done").value = "0";
   $("remainH").value = "12";
   $("remainM").value = "0";
@@ -481,5 +486,5 @@ if (typeof window.setInterval === "function") {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=63").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=64").catch(() => {}));
 }
