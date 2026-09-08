@@ -142,17 +142,19 @@
         if (metrics.getBoundingClientRect().bottom + root.scrollY <= bottom) break;
       }
       const cardRect = metrics.getBoundingClientRect();
-      if (cardRect.bottom + root.scrollY > bottom) {
-        // Very short screens / enlarged text: keep both rows readable, and let only
-        // the overview scroll instead of hiding cards behind the operation dock.
-        const overviewTop = overview.getBoundingClientRect().top + root.scrollY;
-        overview.style.setProperty("max-height", `${Math.max(44, Math.floor(bottom - overviewTop - cardRect.height))}px`);
+      const overflow = cardRect.bottom + root.scrollY - bottom;
+      if (overflow > 0) {
+        // Only the hero's details scroll on short screens. Its target-pace footer
+        // stays visible, outside this region. Subtract the measured overflow so
+        // the footer, quest summary, borders and gaps all retain their space.
+        const overviewHeight = overview.getBoundingClientRect().height;
+        overview.style.setProperty("max-height", `${Math.max(44, Math.floor(overviewHeight - overflow))}px`);
       }
       overview.scrollTop = scrollTop;
     }
     if (root.ResizeObserver) {
       const observer = new root.ResizeObserver(schedule);
-      [dock, overview, metrics, doc.getElementById("hero")].filter(Boolean).forEach(element => observer.observe(element));
+      [dock, overview, metrics, doc.getElementById("hero"), doc.getElementById("questBrief")].filter(Boolean).forEach(element => observer.observe(element));
     }
     root.addEventListener("resize", schedule);
     root.addEventListener("pageshow", schedule);

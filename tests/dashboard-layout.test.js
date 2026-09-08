@@ -8,7 +8,7 @@ const vm = require("node:vm");
 
 // Exercise the real resize callbacks with measured-box fixtures. Pixel rendering
 // is separate; these fixtures cover the fit budget, scrolling and resize lifecycle.
-function layoutHarness({ height = 956, top = 62, dockHeight = 188 } = {}) {
+function layoutHarness({ height = 956, top = 62, dockHeight = 188, footerHeight = 0, questHeight = 0 } = {}) {
   const events = new Map();
   const frames = [];
   const observers = [];
@@ -34,21 +34,23 @@ function layoutHarness({ height = 956, top = 62, dockHeight = 188 } = {}) {
       const natural = overviewHeights[density()];
       const cap = Number.parseFloat(this.style.getPropertyValue("max-height"));
       const size = Number.isFinite(cap) ? Math.min(natural, cap) : natural;
-      return { top: top - window.scrollY, height: size, bottom: top - window.scrollY + size };
+      const start = top + questHeight - window.scrollY;
+      return { top: start, height: size, bottom: start + size };
     }
   };
   let reorder = false;
   const metrics = {
     classList: { contains: () => reorder },
     getBoundingClientRect() {
-      const start = overview.getBoundingClientRect().bottom;
+      const start = overview.getBoundingClientRect().bottom + footerHeight;
       const size = cardHeights[density()];
       return { top: start, height: size, bottom: start + size };
     }
   };
   const dock = { getBoundingClientRect: () => ({ height: dockHeight }) };
   const hero = {};
-  const elements = { operationDock: dock, dashboardOverview: overview, metrics, hero };
+  const questBrief = {};
+  const elements = { operationDock: dock, dashboardOverview: overview, metrics, hero, questBrief };
   const deliveryData = '{"done":"21","unknown":"keep"}';
   const storageWrites = [];
   const document = {
@@ -75,10 +77,11 @@ function layoutHarness({ height = 956, top = 62, dockHeight = 188 } = {}) {
   emit("document:DOMContentLoaded");
   flush();
   return {
-    window, document, overview, metrics, dock, hero, observed, body, storageWrites,
+    window, document, overview, metrics, dock, hero, questBrief, observed, body, storageWrites,
     frames, cardHeights, overviewHeights, emit, flush,
     notifyResize: () => observers.forEach(fn => fn()),
     setReorder: value => { reorder = value; },
+    setQuestHeight(value) { questHeight = value; observers.forEach(fn => fn()); flush(); },
     setHeight(value) { window.innerHeight = value; window.visualViewport.height = value; emit("window:resize"); flush(); },
     cardsClearDock: () => metrics.getBoundingClientRect().bottom + window.scrollY <= window.innerHeight - dockHeight - 8
   };
@@ -145,4 +148,23 @@ test("reorder mode releases the overview limit without moving density during a d
   app.setReorder(false);
   app.notifyResize(); app.flush();
   assert.ok(app.cardsClearDock());
+});
+
+test("a visible target-pace footer retains its full height above both card rows", () => {
+  for (const footerHeight of [28, 52]) {
+    const app = layoutHarness({ height: 740, top: 164, footerHeight, questHeight: 52 });
+    assert.ok(Number.parseFloat(app.overview.style.getPropertyValue("max-height")) >= 44);
+    assert.equal(app.metrics.getBoundingClientRect().top - app.overview.getBoundingClientRect().bottom, footerHeight);
+    assert.ok(app.cardsClearDock(), "target pace, including a wrapped label, must not push the card rows behind the dock");
+    assert.deepEqual(app.storageWrites, []);
+  }
+});
+
+test("showing or wrapping the quest summary remeasures the footer and card budget", () => {
+  const app = layoutHarness({ height: 852, top: 164, footerHeight: 32 });
+  assert.ok(app.observed.includes(app.questBrief));
+  for (const questHeight of [52, 76, 0]) {
+    app.setQuestHeight(questHeight);
+    assert.ok(app.cardsClearDock());
+  }
 });

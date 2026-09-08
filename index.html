@@ -13,10 +13,10 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=64"></script>
-  <link rel="stylesheet" href="styles/main.css?v=64">
-  <link rel="stylesheet" href="styles/appearance.css?v=64">
-  <link rel="stylesheet" href="styles/quest.css?v=64">
+  <script src="src/appearance.js?v=65"></script>
+  <link rel="stylesheet" href="styles/main.css?v=65">
+  <link rel="stylesheet" href="styles/appearance.css?v=65">
+  <link rel="stylesheet" href="styles/quest.css?v=65">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -27,16 +27,17 @@
     <button id="questTab" type="button" role="tab" aria-controls="questView" aria-selected="false">クエスト</button>
   </nav>
   <section id="progressView" role="tabpanel" aria-labelledby="progressTab">
-  <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="配達の進捗と案件時間の目安">
   <button id="questBrief" class="questBrief" type="button" hidden><span id="questBriefCount"></span><span id="questBriefNext"></span></button>
   <div id="hero" class="hero">
+    <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="配達の進捗と案件時間の目安">
     <div class="heroProgress">
       <div class="heroProgressCopy"><div class="heroProgressLabel">完了件数</div><div class="heroCount"><strong id="heroDone">0</strong><span id="heroTarget">/ 46</span></div><div id="heroRemaining" class="heroRemaining">残り46件</div></div>
       <div class="heroCounter" role="group" aria-label="完了件数の変更"><button id="minus" class="minus" type="button" aria-label="完了件数を1件減らす。長押しで連続して減らす" title="長押しで連続変更">−</button><button id="plus" class="plus" type="button" aria-label="完了件数を1件増やす。長押しで連続して増やす" title="長押しで連続変更">＋</button></div>
     </div>
     <div class="heroProgressLine"><div id="heroProgressTrack" class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="heroProgressFill" class="progressFill"></span></div><span id="heroPercent">0%</span></div>
-    <div class="caption">目標ペースに対して</div><div id="mainValue" class="main">-</div><div class="guideCaption">案件時間の目安</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div><button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button>
-  </div>
+    <div class="caption">目標ペースに対して</div><div id="mainValue" class="main">-</div><div class="guideCaption">案件時間の目安</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div>
+    </div>
+    <button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button>
   </div>
   <div id="cardOrderToolbar" class="cardOrderToolbar" hidden><div class="cardOrderMessage"><strong>小カードを並び替え中</strong><small>カード下部の≡を長押しして移動</small></div><button id="cardOrderDone" class="cardOrderDone" type="button">完了</button></div>
   <div id="metrics" class="metrics"></div>
@@ -134,11 +135,11 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=64"></script>
-<script src="src/quest-store.js?v=64"></script>
-<script src="src/main-app.js?v=64"></script>
-<script src="src/session-engine.js?v=64"></script>
-<script src="src/session-editors.js?v=64"></script>
-<script src="src/quest-ui.js?v=64"></script>
+<script src="src/app-core.js?v=65"></script>
+<script src="src/quest-store.js?v=65"></script>
+<script src="src/main-app.js?v=65"></script>
+<script src="src/session-engine.js?v=65"></script>
+<script src="src/session-editors.js?v=65"></script>
+<script src="src/quest-ui.js?v=65"></script>
 </body>
 </html>

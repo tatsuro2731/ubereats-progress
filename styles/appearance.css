@@ -78,6 +78,8 @@ body.mainView .dashboardOverview {
   display: flow-root; overflow: auto; scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
+/* The target pace is a footer of the hero, outside its scrollable details. */
+body.mainView .hero > .baselinePace { max-width: 100%; white-space: normal; }
 body.mainView .dashboardOverview:focus-visible { outline: 2px solid var(--good); outline-offset: 2px; }
 body.progressApp .header {
   position: relative;

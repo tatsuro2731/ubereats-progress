@@ -486,5 +486,5 @@ if (typeof window.setInterval === "function") {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=64").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=65").catch(() => {}));
 }
