@@ -124,7 +124,7 @@ function readEnhancedClock() {
 function effectiveEnhancedClock(enhanced, now = Date.now()) {
   const data = enhanced.data;
   const updatedAt = Number(data.updatedAt);
-  const counting = data.countMode === COUNT_MODE && data.on && !data.breakOn && !data.sessionEndedAt;
+  const counting = data.countMode === COUNT_MODE && data.on && !data.paused && !data.breakOn && !data.sessionEndedAt;
   const elapsedMs = counting && Number.isFinite(updatedAt) && updatedAt > 0 && updatedAt <= now
     ? Math.max(0, now - updatedAt)
     : 0;
@@ -142,14 +142,17 @@ function compactSessionFlags(data, now = Date.now()) {
   const rawUpdatedAt = Number(data.updatedAt);
   const anchorAt = Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0 ? rawUpdatedAt : now;
   const storedBreakOn = Boolean(data.breakOn);
-  const on = !ended && Boolean(data.on) && !storedBreakOn;
   const sessionStartAt = data.sessionStartAt || null;
-  const breakOn = !ended && Boolean(sessionStartAt) && !on;
+  const paused = !ended && Boolean(sessionStartAt) && !storedBreakOn && Boolean(data.paused);
+  const on = !ended && !paused && Boolean(data.on) && !storedBreakOn;
+  const breakOn = !ended && Boolean(sessionStartAt) && !on && !paused;
   const automaticBreakStart = Math.max(Number(sessionStartAt) || anchorAt, anchorAt);
   const breakStartedAt = breakOn ? (storedBreakOn && data.breakStartedAt ? data.breakStartedAt : automaticBreakStart) : null;
   const otherCompanyOn = on && Boolean(data.otherCompanyOn);
   return {
     on,
+    paused,
+    resumeOtherCompany: paused && Boolean(data.resumeOtherCompany),
     breakOn,
     breakStartedAt,
     otherCompanyOn,
@@ -161,6 +164,8 @@ function migrateEnhancedClock(enhanced, now = Date.now()) {
   const wasContinuous = enhanced.data.countMode === COUNT_MODE;
   const flags = compactSessionFlags(enhanced.data, now);
   const flagsMatch = Boolean(enhanced.data.on) === flags.on
+    && Boolean(enhanced.data.paused) === flags.paused
+    && Boolean(enhanced.data.resumeOtherCompany) === flags.resumeOtherCompany
     && Boolean(enhanced.data.breakOn) === flags.breakOn
     && (enhanced.data.breakStartedAt || null) === flags.breakStartedAt
     && Boolean(enhanced.data.otherCompanyOn) === flags.otherCompanyOn
@@ -175,6 +180,8 @@ function migrateEnhancedClock(enhanced, now = Date.now()) {
     countMode: COUNT_MODE,
     usageMode: USAGE_MODE,
     on: flags.on,
+    paused: flags.paused,
+    resumeOtherCompany: flags.resumeOtherCompany,
     remainingMs: enhanced.remainingMs,
     moving: false,
     activeMs: sessionUsedMsFromRemaining(enhanced.remainingMs, enhanced.data.usageBaselineMs),
@@ -227,7 +234,8 @@ function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
   const on = !resetEnded && (typeof previous.on === "boolean" ? previous.on : false) && !effective.exhausted;
   const updatedAt = Math.max(now, Number(previous.updatedAt) || 0);
   const sessionStartAt = resetEnded ? null : (previous.sessionStartAt || null);
-  const breakOn = !resetEnded && Boolean(sessionStartAt) && !on;
+  const paused = !resetEnded && Boolean(previous.paused);
+  const breakOn = !resetEnded && Boolean(sessionStartAt) && !on && !paused;
   const rawUpdatedAt = Number(previous.updatedAt);
   const exhaustedAt = effective.exhausted && Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0
     ? Math.min(now, rawUpdatedAt + current.remainingMs)
@@ -244,6 +252,8 @@ function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
     usageMode: USAGE_MODE,
     on,
     remainingMs,
+    paused,
+    resumeOtherCompany: paused && Boolean(previous.resumeOtherCompany),
     moving: false,
     activeMs: sessionUsedMsFromRemaining(remainingMs, resetEnded ? 0 : previous.usageBaselineMs),
     usageBaselineMs: resetEnded ? 0 : Math.max(0, Number(previous.usageBaselineMs) || 0),
@@ -486,5 +496,5 @@ if (typeof window.setInterval === "function") {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=65").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=66").catch(() => {}));
 }

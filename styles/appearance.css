@@ -226,6 +226,14 @@ body.progressApp .operationDock .countCard, body.progressApp .operationDock .act
   border: 0; border-radius: 0; background: transparent; box-shadow: none;
 }
 body.progressApp .countHead { gap: 8px; margin-bottom: 5px; }
+body.progressApp .countHeading { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; }
+body.progressApp .countHeading .countEndClock { margin-left: 0; }
+body.progressApp .countPause {
+  flex: 0 0 auto; min-height: 44px; min-width: 94px; padding: 7px 9px;
+  border: 1px solid var(--line); border-radius: 10px;
+  color: var(--text); background: var(--card); font-size: 14px; line-height: 1.2; box-shadow: none;
+}
+body.progressApp .countPause[aria-pressed="true"] { color: var(--primary-text); background: var(--good); border-color: var(--good); }
 body.progressApp .countTitle { color: var(--muted); font-size: 13px; font-weight: 650; }
 body.progressApp .countEndClock, body.progressApp .countEndClock.run { padding: 0; color: var(--muted); background: transparent; border: 0; box-shadow: none; font-size: 12px; }
 body.progressApp .help { min-width: 32px; width: 32px; height: 32px; background: var(--card2); color: var(--muted); border: 0; box-shadow: none; }

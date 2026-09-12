@@ -256,6 +256,163 @@ function editSessionStart(app, at) {
   assert.equal(app.element("startTimeError").textContent, "");
 }
 
+test("countdown pause preserves exact remaining time and excludes the gap from breaks after reload", () => {
+  const app = timerHarness();
+  const start = app.now();
+  app.api.enhancedToggleClock();
+  app.setNow(start + 23456);
+  app.element("countPause").onclick();
+  const remaining = WORK_LIMIT_MS - 23456;
+  assert.equal(app.api.getState().remainingMs, remaining);
+  assert.equal(app.api.getState().on, false);
+  assert.equal(app.api.getState().paused, true);
+  assert.equal(app.api.getState().breakOn, false);
+  assert.equal(app.element("countStatus").textContent, "一時停止中");
+  assert.equal(app.element("countPause").attributes["aria-pressed"], "true");
+
+  app.setNow(start + 623456);
+  app.dispatchDocument("visibilitychange");
+  app.dispatchWindow("pageshow");
+  assert.equal(app.api.getState().remainingMs, remaining);
+  assert.equal(app.api.sessionBreakMs(), 0);
+  assert.equal(app.api.sessionElapsedMs(), 623456);
+  assert.equal(app.api.clockUsedMs(), 23456);
+
+  const restored = timerHarness({ now: app.now() + 60000, enhanced: JSON.parse(app.storage.getItem(ENHANCED_KEY)) });
+  assert.equal(restored.api.getState().paused, true);
+  assert.equal(restored.api.getState().breakSegments.length, 0);
+  assert.equal(restored.api.getState().remainingMs, remaining);
+  assert.equal(restored.api.sessionBreakMs(), 0);
+  const resumedAt = restored.now();
+  restored.element("countPause").onclick();
+  restored.setNow(resumedAt + 5432);
+  restored.api.tickClock();
+  assert.equal(restored.api.getState().remainingMs, remaining - 5432);
+  assert.equal(restored.api.getState().paused, false);
+  assert.equal(restored.api.sessionBreakMs(), 0);
+});
+
+test("switching pause to rest starts a break only at the explicit rest action", () => {
+  const app = timerHarness();
+  const start = app.now();
+  app.api.enhancedToggleClock();
+  app.setNow(start + 60000);
+  app.element("countPause").onclick();
+  app.setNow(start + 360000);
+  app.element("countToggle").onclick();
+  assert.equal(app.api.getState().paused, false);
+  assert.equal(app.api.getState().breakOn, true);
+  assert.equal(app.api.getState().breakStartedAt, start + 360000);
+  assert.equal(app.element("countPause").disabled, true);
+  app.setNow(start + 480000);
+  app.element("countToggle").onclick();
+  assert.equal(app.api.sessionBreakMs(), 120000);
+  assert.equal(app.api.sessionElapsedMs(), 360000);
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+  assert.equal(app.api.getState().on, true);
+});
+
+test("start and break edits preserve a paused clock and the pending work category", () => {
+  const start = new Date(2026, 8, 12, 10, 0).getTime();
+  const app = timerHarness({ now: start });
+  app.api.enhancedToggleClock();
+  app.api.toggleOtherCompany();
+  app.setNow(start + 60000);
+  app.element("countPause").onclick();
+  app.setNow(start + 600000);
+  editSessionStart(app, start - 60000);
+  let saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(saved.paused, true);
+  assert.equal(saved.resumeOtherCompany, true);
+  assert.equal(app.editor.setBreakDuration(60000).ok, true);
+  saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(saved.paused, true);
+  assert.equal(saved.resumeOtherCompany, true);
+  const restored = timerHarness({ now: start + 1200000, enhanced: saved });
+  assert.equal(restored.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+  assert.equal(restored.api.sessionBreakMs(), 60000);
+  assert.equal(restored.api.getState().breakOn, false);
+});
+
+test("other-company work resumes after pause without counting the paused gap", () => {
+  const app = timerHarness();
+  const start = app.now();
+  app.api.enhancedToggleClock();
+  app.api.toggleOtherCompany();
+  app.setNow(start + 60000);
+  app.element("countPause").onclick();
+  assert.equal(app.api.otherCompanyUsedMs(), 60000);
+  assert.equal(app.api.getState().resumeOtherCompany, true);
+  const restored = timerHarness({ now: start + 660000, enhanced: JSON.parse(app.storage.getItem(ENHANCED_KEY)) });
+  assert.equal(restored.api.otherCompanyUsedMs(), 60000);
+  restored.element("countPause").onclick();
+  assert.equal(restored.api.getState().otherCompanyOn, true);
+  restored.setNow(start + 690000);
+  restored.api.tickClock();
+  assert.equal(restored.api.otherCompanyUsedMs(), 90000);
+  assert.equal(restored.api.uberUsedMs(), 0);
+  assert.equal(restored.api.sessionBreakMs(), 0);
+  restored.element("countPause").onclick();
+  restored.element("countToggle").onclick();
+  restored.element("countToggle").onclick();
+  assert.equal(restored.api.getState().otherCompanyOn, false);
+  assert.equal(restored.api.getState().resumeOtherCompany, false);
+});
+
+test("a paused session can be corrected and finished without adding rest, then reset", () => {
+  const app = timerHarness();
+  assert.equal(app.element("countPause").disabled, true);
+  app.element("countPause").onclick();
+  assert.equal(app.api.getState().sessionStartAt, null);
+  const start = app.now();
+  app.api.enhancedToggleClock();
+  app.setNow(start + 120000);
+  app.element("countPause").onclick();
+  app.context.adjustRemain(-1);
+  app.context.adjustRemain(1);
+  assert.equal(app.api.getState().paused, true);
+  app.setNow(start + 420000);
+  app.api.finishSession();
+  const record = JSON.parse(app.storage.getItem(HISTORY_KEY))[0];
+  assert.equal(record.endedFromState, "paused");
+  assert.equal(record.usedMs, 120000);
+  assert.equal(record.breakMs, 0);
+  assert.equal(record.elapsedMs, 480000); // The -1 correction moved the start earlier; +1 never moves it back.
+  assert.equal(app.api.getState().paused, false);
+  assert.equal(app.element("countPause").disabled, true);
+  app.element("countPause").onclick();
+  assert.equal(app.api.getState().on, false);
+  app.element("reset").onclick();
+  assert.equal(app.api.getState().paused, false);
+  assert.equal(app.api.getState().resumeOtherCompany, false);
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS);
+});
+
+test("storage updates propagate pause and resume without turning pause into rest", () => {
+  const app = timerHarness();
+  const start = app.now();
+  app.api.enhancedToggleClock();
+  app.setNow(start + 60000);
+  app.element("countPause").onclick();
+  const paused = app.storage.getItem(ENHANCED_KEY);
+  const peer = timerHarness({ now: start + 300000 });
+  peer.storage.setItem(ENHANCED_KEY, paused);
+  // A fresh tab's unused default timestamp must not supersede the saved session.
+  peer.api.getState().updatedAt = start;
+  peer.dispatchWindow("storage", { key: ENHANCED_KEY, newValue: paused });
+  assert.equal(peer.api.getState().paused, true);
+  assert.equal(peer.api.sessionBreakMs(), 0);
+  assert.equal(peer.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+  peer.element("countPause").onclick();
+  const resumed = peer.storage.getItem(ENHANCED_KEY);
+  app.setNow(peer.now());
+  app.storage.setItem(ENHANCED_KEY, resumed);
+  app.dispatchWindow("storage", { key: ENHANCED_KEY, newValue: resumed });
+  assert.equal(app.api.getState().on, true);
+  assert.equal(app.api.getState().paused, false);
+  assert.equal(app.api.sessionBreakMs(), 0);
+});
+
 test("repeated start edits restore work after reload without altering the remaining clock", () => {
   const minute = 60000;
   const start = new Date(2026, 8, 4, 10, 0).getTime();

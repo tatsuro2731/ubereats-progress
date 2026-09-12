@@ -133,6 +133,58 @@ test("a fresh compact visit starts at zero deliveries with the full 12 hours", (
   assert.equal(saved.remainM, "0");
 });
 
+test("compact preserves countdown pause through time, edits, reload, goal, and reset", () => {
+  const now = 1800000000000;
+  const paused = {
+    countMode: COUNT_MODE, usageMode: USAGE_MODE, on: false, paused: true,
+    resumeOtherCompany: true, remainingMs: 600 * 60000 - 3456,
+    sessionStartAt: now - 120 * 60000, updatedAt: now,
+    breakOn: false, breakMs: 0, breakSegments: [],
+    otherCompanyOn: false, otherCompanySegments: [], unknownField: "retain"
+  };
+  const app = runCompact({
+    [DATA_KEY]: JSON.stringify({ target: "46", done: "0", remainH: "10", remainM: "0" }),
+    [ENHANCED_KEY]: JSON.stringify(paused)
+  }, now + 600000);
+  app.advanceTime(600000);
+  app.runIntervals();
+  let saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(saved.remainingMs, paused.remainingMs);
+  assert.equal(saved.paused, true);
+  assert.equal(saved.breakOn, false);
+  app.element("remainM").value = "1";
+  app.element("remainM").dispatch("change");
+  app.element("done").value = "46";
+  app.element("done").dispatch("change");
+  saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(saved.remainingMs, 601 * 60000);
+  assert.equal(saved.paused, true);
+  assert.equal(saved.resumeOtherCompany, true);
+  assert.equal(saved.breakOn, false);
+  assert.equal(saved.breakSegments.length, 0);
+  assert.equal(saved.unknownField, "retain");
+  const restored = runCompact({
+    [DATA_KEY]: app.storage.getItem(DATA_KEY),
+    [ENHANCED_KEY]: app.storage.getItem(ENHANCED_KEY)
+  }, now + 1800000);
+  assert.equal(JSON.parse(restored.storage.getItem(ENHANCED_KEY)).paused, true);
+  restored.element("reset").dispatch("click");
+  const reset = JSON.parse(restored.storage.getItem(ENHANCED_KEY));
+  // Compact reset preserves an active session; only an ended session is cleared.
+  assert.equal(reset.paused, true);
+  assert.equal(reset.resumeOtherCompany, true);
+  assert.equal(reset.breakOn, false);
+  assert.equal(reset.remainingMs, LIMIT_MS);
+  const endedApp = runCompact({
+    [ENHANCED_KEY]: JSON.stringify({ ...saved, sessionEndedAt: now + 1800000 })
+  }, now + 2400000);
+  endedApp.element("reset").dispatch("click");
+  const newSession = JSON.parse(endedApp.storage.getItem(ENHANCED_KEY));
+  assert.equal(newSession.paused, false);
+  assert.equal(newSession.resumeOtherCompany, false);
+  assert.equal(newSession.sessionStartAt, null);
+});
+
 test("compact edits and goal stopping preserve corrected session work and break exclusions", () => {
   const minute = 60000;
   const now = new Date(2026, 8, 4, 14, 0).getTime();

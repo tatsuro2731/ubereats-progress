@@ -71,6 +71,8 @@
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
       on: Boolean(clockState.on),
+      paused: Boolean(clockState.paused),
+      resumeOtherCompany: Boolean(clockState.resumeOtherCompany),
       remainingMs,
       activeMs: clockState.activeMs,
       usageBaselineMs: usageBaselineMs(remainingMs),

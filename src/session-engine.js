@@ -59,6 +59,8 @@
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
       on: Boolean(clockState && clockState.on),
+      paused: false,
+      resumeOtherCompany: false,
       remainingMs,
       baseRemain: Math.max(0, legacyRemain),
       baseAt: now,
@@ -109,8 +111,9 @@
     const rawUpdatedAt = finite(data && data.updatedAt, now);
     const resumeAt = isContinuousState && rawUpdatedAt > 0 ? rawUpdatedAt : now;
     const storedBreakOn = Boolean(data && data.breakOn);
-    const clockOn = !sessionEndedAt && Boolean(data && data.on) && !storedBreakOn;
-    const breakOn = !sessionEndedAt && Boolean(sessionStartAt) && !clockOn;
+    const paused = !sessionEndedAt && Boolean(sessionStartAt) && !storedBreakOn && Boolean(data && data.paused);
+    const clockOn = !sessionEndedAt && !paused && Boolean(data && data.on) && !storedBreakOn;
+    const breakOn = !sessionEndedAt && Boolean(sessionStartAt) && !clockOn && !paused;
     const automaticBreakStart = Math.max(finite(sessionStartAt, resumeAt), resumeAt);
     const storedBreakStartedAt = finite(data && data.breakStartedAt, NaN);
     const breakStartedAt = breakOn && Number.isFinite(storedBreakStartedAt) && storedBreakStartedAt > 0
@@ -129,6 +132,8 @@
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
       on: clockOn,
+      paused,
+      resumeOtherCompany: paused && Boolean(data && data.resumeOtherCompany),
       remainingMs: clamp(remainingMs, 0, MAX_REMAIN_INPUT_MINUTES * 60000),
       baseRemain: remainingMs / 60000,
       baseAt: now,
@@ -204,6 +209,8 @@
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
       on: clockState.on,
+      paused: Boolean(clockState.paused),
+      resumeOtherCompany: Boolean(clockState.resumeOtherCompany),
       remainingMs: clockState.remainingMs,
       activeMs: clockState.activeMs,
       usageBaselineMs: usageBaselineMs(),
@@ -369,6 +376,7 @@
   function currentStatus() {
     // Keep mode values unchanged: history stores them as endedFromState.
     if (clockState.sessionEndedAt) return { text: "稼働終了", sub: "時間OFF・保存済み", mode: "ended", state: "ended", action: "" };
+    if (clockState.paused) return { text: "一時停止中", sub: "休憩に加算しません", mode: "paused", state: "paused", action: "タップで休憩を開始" };
     if (clockState.on && clockState.otherCompanyOn) return { text: "稼働中", sub: "時間ON・他社稼働", mode: "otherCompany", state: "working", action: "タップで休憩" };
     if (clockState.breakOn) return { text: "休憩中", sub: "時間OFF", mode: "break", state: "break", action: "タップで再開" };
     if (!clockState.on) return clockState.sessionStartAt
@@ -404,12 +412,18 @@
     $("countEndClock").textContent = exhaustionText();
     $("countEndClock").classList.toggle("run", counting);
     button.classList.toggle("off", clockState.on);
-    button.firstChild.nodeValue = status.text;
+    button.firstChild.nodeValue = clockState.paused ? "休憩する" : status.text;
     sub.textContent = ended ? status.sub : `${counting ? "時間ON" : "時間OFF"}・${status.action}`;
     button.setAttribute("aria-pressed", String(counting));
     button.setAttribute("aria-label", `${status.text}。${status.sub}。${ended ? "履歴に保存済み" : status.action}`);
     button.disabled = ended;
     button.setAttribute("aria-disabled", String(ended));
+    const pauseButton = $("countPause");
+    pauseButton.textContent = clockState.paused ? "▶ 再開" : "Ⅱ 一時停止";
+    pauseButton.setAttribute("aria-pressed", String(Boolean(clockState.paused)));
+    pauseButton.setAttribute("aria-label", clockState.paused ? "残り稼働時間のカウントを再開" : "残り稼働時間を一時停止。休憩時間に加算しません");
+    pauseButton.disabled = ended || (!clockState.on && !clockState.paused);
+    pauseButton.setAttribute("aria-disabled", String(pauseButton.disabled));
     ["remainMinus", "remainPlus", "remainH", "remainM"].forEach(id => {
       const control = $(id);
       if (!control) return;
@@ -421,13 +435,15 @@
     const detail = $("movementDetail");
     if (detail) detail.textContent = ended
       ? "稼働終了・履歴に保存済み"
-      : clockState.on && clockState.otherCompanyOn
-        ? "他社稼働中も残り時間をカウントしています"
-        : clockState.on
-          ? "移動・停車にかかわらず連続でカウントします"
-          : clockState.breakOn
-            ? "時間OFFのため休憩を記録中です"
-            : "時間OFF中は残り時間を止めています";
+      : clockState.paused
+        ? "残り時間を一時停止中です。休憩時間には加算しません"
+        : clockState.on && clockState.otherCompanyOn
+          ? "他社稼働中も残り時間をカウントしています"
+          : clockState.on
+            ? "移動・停車にかかわらず連続でカウントします"
+            : clockState.breakOn
+              ? "時間OFFのため休憩を記録中です"
+              : "時間OFF中は残り時間を止めています";
     renderSessionPanel();
   }
 
@@ -436,7 +452,7 @@
     const wasOn = Boolean(clockState.on);
     tickClock();
     const now = nowMs();
-    if (wasOn) {
+    if (wasOn || clockState.paused) {
       closeActiveOtherCompany(now);
       clockState.on = false;
       startActiveBreak(now);
@@ -450,6 +466,34 @@
     }
     clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
     clockState.backgroundGap = null;
+    persistEnhancedClock(true);
+    calc();
+    renderEnhancedClock();
+  }
+
+  function toggleCountdownPause() {
+    if (clockState.sessionEndedAt) return;
+    tickClock();
+    if (!clockState.on && !clockState.paused) return;
+    const now = nowMs();
+    if (clockState.paused) {
+      const resumeOtherCompany = clockState.resumeOtherCompany;
+      clockState.paused = false;
+      clockState.resumeOtherCompany = false;
+      clockState.on = true;
+      if (resumeOtherCompany) {
+        clockState.otherCompanyOn = true;
+        clockState.otherCompanyStartedAt = now;
+        clockState.otherCompanySegments.push({ startAt: now, endAt: null });
+      }
+    } else {
+      clockState.resumeOtherCompany = Boolean(clockState.otherCompanyOn);
+      closeActiveOtherCompany(now);
+      clockState.on = false;
+      clockState.paused = true;
+    }
+    // Anchor at the transition so paused time is never caught up on resume.
+    clockState.lastTickAt = Math.max(finite(clockState.lastTickAt, 0), now);
     persistEnhancedClock(true);
     calc();
     renderEnhancedClock();
@@ -584,6 +628,8 @@
 
   function startActiveBreak(at) {
     if (!clockState.sessionStartAt || clockState.sessionEndedAt || clockState.breakOn) return;
+    clockState.paused = false;
+    clockState.resumeOtherCompany = false;
     if (!Array.isArray(clockState.breakSegments)) clockState.breakSegments = [];
     const startedAt = Math.max(finite(clockState.sessionStartAt, at), finite(at, nowMs()));
     clockState.breakOn = true;
@@ -617,6 +663,8 @@
     closeActiveBreak(at);
     closeActiveOtherCompany(at);
     clockState.on = false;
+    clockState.paused = false;
+    clockState.resumeOtherCompany = false;
     clockState.moving = false;
     clockState.backgroundGap = null;
     clockState.sessionEndedAt = at;
@@ -677,6 +725,7 @@
       counting: "時間ON",
       otherCompany: "他社稼働中",
       off: "時間OFF",
+      paused: "一時停止中",
       break: "休憩中"
     };
     return labels[item && item.endedFromState] || "";
@@ -1162,8 +1211,8 @@
     const desc = $("countPanel").querySelector(".desc");
     const hint = $("countPanel").querySelector(".hint");
     if (desc) desc.textContent = "時間ON中は移動・停車やUber／他社にかかわらず連続で減少します。内部では秒単位で計算し、画面には分単位で表示します。";
-    if (hint) hint.textContent = "時間OFFで休憩を自動記録します。他社稼働は時間ON中だけ切り替えられます。−／＋で1分ずつ補正できます。";
-    $("helpText").textContent = "時間ON中は残り稼働時間を連続で減らし、時間OFFへ切り替えると休憩を自動開始します。時間ONへ戻すと休憩は自動終了します。稼働開始前・稼働終了後のOFF時間は休憩に含めません。他社稼働は時間ON中だけON／OFFでき、他社稼働中も残り時間は減ります。残り時間の補正で記録済み稼働が経過を上回る場合は、開始時刻を必要分だけ前へ自動調整します。履歴ではUber稼働と分けて記録します。案件の有無や移動状態は自動判定しません。";
+    if (hint) hint.textContent = "一時停止は残り時間だけを止め、休憩には加算しません。時間OFFで休憩を自動記録します。他社稼働は時間ON中だけ切り替えられます。−／＋で1分ずつ補正できます。";
+    $("helpText").textContent = "時間ON中は残り稼働時間を連続で減らし、時間OFFへ切り替えると休憩を自動開始します。時間ONへ戻すと休憩は自動終了します。「一時停止」は残り時間だけを止め、休憩時間には加算しません。経過時間は進みます。「再開」でカウントを再開し、「休憩する」で休憩記録へ切り替えます。稼働開始前・稼働終了後のOFF時間は休憩に含めません。他社稼働は時間ON中だけON／OFFでき、他社稼働中も残り時間は減ります。残り時間の補正で記録済み稼働が経過を上回る場合は、開始時刻を必要分だけ前へ自動調整します。履歴ではUber稼働と分けて記録します。案件の有無や移動状態は自動判定しません。";
   }
 
   loadEnhancedClock();
@@ -1201,6 +1250,7 @@
 
   injectUi();
   $("countToggle").onclick = enhancedToggleClock;
+  $("countPause").onclick = toggleCountdownPause;
 
   adjustRemain = function(delta) {
     if (clockState.sessionEndedAt) {
@@ -1233,6 +1283,8 @@
       countMode: COUNT_MODE,
       usageMode: USAGE_MODE,
       on: false,
+      paused: false,
+      resumeOtherCompany: false,
       remainingMs: WORK_LIMIT_MS,
       baseRemain: CONFIG.workLimitMinutes,
       baseAt: now,
