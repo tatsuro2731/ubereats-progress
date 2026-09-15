@@ -41,6 +41,28 @@
 
   function readPeriod(text, now = Date.now()) {
     const compact = normalize(text).replace(/\s/g, "");
+    const dated = compact.match(/(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})[〜~～へ\-–—]+(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})/);
+    if (dated) {
+      const startTime = clock(null, dated[5], dated[6]); const endTime = clock(null, dated[11], dated[12]);
+      if (!startTime || !endTime) return null;
+      const currentYear = new Date(now + JST).getUTCFullYear();
+      const years = dated[1] ? [Number(dated[1])] : [currentYear - 1, currentYear, currentYear + 1];
+      const periods = years.flatMap(year => {
+        const endYear = dated[7] ? Number(dated[7]) : year + (Number(dated[8]) < Number(dated[2]) ? 1 : 0);
+        const start = new Date(Date.UTC(year, Number(dated[2]) - 1, Number(dated[3])));
+        const end = new Date(Date.UTC(endYear, Number(dated[8]) - 1, Number(dated[9])));
+        if (start.getUTCMonth() + 1 !== Number(dated[2]) || start.getUTCDate() !== Number(dated[3]) || end.getUTCMonth() + 1 !== Number(dated[8]) || end.getUTCDate() !== Number(dated[9]) ||
+            (dated[4] && start.getUTCDay() !== "日月火水木金土".indexOf(dated[4])) || (dated[10] && end.getUTCDay() !== "日月火水木金土".indexOf(dated[10]))) return [];
+        const startDate = start.toISOString().slice(0, 10); const endDate = end.toISOString().slice(0, 10);
+        const startAt = Date.parse(`${startDate}T${startTime}:00+09:00`); const endAt = Date.parse(`${endDate}T${endTime}:00+09:00`);
+        if (endAt <= startAt || endAt - startAt > 35 * DAY) return [];
+        return [{ startDate, endDate, startTime, endTime, inferred: !dated[1] || !dated[7], dateSource: "calendar", next: false,
+          template: start.getUTCDay() === 1 && end.getUTCDay() === 5 ? "weekday" : start.getUTCDay() === 5 && end.getUTCDay() === 1 ? "weekend" : "custom", distance: Math.abs(now - startAt) }];
+      });
+      const best = periods.sort((a, b) => a.distance - b.distance)[0];
+      if (!best) return null;
+      delete best.distance; return best;
+    }
     // A selection deadline contains one weekday; it must never become the quest period.
     const pattern = /([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?[〜~～へ\-–—]+([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?/;
     const match = compact.match(pattern);
@@ -66,6 +88,7 @@
   }
 
   function parseText(text, now = Date.now()) {
+    if (/クエストの進捗/.test(normalize(text).replace(/\s/g, ""))) return parseProgress(text, now);
     const lines = normalize(text).split("\n").map(line => line.replace(/\s/g, "")).filter(Boolean);
     const candidates = [];
     let current = null;
@@ -105,6 +128,36 @@
     }
     finish();
     return { candidates, skipped, period: readPeriod(text, now) };
+  }
+
+  function parseProgress(text, now) {
+    const rows = normalize(text).split("\n");
+    const period = readPeriod(text, now);
+    const reject = () => ({ candidates: [], skipped: 1, period });
+    const converted = ["クエスト1"];
+    let completed = null; let target = null;
+    for (const row of rows) {
+      const compact = row.replace(/\s/g, "");
+      if (/^詳細/.test(compact)) break;
+      const progress = row.match(/(?:^|[^\d.,\-−A-Za-z])(\d{1,4})\s*\/\s*(\d{1,4})\s*(?:回|件)/);
+      if (progress) {
+        // A later-stage progress fraction does not establish the full period total.
+        if (completed !== null) return reject();
+        completed = Number(progress[1]); target = Number(progress[2]);
+        if (completed > target || target < 1) return reject();
+        converted.push(`${target}回${row.slice(progress.index + progress[0].length)}`);
+      } else if (completed !== null) {
+        const count = row.match(/(?:^|[^\d.,+\-−A-Za-z])(\+)?(\d{1,4})\s*(?:回|件)/);
+        // Locked bonus tiers omit '+' on the count but retain it on the reward.
+        if (count) converted.push(`+${Number(count[2])}回${row.slice(count.index + count[0].length)}`);
+        else converted.push(row);
+      }
+    }
+    if (completed === null) return reject();
+    const remaining = normalize(text).replace(/\s/g, "").match(/あと(\d{1,4})回/);
+    if (remaining && Number(remaining[1]) + completed !== target) return reject();
+    const result = parseText(converted.join("\n"), now);
+    return { ...result, period, candidates: result.candidates.map(candidate => ({ ...candidate, label: "進行中のクエスト", completed })) };
   }
 
   function loadLibrary() {

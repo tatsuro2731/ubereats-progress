@@ -18,14 +18,16 @@
   let imageController = null;
   let imageResult = null;
   let imagePreviewUrl = null;
+  let imageCountApplied = false;
 
   function imageBusy(busy) {
     byId("questImagePick").disabled = busy;
     byId("questImageStop").hidden = !busy;
     byId("questConfigForm").querySelector('button[type="submit"]').disabled = busy;
   }
-  function resetImage() {
+  function resetImage(resetCount = false) {
     imageController?.abort(); imageController = null; imageResult = null;
+    if (resetCount) imageCountApplied = false;
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     imagePreviewUrl = null;
     byId("questImageOriginal").removeAttribute("src");
@@ -42,7 +44,9 @@
     if (period) {
       for (const key of ["startDate", "startTime", "endDate", "endTime"]) byId(`quest${key[0].toUpperCase()}${key.slice(1)}`).value = period[key];
       byId("questTemplate").value = period.template;
-      text("questImageDateNote", `画像には曜日だけが表示されているため、${period.startDate} ${period.startTime} 〜 ${period.endDate} ${period.endTime} を仮入力しました。対象の週を確認し、違う場合は日付を変更してください。`);
+      text("questImageDateNote", period.dateSource === "calendar"
+        ? `${period.startDate} ${period.startTime} 〜 ${period.endDate} ${period.endTime} を読み取りました。${period.inferred ? "年は推定です。" : ""}画像の対象期間を確認してください。`
+        : `画像には曜日だけが表示されているため、${period.startDate} ${period.startTime} 〜 ${period.endDate} ${period.endTime} を仮入力しました。対象の週を確認し、違う場合は日付を変更してください。`);
     } else {
       if (editingId === "new") for (const id of ["questStartDate", "questStartTime", "questEndDate", "questEndTime"]) byId(id).value = "";
       text("questImageDateNote", "期間を読み取れませんでした。Uberの画面に合わせて開始・終了日時を確認して入力してください。");
@@ -51,11 +55,19 @@
     byId("questTierInputs").replaceChildren();
     candidate.tiers.forEach(tier => addTier(tier.target, tier.reward));
     refreshTierLabels(candidate.tiers.length - 1);
+    imageCountApplied = Number.isInteger(candidate.completed);
     checkPeriodEdit();
     const after = ["questStartDate", "questStartTime", "questEndDate", "questEndTime"].map(id => byId(id).value).join();
     if (editingId === "new" || before !== after) {
       const future = Date.parse(`${byId("questStartDate").value}T${byId("questStartTime").value}:00+09:00`) > Date.now();
       for (const id of ["questInitialTotal", "questInitialToday"]) byId(id).value = future ? "0" : "";
+    }
+    if (imageCountApplied) {
+      byId("questInitialCounts").hidden = false;
+      byId("questInitialTotal").required = byId("questInitialToday").required = true;
+      byId("questInitialTotal").value = String(candidate.completed);
+      byId("questInitialToday").value = candidate.completed === 0 ? "0" : "";
+      byId("questImageDateNote").textContent += ` 累計${candidate.completed}件を入力しました。今日の件数は画像にないため、公式アプリを確認して入力してください。`;
     }
     Array.from(byId("questImageChoices").children).forEach((button, i) => {
       button.setAttribute("aria-pressed", String(i === index));
@@ -79,6 +91,7 @@
       byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
         const button = document.createElement("button"); button.type = "button"; button.className = "questImageChoice"; button.setAttribute("aria-pressed", "false");
         const title = document.createElement("strong"); title.textContent = candidate.label; button.append(title);
+        if (Number.isInteger(candidate.completed)) { const progress = document.createElement("span"); progress.textContent = `現在の累計 ${candidate.completed}件`; button.append(progress); }
         candidate.tiers.forEach((tier, i) => {
           const row = document.createElement("span"); const count = document.createElement("em"); const reward = document.createElement("em");
           count.textContent = i ? `＋${tier.target - candidate.tiers[i - 1].target}件` : `${tier.target}件`;
@@ -235,7 +248,7 @@
     try {
       const state = store.read(); const quest = isNew ? null : selected(state);
       editingId = quest ? quest.id : "new";
-      resetImage();
+      resetImage(true);
       byId("questConfigForm").reset(); byId("questConfigForm").hidden = false;
       byId("questConfigError").hidden = true; byId("questTierInputs").replaceChildren();
       text("questFormTitle", quest ? "クエストを編集" : "クエストを登録");
@@ -250,14 +263,14 @@
       render(); byId("questTemplate").focus();
     } catch (error) { errorMessage(error); }
   }
-  function closeForm() { resetImage(); byId("questConfigForm").hidden = true; editingId = null; render(); byId("questNew").focus(); }
+  function closeForm() { resetImage(true); byId("questConfigForm").hidden = true; editingId = null; render(); byId("questNew").focus(); }
   function checkPeriodEdit() {
     if (!editingId || editingId === "new") return;
     try {
       const quest = store.read().quests.find(item => item.id === editingId);
       const changed = `${byId("questStartDate").value}T${byId("questStartTime").value}` !== jstInput(quest.startAt) || `${byId("questEndDate").value}T${byId("questEndTime").value}` !== jstInput(quest.endAt);
-      byId("questInitialCounts").hidden = !changed;
-      byId("questInitialTotal").required = changed; byId("questInitialToday").required = changed;
+      byId("questInitialCounts").hidden = !changed && !imageCountApplied;
+      byId("questInitialTotal").required = changed || imageCountApplied; byId("questInitialToday").required = changed || imageCountApplied;
     } catch (error) { errorMessage(error, "questConfigError"); }
   }
 
@@ -303,7 +316,7 @@
       const quest = { ...old, id: old ? old.id : `quest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, startAt, endAt, boundaryMinutes: hours * 60 + minutes, template: byId("questTemplate").value, tiers: tierRows().map(row => ({ target: Number(row.querySelector("[data-tier-count]").value), reward: Number(row.querySelector("[data-tier-reward]").value) })), goalIndex: Number(byId("questGoalInput").value), adjustments: old ? old.adjustments : {}, sales: old ? old.sales : {} };
       const error = core.validateQuest(quest, state.quests); if (error) throw new Error(error);
       const changedPeriod = old && (old.startAt !== startAt || old.endAt !== endAt);
-      const needsAlign = !old || changedPeriod;
+      const needsAlign = !old || changedPeriod || imageCountApplied;
       if (needsAlign && (byId("questInitialTotal").value === "" || byId("questInitialToday").value === "")) throw new Error("この期間の公式の累計と今日の件数を入力してください。");
       if (changedPeriod) { quest.adjustments = {}; quest.unverifiedDays = []; }
       quest.workDays = old && !changedPeriod ? old.workDays : core.questDateKeys(quest);

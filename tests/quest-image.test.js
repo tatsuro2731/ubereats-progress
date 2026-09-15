@@ -14,6 +14,31 @@ const SCREEN = `次のクエストを選択する
 110回の乗車 ¥11,020
 +10回の乗車 +¥3,740
 クエスト3`;
+const PROGRESS = `クエストの進捗
+9月14日(月)4:00〜9月18日(金)4:00
+あと91回の乗車サービスを完了すると、¥9,590を獲得できます
+9/100回の乗車 ¥9,590
+0 10 回の乗車 +¥1,380
+詳細`;
+
+test("progress screenshot imports its actual goal, locked bonus, calendar dates and completed total", () => {
+  const result = image.parseText(PROGRESS, NOW);
+  assert.deepEqual(result.candidates, [{ label: "進行中のクエスト", completed: 9, tiers: [{ target: 100, reward: 9590 }, { target: 110, reward: 1380 }] }]);
+  assert.equal(result.period.startDate, "2026-09-14"); assert.equal(result.period.endDate, "2026-09-18");
+  assert.equal(result.period.startTime, "04:00"); assert.equal(result.period.endTime, "04:00");
+  assert.equal(result.period.dateSource, "calendar");
+});
+
+test("progress description alone, contradictory remaining counts, and ambiguous later stages are rejected", () => {
+  for (const text of [PROGRESS.replace('9/100回の乗車 ¥9,590', ''), PROGRESS.replace('あと91', 'あと81'), PROGRESS.replace('0 10 回', '2/10回'), PROGRESS.replace('+¥1,380', ''), PROGRESS.replace('+¥1,380', '¥1,380')]) assert.equal(image.parseText(text, NOW).candidates.length, 0);
+});
+
+test("calendar dates validate actual days and roll over the year rather than guessing the current week", () => {
+  assert.equal(image.readPeriod('12月29日4:00〜1月2日4:00', Date.parse('2027-01-01T12:00:00+09:00')).startDate, '2026-12-29');
+  assert.equal(image.readPeriod('2026年9月14日(月)4:00〜2026年9月18日(金)4:00', NOW).inferred, false);
+  assert.equal(image.readPeriod('2月30日4:00〜3月3日4:00', NOW), null);
+  assert.equal(image.readPeriod('9月14日4:90〜9月18日4:00', NOW), null);
+});
 
 test("quest selection screenshot produces independent candidates and incremental rewards", () => {
   const result = image.parseText(SCREEN, NOW);
