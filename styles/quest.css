@@ -41,6 +41,7 @@ body.progressApp .questBrief { display:flex; justify-content:space-between; flex
 .questImageChoice em { font-style:normal; font-variant-numeric:tabular-nums; }
 .questImageChoice small { font-size:14px; color:var(--muted); }
 .questImport img { display:block; width:100%; max-width:430px; height:auto; border-radius:8px; }
+.questImport textarea { display:block; width:100%; max-width:100%; box-sizing:border-box; padding:10px; font-size:16px; color:var(--text); background:var(--input); border:1px solid var(--line); border-radius:8px; }
 .questImportNotice { padding:10px 12px; border-left:3px solid var(--accent); background:var(--card2); border-radius:5px; font-size:14px; }
 .questImageChoice:focus-visible,.questImport button:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
 .compactQuestLink { display:block; background:var(--card); color:var(--text); border:1px solid var(--line); padding:12px; border-radius:12px; margin-top:12px; font-size:14px; text-decoration:none; }

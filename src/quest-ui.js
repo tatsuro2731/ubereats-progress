@@ -34,6 +34,7 @@
     byId("questImageFile").value = "";
     for (const id of ["questImageResults", "questImageError", "questImagePreview", "questImageDateNote"]) byId(id).hidden = true;
     byId("questImagePreview").open = false;
+    byId("questImageDebug").hidden = true; byId("questImageDebug").open = false; byId("questImageDebugText").value = "";
     byId("questImageChoices").replaceChildren(); text("questImageStatus", ""); imageBusy(false);
   }
   function applyImageCandidate(index) {
@@ -85,7 +86,9 @@
     try {
       const result = await UberQuestImage.recognize(file, { signal: controller.signal, onProgress: value => { if (imageController === controller) text("questImageStatus", value); } });
       if (imageController !== controller) return;
-      if (!result.candidates.length) throw new Error("件数と報酬を読み取れませんでした。1つのクエストの全段階が写った、鮮明なスクリーンショットでお試しください。手入力もできます。");
+      byId("questImageDebugText").value = result.diagnosticText || "";
+      byId("questImageDebug").hidden = !result.diagnosticText;
+      if (!result.candidates.length) throw new Error("読み取った文字から件数と報酬を確定できませんでした。下の「読み取り結果を確認」を開いた画面を送ってください。手入力もできます。");
       imageResult = result;
       imagePreviewUrl = URL.createObjectURL(file); byId("questImageOriginal").src = imagePreviewUrl; byId("questImagePreview").hidden = false;
       byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {

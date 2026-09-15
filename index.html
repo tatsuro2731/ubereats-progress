@@ -13,10 +13,10 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=68"></script>
-  <link rel="stylesheet" href="styles/main.css?v=68">
-  <link rel="stylesheet" href="styles/appearance.css?v=68">
-  <link rel="stylesheet" href="styles/quest.css?v=68">
+  <script src="src/appearance.js?v=69"></script>
+  <link rel="stylesheet" href="styles/main.css?v=69">
+  <link rel="stylesheet" href="styles/appearance.css?v=69">
+  <link rel="stylesheet" href="styles/quest.css?v=69">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -94,6 +94,7 @@
         <p class="questMuted">Uberのクエスト選択画面・進捗画面から、件数・報酬・期間を読み取ります。画像は端末内で処理します。読み取りの準備には通信が必要です。</p>
         <div class="questBetween"><p id="questImageStatus" class="questMuted" role="status" aria-live="polite"></p><button id="questImageStop" class="questTextButton" type="button" hidden>読み取りを中止</button></div>
         <p id="questImageError" class="questError" role="alert" hidden></p>
+        <details id="questImageDebug" hidden><summary>読み取り結果を確認</summary><p class="questMuted">読み込めない場合は、この欄を開いた画面を送ってください。結果は自動送信されません。</p><textarea id="questImageDebugText" aria-label="読み取り結果（確認用）" rows="9" readonly></textarea></details>
         <div id="questImageResults" hidden><p>反映するクエストを選んでください。</p><div id="questImageChoices" class="questImageChoices" role="group" aria-label="読み取ったクエスト候補"></div><p id="questImageSkipped" class="questMuted" hidden></p></div>
         <details id="questImagePreview" hidden><summary>読み込んだ画像を確認</summary><img id="questImageOriginal" alt="読み込んだUberクエスト画面"></details>
       </section>
@@ -145,12 +146,12 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=68"></script>
-<script src="src/quest-store.js?v=68"></script>
-<script src="src/main-app.js?v=68"></script>
-<script src="src/session-engine.js?v=68"></script>
-<script src="src/session-editors.js?v=68"></script>
-<script src="src/quest-image.js?v=68"></script>
-<script src="src/quest-ui.js?v=68"></script>
+<script src="src/app-core.js?v=69"></script>
+<script src="src/quest-store.js?v=69"></script>
+<script src="src/main-app.js?v=69"></script>
+<script src="src/session-engine.js?v=69"></script>
+<script src="src/session-editors.js?v=69"></script>
+<script src="src/quest-image.js?v=69"></script>
+<script src="src/quest-ui.js?v=69"></script>
 </body>
 </html>

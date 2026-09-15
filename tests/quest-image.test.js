@@ -21,6 +21,39 @@ const PROGRESS = `クエストの進捗
 0 10 回の乗車 +¥1,380
 詳細`;
 
+test("progress fractions identify the screen even when the title is not recognized", () => {
+  assert.deepEqual(image.parseText(PROGRESS.replace('クエストの進捗', 'クエストの進歩'), NOW).candidates, image.parseText(PROGRESS, NOW).candidates);
+});
+
+test("currency glyph confusion is normalized without altering the amount digits", () => {
+  assert.deepEqual(image.parseText(PROGRESS.replaceAll('¥', 'Y'), NOW).candidates, image.parseText(PROGRESS, NOW).candidates);
+  assert.deepEqual(image.parseText(PROGRESS.replaceAll('¥', '羊'), NOW).candidates, image.parseText(PROGRESS, NOW).candidates);
+});
+
+test("observed long-dash range and duplicated time punctuation retain calendar dates", () => {
+  assert.equal(image.readPeriod('9月14日(月)4:00 ーー 9月18日(金)4:.00', NOW).endTime, '04:00');
+});
+
+test("unequal OCR text heights preserve count-before-money order", () => {
+  const line = (text, x0, y0, y1) => ({text, bbox:{x0, x1:x0+150, y0, y1}});
+  const data = {blocks:[{paragraphs:[{lines:[line('クエスト1',20,100,130),line('120回',80,180,240),line('¥15,700',600,181,193)]}]}]};
+  assert.deepEqual(image.parseText(image.textFromBlocks(data)).candidates[0].tiers,[{target:120,reward:15700}]);
+});
+
+test("failed recognition retries once and retains diagnostics while terminating its worker", async () => {
+  const vm = require('node:vm'); const fs = require('node:fs');
+  let reads = 0; let terminated = 0; let workerOptions;
+  const ctx = {fillRect(){},drawImage(){},getImageData(){return {data:new Uint8ClampedArray([255,255,255,255])};},putImageData(){}};
+  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:async(l,o,opts)=>{
+    workerOptions=opts; return {setParameters:async()=>{},recognize:async()=>({data:{text:++reads===1?'読み取り失敗':PROGRESS}}),terminate:async()=>{terminated++;}};
+  }}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=943;naturalHeight=2048;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,setTimeout,clearTimeout,console};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../src/quest-image.js'),'utf8'),scope);
+  const result = await scope.module.exports.recognize({name:'test.png',type:'image/png',size:100});
+  assert.equal(reads,2); assert.equal(terminated,1); assert.equal(result.candidates[0].completed,9);
+  assert.match(result.diagnosticText,/読み取り失敗/); assert.match(result.diagnosticText,/943×2048/);
+  assert.equal(workerOptions.cachePath,'ubereats-quest-jpn-v1');
+});
+
 test("progress screenshot imports its actual goal, locked bonus, calendar dates and completed total", () => {
   const result = image.parseText(PROGRESS, NOW);
   assert.deepEqual(result.candidates, [{ label: "進行中のクエスト", completed: 9, tiers: [{ target: 100, reward: 9590 }, { target: 110, reward: 1380 }] }]);

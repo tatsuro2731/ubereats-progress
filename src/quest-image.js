@@ -11,7 +11,9 @@
   let libraryPromise;
 
   function normalize(text) {
-    return String(text || "").normalize("NFKC").replace(/\r/g, "").replace(/クエス卜/g, "クエスト");
+    return String(text || "").normalize("NFKC").replace(/\r/g, "").replace(/クエス卜/g, "クエスト")
+      .replace(/クエスト\s*[Il|](?=\s|$)/g, "クエスト1")
+      .replace(/([+＋]?)\s*[Y羊]\s*(?=\d{1,3}[,.]\d{3})/g, "$1¥");
   }
 
   // Sparse OCR reads the two columns separately. Restore visual row order before parsing.
@@ -24,7 +26,9 @@
       const box = line.bbox;
       const center = (box.y0 + box.y1) / 2;
       const height = box.y1 - box.y0;
-      const row = rows.find(item => Math.abs(item.center - center) < Math.min(item.height, height) * 0.55);
+      const row = rows.find(item => item.lines.every(other => box.x0 >= other.bbox.x1 || box.x1 <= other.bbox.x0) &&
+        (Math.abs(item.center - center) < Math.min(item.height, height) * 0.55 ||
+          item.lines.some(other => Math.min(box.y1, other.bbox.y1) - Math.max(box.y0, other.bbox.y0) >= Math.min(height, other.bbox.y1 - other.bbox.y0) * 0.6)));
       if (row) row.lines.push(line);
       else rows.push({ center, height, lines: [line] });
     }
@@ -40,8 +44,8 @@
   }
 
   function readPeriod(text, now = Date.now()) {
-    const compact = normalize(text).replace(/\s/g, "");
-    const dated = compact.match(/(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})[〜~～へ\-–—]+(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})/);
+    const compact = normalize(text).replace(/\s/g, "").replace(/(\d{1,2}):[.,](\d{2})/g, "$1:$2");
+    const dated = compact.match(/(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})[〜~～へー\-–—]+(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})/);
     if (dated) {
       const startTime = clock(null, dated[5], dated[6]); const endTime = clock(null, dated[11], dated[12]);
       if (!startTime || !endTime) return null;
@@ -64,7 +68,7 @@
       delete best.distance; return best;
     }
     // A selection deadline contains one weekday; it must never become the quest period.
-    const pattern = /([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?[〜~～へ\-–—]+([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?/;
+    const pattern = /([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?[〜~～へー\-–—]+([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?/;
     const match = compact.match(pattern);
     if (!match) return null;
     const startTime = clock(match[2], match[3], match[4]);
@@ -88,7 +92,7 @@
   }
 
   function parseText(text, now = Date.now()) {
-    if (/クエストの進捗/.test(normalize(text).replace(/\s/g, ""))) return parseProgress(text, now);
+    if (/クエストの進捗|\d+\/\d+(?:回|件)/.test(normalize(text).replace(/\s/g, ""))) return parseProgress(text, now);
     const lines = normalize(text).split("\n").map(line => line.replace(/\s/g, "")).filter(Boolean);
     const candidates = [];
     let current = null;
@@ -178,7 +182,7 @@
     return libraryPromise;
   }
 
-  function imageCanvas(file) {
+  function imageCanvas(file, enhance = true) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const img = new Image();
@@ -186,12 +190,13 @@
         URL.revokeObjectURL(url);
         try {
           if (!img.naturalWidth || !img.naturalHeight || img.naturalWidth * img.naturalHeight > 40000000) throw new Error("画像が大きすぎます。スクリーンショットを選んでください。");
-          const scale = Math.min(1.5, 1400 / img.naturalWidth, 5000 / img.naturalHeight, Math.sqrt(6000000 / (img.naturalWidth * img.naturalHeight)));
+          const scale = Math.min(1, 1600 / img.naturalWidth, 5000 / img.naturalHeight, Math.sqrt(6000000 / (img.naturalWidth * img.naturalHeight)));
           const canvas = document.createElement("canvas");
           canvas.width = Math.round(img.naturalWidth * scale); canvas.height = Math.round(img.naturalHeight * scale);
           const context = canvas.getContext("2d", { willReadFrequently: true });
           context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height);
           context.drawImage(img, 0, 0, canvas.width, canvas.height);
+          if (!enhance) { resolve(canvas); return; }
           const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
           let dark = 0; let samples = 0;
           for (let i = 0; i < pixels.data.length; i += 400) { if (Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]) < 128) dark++; samples++; }
@@ -231,14 +236,39 @@
           workerPath: `${CDN}tesseract.js@7.0.0/dist/worker.min.js`,
           corePath: `${CDN}tesseract.js-core@7.0.0`,
           langPath: `${CDN}@tesseract.js-data/jpn@1.0.0/4.0.0_best_int`,
+          cachePath: "ubereats-quest-jpn-v1",
           logger: item => { if (!stopped && item.status === "recognizing text") onProgress(`画像を読み取り中…${Math.round(item.progress * 100)}%`); },
           errorHandler: () => {}
         });
         if (stopped) { await worker.terminate(); return; }
         await worker.setParameters({ tessedit_pageseg_mode: "11" });
-        const result = await worker.recognize(canvas, {}, { text: true, blocks: true });
+        const attempts = [];
+        const inputSize = `${canvas.width}×${canvas.height}`;
+        async function read(input) {
+          const { data } = await worker.recognize(input, {}, { text: true, blocks: true });
+          const arranged = textFromBlocks(data);
+          attempts.push(arranged || data.text || "（文字を読み取れませんでした）");
+          // If row grouping is unsuccessful, also try the engine's original line order.
+          let parsed = parseText(arranged);
+          if (!parsed.candidates.length && data.text && data.text !== arranged) {
+            const original = parseText(data.text);
+            attempts.push(data.text);
+            if (original.candidates.length) parsed = original;
+          }
+          return parsed;
+        }
+        let parsed = await read(canvas);
         canvas.width = canvas.height = 1;
-        return parseText(textFromBlocks(result.data));
+        if ((!parsed.candidates.length || !parsed.period) && !stopped) {
+          onProgress("別の画像処理で、もう一度読み取り中…");
+          const original = await imageCanvas(file, false);
+          if (stopped) return;
+          const alternative = await read(original);
+          if (!parsed.candidates.length) parsed = alternative;
+          else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
+          original.width = original.height = 1;
+        }
+        return { ...parsed, diagnosticText: `読み取り v69（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {
@@ -247,5 +277,5 @@
     }
   }
 
-  return { parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "69", parseText, readPeriod, textFromBlocks, recognize };
 });
