@@ -144,9 +144,9 @@
       const cardRect = metrics.getBoundingClientRect();
       const overflow = cardRect.bottom + root.scrollY - bottom;
       if (overflow > 0) {
-        // Only the hero's details scroll on short screens. Its target-pace footer
-        // stays visible, outside this region. Subtract the measured overflow so
-        // the footer, quest summary, borders and gaps all retain their space.
+        // Only pace/guide details scroll. The count header, +/- controls,
+        // progress bar and target-pace footer stay outside this region.
+        // Reserve their measured space as well as the quest summary and cards.
         const overviewHeight = overview.getBoundingClientRect().height;
         overview.style.setProperty("max-height", `${Math.max(44, Math.floor(overviewHeight - overflow))}px`);
       }

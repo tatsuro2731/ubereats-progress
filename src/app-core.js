@@ -265,6 +265,24 @@
   function questDayStart(day, boundaryMinutes = 0) {
     return Date.parse(`${day}T00:00:00+09:00`) + boundaryMinutes * 60000;
   }
+
+  // Storage keeps an exclusive deadline. Forms show the last included minute,
+  // so "03:59まで" includes 03:59:59.999 and the next period starts at 04:00.
+  function questPeriodFields(quest) {
+    const parts = at => new Date(at + 540 * 60000).toISOString().slice(0, 16).split("T");
+    const start = parts(quest.startAt);
+    const end = parts(quest.endAt - 1);
+    return { startDate: start[0], startTime: start[1], endDate: end[0], endTime: end[1] };
+  }
+
+  function questPeriodTimes(fields, previous = null) {
+    const before = previous ? questPeriodFields(previous) : null;
+    const read = (prefix, offset) => before && fields[`${prefix}Date`] === before[`${prefix}Date`] && fields[`${prefix}Time`] === before[`${prefix}Time`]
+      ? previous[`${prefix}At`]
+      : Date.parse(`${fields[`${prefix}Date`]}T${fields[`${prefix}Time`]}:00+09:00`) + offset;
+    // A no-op edit must not round or migrate existing timestamps or counts.
+    return { startAt: read("start", 0), endAt: read("end", 60000) };
+  }
   function questDateKeys(quest) {
     const dates = [];
     for (let at = questDayStart(questDayKey(quest.startAt, quest.boundaryMinutes), quest.boundaryMinutes); at < quest.endAt && dates.length < 36; at += DAY_MS) {
@@ -415,6 +433,8 @@
     QUEST_STORAGE_KEY,
     questDayKey,
     questDayStart,
+    questPeriodFields,
+    questPeriodTimes,
     questDateKeys,
     createQuestState,
     changeQuestCount,

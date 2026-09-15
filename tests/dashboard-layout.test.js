@@ -8,7 +8,7 @@ const vm = require("node:vm");
 
 // Exercise the real resize callbacks with measured-box fixtures. Pixel rendering
 // is separate; these fixtures cover the fit budget, scrolling and resize lifecycle.
-function layoutHarness({ height = 956, top = 62, dockHeight = 188, footerHeight = 0, questHeight = 0 } = {}) {
+function layoutHarness({ height = 956, top = 62, dockHeight = 188, footerHeight = 0, questHeight = 0, headerHeight = 0 } = {}) {
   const events = new Map();
   const frames = [];
   const observers = [];
@@ -34,7 +34,7 @@ function layoutHarness({ height = 956, top = 62, dockHeight = 188, footerHeight 
       const natural = overviewHeights[density()];
       const cap = Number.parseFloat(this.style.getPropertyValue("max-height"));
       const size = Number.isFinite(cap) ? Math.min(natural, cap) : natural;
-      const start = top + questHeight - window.scrollY;
+      const start = top + questHeight + headerHeight - window.scrollY;
       return { top: start, height: size, bottom: start + size };
     }
   };
@@ -167,4 +167,44 @@ test("showing or wrapping the quest summary remeasures the footer and card budge
     app.setQuestHeight(questHeight);
     assert.ok(app.cardsClearDock());
   }
+});
+
+test("the fixed count header fits with the footer, quest summary and two card rows when space permits", () => {
+  for (const height of [780, 852, 956]) {
+    const app = layoutHarness({ height, top: 120, headerHeight: 110, footerHeight: 28, questHeight: 52 });
+    assert.ok(app.cardsClearDock());
+    assert.equal(app.overview.getBoundingClientRect().top, 282, "only details below the count header are capped");
+    app.overview.scrollTop = 30;
+    app.notifyResize(); app.flush();
+    assert.equal(app.overview.scrollTop, 30);
+    assert.equal(app.overview.getBoundingClientRect().top, 282);
+    assert.deepEqual(app.storageWrites, []);
+  }
+});
+
+test("on an impossibly short viewport content remains scrollable rather than being hidden", () => {
+  const app = layoutHarness({ height: 568, top: 160, headerHeight: 110, footerHeight: 28, questHeight: 76 });
+  assert.equal(app.overview.style.getPropertyValue("max-height"), "44px");
+  assert.ok(app.metrics.getBoundingClientRect().height > 0);
+  assert.equal(app.document.documentElement.style.getPropertyValue("--operation-dock-height"), "188px");
+});
+
+test("count label, buttons and progress bar are structurally outside the scrolled details", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
+  const stack = [];
+  const ancestors = new Map();
+  for (const match of html.matchAll(/<(\/?)([a-z][\w-]*)\b([^>]*)>/gi)) {
+    const [, close, tag, attributes] = match;
+    if (close) { stack.splice(stack.findLastIndex(item => item.tag === tag)); continue; }
+    const id = attributes.match(/\bid="([^"]+)"/)?.[1];
+    if (id) ancestors.set(id, stack.map(item => item.id));
+    if (!/^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(tag)) stack.push({ tag, id });
+  }
+  for (const id of ["heroProgress", "heroDone", "heroTarget", "heroRemaining", "plus", "minus", "heroProgressTrack", "baselinePace"]) {
+    assert.ok(ancestors.get(id).includes("hero"), `${id} remains within the hero card`);
+    assert.ok(!ancestors.get(id).includes("dashboardOverview"), `${id} cannot be scrolled out of its own card`);
+  }
+  for (const id of ["mainValue", "subValue", "miniValue"]) assert.ok(ancestors.get(id).includes("dashboardOverview"));
+  const css = fs.readFileSync(path.join(__dirname, "../styles/quest.css"), "utf8");
+  assert.match(css, /@media\(max-width:440px\)\s*\{\s*\.questView \.questDateTimeFields\s*\{\s*grid-template-columns:minmax\(0,1fr\)/);
 });

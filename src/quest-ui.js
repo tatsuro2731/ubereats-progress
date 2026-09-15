@@ -7,7 +7,9 @@
   const yen = value => `¥${Math.round(value).toLocaleString("ja-JP")}`;
   const dateLabel = day => new Date(`${day}T12:00:00+09:00`).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" });
   const timeLabel = at => new Date(at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-  const jstInput = at => new Date(at + 540 * 60000).toISOString().slice(0, 16);
+  const periodLabel = quest => `${timeLabel(quest.startAt)} 〜 ${timeLabel(quest.endAt - 1)}まで`;
+  const periodFields = () => Object.fromEntries(["startDate", "startTime", "endDate", "endTime"].map(key => [key, byId(`quest${key[0].toUpperCase()}${key.slice(1)}`).value]));
+  const fillPeriod = fields => { for (const key of ["startDate", "startTime", "endDate", "endTime"]) byId(`quest${key[0].toUpperCase()}${key.slice(1)}`).value = fields[key]; };
   const text = (id, value) => { const element = byId(id); if (element) element.textContent = String(value); };
   let editingId = null;
   let displayDay = null;
@@ -43,11 +45,17 @@
     const before = ["questStartDate", "questStartTime", "questEndDate", "questEndTime"].map(id => byId(id).value).join();
     const period = imageResult.period;
     if (period) {
-      for (const key of ["startDate", "startTime", "endDate", "endTime"]) byId(`quest${key[0].toUpperCase()}${key.slice(1)}`).value = period[key];
+      // Uber shows either the 04:00 boundary or the already-inclusive 03:59.
+      // Keep the raw OCR period intact and convert only the form presentation.
+      const fields = period.endTime === "03:59" ? period : core.questPeriodFields({
+        startAt: Date.parse(`${period.startDate}T${period.startTime}:00+09:00`),
+        endAt: Date.parse(`${period.endDate}T${period.endTime}:00+09:00`)
+      });
+      fillPeriod(fields);
       byId("questTemplate").value = period.template;
       text("questImageDateNote", period.dateSource === "calendar"
-        ? `${period.startDate} ${period.startTime} 〜 ${period.endDate} ${period.endTime} を読み取りました。${period.inferred ? "年は推定です。" : ""}画像の対象期間を確認してください。`
-        : `画像には曜日だけが表示されているため、${period.startDate} ${period.startTime} 〜 ${period.endDate} ${period.endTime} を仮入力しました。対象の週を確認し、違う場合は日付を変更してください。`);
+        ? `${fields.startDate} ${fields.startTime} 〜 ${fields.endDate} ${fields.endTime}までを入力しました。${period.inferred ? "年は推定です。" : ""}画像の対象期間を確認してください。`
+        : `画像には曜日だけが表示されているため、${fields.startDate} ${fields.startTime} 〜 ${fields.endDate} ${fields.endTime}までを仮入力しました。対象の週を確認し、違う場合は日付を変更してください。`);
     } else {
       if (editingId === "new") for (const id of ["questStartDate", "questStartTime", "questEndDate", "questEndTime"]) byId(id).value = "";
       text("questImageDateNote", "期間を読み取れませんでした。Uberの画面に合わせて開始・終了日時を確認して入力してください。");
@@ -169,8 +177,8 @@
     if (!quest) return;
     if (quest.id !== lastSelectedId) { lastSelectedId = quest.id; displayDay = null; salesDirty = false; byId("questAlignDetails").open = false; }
     const value = core.calculateQuest(quest, state.entries, Date.now(), displayDay);
-    options(byId("questSelect"), state.quests.slice().sort((a, b) => b.startAt - a.startAt).map(item => [item.id, `${timeLabel(item.startAt)} 〜 ${timeLabel(item.endAt)}`]), quest.id);
-    text("questPeriod", `${timeLabel(quest.startAt)} 〜 ${timeLabel(quest.endAt)}`);
+    options(byId("questSelect"), state.quests.slice().sort((a, b) => b.startAt - a.startAt).map(item => [item.id, periodLabel(item)]), quest.id);
+    text("questPeriod", periodLabel(quest));
     text("questPhase", value.phase === "active" ? "進行中" : value.phase === "upcoming" ? "開始前" : "期間終了");
     text("questTotal", value.total); text("questGoal", `/ ${value.goal}件`);
     const percentage = Math.min(100, value.total / value.goal * 100);
@@ -240,12 +248,14 @@
   function fillTemplate() {
     const kind = byId("questTemplate").value;
     if (kind === "custom") return;
-    const date = new Date(`${core.questDayKey(Date.now())}T00:00:00Z`);
+    const date = new Date(`${core.questDayKey(Date.now(), 240)}T00:00:00Z`);
     const offset = (date.getUTCDay() + 6) % 7;
     date.setUTCDate(date.getUTCDate() - offset + (kind === "weekend" ? 4 : 0));
     byId("questStartDate").value = date.toISOString().slice(0, 10);
     date.setUTCDate(date.getUTCDate() + (kind === "weekend" ? 3 : 4));
     byId("questEndDate").value = date.toISOString().slice(0, 10);
+    byId("questStartTime").value = "04:00";
+    byId("questEndTime").value = "03:59";
   }
   function openForm(isNew) {
     try {
@@ -258,9 +268,8 @@
       byId("questInitialCounts").hidden = Boolean(quest);
       byId("questInitialTotal").required = !quest; byId("questInitialToday").required = !quest;
       if (quest) {
-        const start = jstInput(quest.startAt).split("T"); const end = jstInput(quest.endAt).split("T");
         byId("questTemplate").value = quest.template || "custom";
-        byId("questStartDate").value = start[0]; byId("questStartTime").value = start[1]; byId("questEndDate").value = end[0]; byId("questEndTime").value = end[1];
+        fillPeriod(core.questPeriodFields(quest));
         quest.tiers.forEach(tier => addTier(tier.target, tier.reward)); refreshTierLabels(quest.goalIndex);
       } else { fillTemplate(); addTier(120, ""); }
       render(); byId("questTemplate").focus();
@@ -271,7 +280,8 @@
     if (!editingId || editingId === "new") return;
     try {
       const quest = store.read().quests.find(item => item.id === editingId);
-      const changed = `${byId("questStartDate").value}T${byId("questStartTime").value}` !== jstInput(quest.startAt) || `${byId("questEndDate").value}T${byId("questEndTime").value}` !== jstInput(quest.endAt);
+      const times = core.questPeriodTimes(periodFields(), quest);
+      const changed = times.startAt !== quest.startAt || times.endAt !== quest.endAt;
       byId("questInitialCounts").hidden = !changed && !imageCountApplied;
       byId("questInitialTotal").required = changed || imageCountApplied; byId("questInitialToday").required = changed || imageCountApplied;
     } catch (error) { errorMessage(error, "questConfigError"); }
@@ -313,8 +323,7 @@
     event.preventDefault();
     try {
       const state = store.read(); const old = state.quests.find(quest => quest.id === editingId);
-      const startAt = Date.parse(`${byId("questStartDate").value}T${byId("questStartTime").value}:00+09:00`);
-      const endAt = Date.parse(`${byId("questEndDate").value}T${byId("questEndTime").value}:00+09:00`);
+      const { startAt, endAt } = core.questPeriodTimes(periodFields(), old);
       const [hours, minutes] = byId("questStartTime").value.split(":").map(Number);
       const quest = { ...old, id: old ? old.id : `quest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, startAt, endAt, boundaryMinutes: hours * 60 + minutes, template: byId("questTemplate").value, tiers: tierRows().map(row => ({ target: Number(row.querySelector("[data-tier-count]").value), reward: Number(row.querySelector("[data-tier-reward]").value) })), goalIndex: Number(byId("questGoalInput").value), adjustments: old ? old.adjustments : {}, sales: old ? old.sales : {} };
       const error = core.validateQuest(quest, state.quests); if (error) throw new Error(error);

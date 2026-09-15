@@ -617,7 +617,7 @@ function setTone(margin, left) {
 }
 
 function bikeIcon(count) {
-  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=69#scooter"></use></svg>';
+  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=70#scooter"></use></svg>';
   return `<span class="bikes" aria-hidden="true">${icon.repeat(count)}</span>`;
 }
 
@@ -661,7 +661,7 @@ function limits(targetPace, margin) {
 }
 
 function metricIcon(id) {
-  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=69#${id}"></use></svg></span>`;
+  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=70#${id}"></use></svg></span>`;
 }
 
 function slackMarkup(minutes) {
@@ -757,7 +757,7 @@ function drawCards(values) {
     const toggle = isPaceToggleCard(id) && !cardOrderMode;
     const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     const handle = cardOrderMode ? `<button class="dragHandle" type="button" aria-label="${item.k}を移動" title="長押しして移動">≡</button>` : "";
-    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=69#swap"></use></svg>' : "";
+    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=70#swap"></use></svg>' : "";
     return `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
   }).join("");
 }
@@ -1107,5 +1107,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=69").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=70").catch(() => {}));
 }

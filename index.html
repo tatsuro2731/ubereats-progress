@@ -13,10 +13,10 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=69"></script>
-  <link rel="stylesheet" href="styles/main.css?v=69">
-  <link rel="stylesheet" href="styles/appearance.css?v=69">
-  <link rel="stylesheet" href="styles/quest.css?v=69">
+  <script src="src/appearance.js?v=70"></script>
+  <link rel="stylesheet" href="styles/main.css?v=70">
+  <link rel="stylesheet" href="styles/appearance.css?v=70">
+  <link rel="stylesheet" href="styles/quest.css?v=70">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -29,12 +29,12 @@
   <section id="progressView" role="tabpanel" aria-labelledby="progressTab">
   <button id="questBrief" class="questBrief" type="button" hidden><span id="questBriefCount"></span><span id="questBriefNext"></span></button>
   <div id="hero" class="hero">
-    <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="配達の進捗と案件時間の目安">
-    <div class="heroProgress">
+    <div id="heroProgress" class="heroProgress">
       <div class="heroProgressCopy"><div class="heroProgressLabel">完了件数</div><div class="heroCount"><strong id="heroDone">0</strong><span id="heroTarget">/ 46</span></div><div id="heroRemaining" class="heroRemaining">残り46件</div></div>
       <div class="heroCounter" role="group" aria-label="完了件数の変更"><button id="minus" class="minus" type="button" aria-label="完了件数を1件減らす。長押しで連続して減らす" title="長押しで連続変更">−</button><button id="plus" class="plus" type="button" aria-label="完了件数を1件増やす。長押しで連続して増やす" title="長押しで連続変更">＋</button></div>
     </div>
     <div class="heroProgressLine"><div id="heroProgressTrack" class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="heroProgressFill" class="progressFill"></span></div><span id="heroPercent">0%</span></div>
+    <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="ペースと案件時間の目安（高さが足りない場合はスクロールできます）">
     <div class="caption">目標ペースに対して</div><div id="mainValue" class="main">-</div><div class="guideCaption">案件時間の目安</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div>
     </div>
     <button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button>
@@ -99,9 +99,9 @@
         <details id="questImagePreview" hidden><summary>読み込んだ画像を確認</summary><img id="questImageOriginal" alt="読み込んだUberクエスト画面"></details>
       </section>
       <label class="questField" for="questTemplate">期間のひな形<select id="questTemplate"><option value="weekday">月〜木</option><option value="weekend">金〜日</option><option value="custom">自由に設定</option></select></label>
-      <div class="questFormPair"><label class="questField" for="questStartDate">開始日<input id="questStartDate" type="date" required></label><label class="questField" for="questStartTime">開始時刻<input id="questStartTime" type="time" required></label><label class="questField" for="questEndDate">終了日<input id="questEndDate" type="date" required></label><label class="questField" for="questEndTime">終了時刻<input id="questEndTime" type="time" required></label></div>
+      <div class="questFormPair questDateTimeFields"><label class="questField" for="questStartDate">開始日<input id="questStartDate" type="date" required></label><label class="questField" for="questStartTime">開始時刻<input id="questStartTime" type="time" required></label><label class="questField" for="questEndDate">終了日<input id="questEndDate" type="date" required></label><label class="questField" for="questEndTime">終了時刻（この分まで）<input id="questEndTime" type="time" aria-describedby="questEndTimeNote" required></label></div>
       <p id="questImageDateNote" class="questImportNotice" hidden></p>
-      <p class="questMuted">日時は日本時間です。Uberに表示される開始・終了時刻に合わせてください。</p>
+      <p id="questEndTimeNote" class="questMuted">日時は日本時間です。終了はその分の終わりまで含みます。午前4:00に切り替わるクエストは「03:59まで」と入力・表示します。</p>
       <div class="questBetween"><h4>段階ごとの件数と報酬</h4><button id="questAddTier" class="questTextButton" type="button">段階を追加</button></div><div id="questTierInputs"></div>
       <p class="questMuted">例：120件＋追加10件なら、必要件数は120・130件。報酬は各段階でもらえる追加額を入力します。</p>
       <label class="questField" for="questGoalInput">狙う段階<select id="questGoalInput"></select></label>
@@ -146,12 +146,12 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=69"></script>
-<script src="src/quest-store.js?v=69"></script>
-<script src="src/main-app.js?v=69"></script>
-<script src="src/session-engine.js?v=69"></script>
-<script src="src/session-editors.js?v=69"></script>
-<script src="src/quest-image.js?v=69"></script>
-<script src="src/quest-ui.js?v=69"></script>
+<script src="src/app-core.js?v=70"></script>
+<script src="src/quest-store.js?v=70"></script>
+<script src="src/main-app.js?v=70"></script>
+<script src="src/session-engine.js?v=70"></script>
+<script src="src/session-editors.js?v=70"></script>
+<script src="src/quest-image.js?v=70"></script>
+<script src="src/quest-ui.js?v=70"></script>
 </body>
 </html>

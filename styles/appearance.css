@@ -76,9 +76,11 @@ body.progressApp .wrap { max-width: 620px; }
 body.mainView .wrap { padding-bottom: calc(var(--operation-dock-height) + 20px); }
 body.mainView .dashboardOverview {
   display: flow-root; overflow: auto; scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling: touch; overflow-anchor: none;
 }
-/* The target pace is a footer of the hero, outside its scrollable details. */
+/* Count controls and target pace stay outside the scrollable pace details. */
+body.mainView .hero > .heroProgress { padding-top: 2px; }
+body.mainView .heroProgressLabel { line-height: 1.5; }
 body.mainView .hero > .baselinePace { max-width: 100%; white-space: normal; }
 body.mainView .dashboardOverview:focus-visible { outline: 2px solid var(--good); outline-offset: 2px; }
 body.progressApp .header {

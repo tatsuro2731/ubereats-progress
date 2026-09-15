@@ -16,6 +16,10 @@ body.mainView.questMode .wrap { padding-bottom:max(20px,env(safe-area-inset-bott
 .questView .questField { display:grid; gap:6px; min-width:0; color:var(--muted); font-size:14px; margin-bottom:12px; }
 .questView input,.questView select { display:block; width:100%; min-width:0; max-width:100%; min-height:44px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--text); background:var(--input); font-size:16px; box-sizing:border-box; }
 .questView .questFormPair { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 12px; }
+/* Native iOS date controls need more width than half a phone-sized card. */
+.questView input:is([type="date"],[type="time"]) { min-inline-size:0; max-inline-size:100%; }
+.questView input:is([type="date"],[type="time"])::-webkit-date-and-time-value { min-width:0; text-align:left; }
+@media(max-width:440px) { .questView .questDateTimeFields { grid-template-columns:minmax(0,1fr); } }
 .questMuted,.questLabel { color:var(--muted); font-size:14px; }
 .questView .questBigCount { display:flex; gap:8px; align-items:baseline; font-variant-numeric:tabular-nums; }
 .questBigCount strong { font-size:46px; font-weight:800; line-height:1.25; letter-spacing:-.03em; }.questBigCount span { font-size:20px; color:var(--muted); }

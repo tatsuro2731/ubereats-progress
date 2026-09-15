@@ -82,7 +82,8 @@
     let start = midnight - ((date.getUTCDay() - startDay + 7) % 7) * DAY;
     const span = (endDay - startDay + 7) % 7 || (minutes(endTime) > minutes(startTime) ? 0 : 7);
     const next = /次のクエスト|クエストを選択できるのはあと/.test(compact);
-    if (next ? start - JST + minutes(startTime) * 60000 <= now : start + span * DAY - JST + minutes(endTime) * 60000 <= now) start += 7 * DAY;
+    const endMinutes = minutes(endTime) + (endTime === "03:59" ? 1 : 0);
+    if (next ? start - JST + minutes(startTime) * 60000 <= now : start + span * DAY - JST + endMinutes * 60000 <= now) start += 7 * DAY;
     return {
       startDate: new Date(start).toISOString().slice(0, 10), startTime,
       endDate: new Date(start + span * DAY).toISOString().slice(0, 10), endTime,
@@ -268,7 +269,7 @@
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v69（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        return { ...parsed, diagnosticText: `読み取り v70（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {
@@ -277,5 +278,5 @@
     }
   }
 
-  return { version: "69", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "70", parseText, readPeriod, textFromBlocks, recognize };
 });
