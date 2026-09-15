@@ -105,7 +105,7 @@ test("the service worker cache revision and assets match direct script URLs", ()
     ...[...page.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi)].map(match => match[1]),
     ...[...page.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1])
   ]).map(normalizedAsset);
-  assert.equal(pageAssets.length, 18, "both pages load shared appearance and quest assets");
+  assert.equal(pageAssets.length, 19, "both pages load shared assets; the full page also loads quest image import");
   for (const page of [html, compact]) {
     assert.match(page, /src\/quest-store\.js/);
     assert.match(page, /src\/quest-ui\.js/);

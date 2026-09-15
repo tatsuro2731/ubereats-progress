@@ -13,10 +13,10 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=66"></script>
-  <link rel="stylesheet" href="styles/main.css?v=66">
-  <link rel="stylesheet" href="styles/appearance.css?v=66">
-  <link rel="stylesheet" href="styles/quest.css?v=66">
+  <script src="src/appearance.js?v=67"></script>
+  <link rel="stylesheet" href="styles/main.css?v=67">
+  <link rel="stylesheet" href="styles/appearance.css?v=67">
+  <link rel="stylesheet" href="styles/quest.css?v=67">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -88,8 +88,18 @@
     </div>
     <form id="questConfigForm" class="questCard questConfigForm" hidden>
       <div class="questBetween"><h3 id="questFormTitle">クエストを登録</h3><button id="questCancel" class="questTextButton" type="button">閉じる</button></div>
+      <section class="questImport" aria-labelledby="questImportTitle">
+        <div class="questBetween"><h4 id="questImportTitle">スクリーンショットから入力</h4><button id="questImagePick" class="questSecondary" type="button">画像を選ぶ</button></div>
+        <input id="questImageFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <p class="questMuted">Uberのクエスト選択画面から、件数・報酬・期間を読み取ります。画像は端末内で処理します。読み取りの準備には通信が必要です。</p>
+        <div class="questBetween"><p id="questImageStatus" class="questMuted" role="status" aria-live="polite"></p><button id="questImageStop" class="questTextButton" type="button" hidden>読み取りを中止</button></div>
+        <p id="questImageError" class="questError" role="alert" hidden></p>
+        <div id="questImageResults" hidden><p>反映するクエストを選んでください。</p><div id="questImageChoices" class="questImageChoices" role="group" aria-label="読み取ったクエスト候補"></div><p id="questImageSkipped" class="questMuted" hidden></p></div>
+        <details id="questImagePreview" hidden><summary>読み込んだ画像を確認</summary><img id="questImageOriginal" alt="読み込んだUberクエスト画面"></details>
+      </section>
       <label class="questField" for="questTemplate">期間のひな形<select id="questTemplate"><option value="weekday">月〜木</option><option value="weekend">金〜日</option><option value="custom">自由に設定</option></select></label>
       <div class="questFormPair"><label class="questField" for="questStartDate">開始日<input id="questStartDate" type="date" required></label><label class="questField" for="questStartTime">開始時刻<input id="questStartTime" type="time" required></label><label class="questField" for="questEndDate">終了日<input id="questEndDate" type="date" required></label><label class="questField" for="questEndTime">終了時刻<input id="questEndTime" type="time" required></label></div>
+      <p id="questImageDateNote" class="questImportNotice" hidden></p>
       <p class="questMuted">日時は日本時間です。Uberに表示される開始・終了時刻に合わせてください。</p>
       <div class="questBetween"><h4>段階ごとの件数と報酬</h4><button id="questAddTier" class="questTextButton" type="button">段階を追加</button></div><div id="questTierInputs"></div>
       <p class="questMuted">例：120件＋追加10件なら、必要件数は120・130件。報酬は各段階でもらえる追加額を入力します。</p>
@@ -135,11 +145,12 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=66"></script>
-<script src="src/quest-store.js?v=66"></script>
-<script src="src/main-app.js?v=66"></script>
-<script src="src/session-engine.js?v=66"></script>
-<script src="src/session-editors.js?v=66"></script>
-<script src="src/quest-ui.js?v=66"></script>
+<script src="src/app-core.js?v=67"></script>
+<script src="src/quest-store.js?v=67"></script>
+<script src="src/main-app.js?v=67"></script>
+<script src="src/session-engine.js?v=67"></script>
+<script src="src/session-editors.js?v=67"></script>
+<script src="src/quest-image.js?v=67"></script>
+<script src="src/quest-ui.js?v=67"></script>
 </body>
 </html>

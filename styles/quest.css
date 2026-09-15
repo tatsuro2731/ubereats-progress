@@ -30,5 +30,18 @@ body.mainView.questMode .wrap { padding-bottom:max(20px,env(safe-area-inset-bott
 .questError { color:var(--bad); font-size:14px; font-weight:650; }.questLive { color:var(--accent); min-height:22px; font-size:14px; }
 body.progressApp .questBrief { display:flex; justify-content:space-between; flex-wrap:wrap; gap:3px 10px; width:100%; text-align:left; min-height:44px; padding:8px 12px; margin:0 0 8px; background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:12px; box-shadow:none; font-size:14px; }
 .questBrief span:last-child { color:var(--muted); font-size:13px; }
+.questImport { padding:12px; border:1px dashed var(--line); border-radius:12px; margin:0 0 18px; }
+.questImport p:empty { display:none; }
+.questView .questImport input[hidden] { display:none; }
+.questImageChoices { display:grid; gap:10px; }
+.questView .questImageChoice { display:grid; gap:6px; width:100%; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--card); color:var(--text); cursor:pointer; text-align:left; font-size:14px; }
+.questView .questImageChoice[aria-pressed="true"] { border:2px solid var(--accent); padding:11px; }
+.questImageChoice strong { color:var(--accent); font-size:16px; }
+.questImageChoice span { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.questImageChoice em { font-style:normal; font-variant-numeric:tabular-nums; }
+.questImageChoice small { font-size:14px; color:var(--muted); }
+.questImport img { display:block; width:100%; max-width:430px; height:auto; border-radius:8px; }
+.questImportNotice { padding:10px 12px; border-left:3px solid var(--accent); background:var(--card2); border-radius:5px; font-size:14px; }
+.questImageChoice:focus-visible,.questImport button:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
 .compactQuestLink { display:block; background:var(--card); color:var(--text); border:1px solid var(--line); padding:12px; border-radius:12px; margin-top:12px; font-size:14px; text-decoration:none; }
 @media(max-width:359px) { .questCard { padding:13px; }.questBigCount strong { font-size:40px; }.questView .questFormPair { gap:0 8px; }.questToolbar { gap:6px; } }

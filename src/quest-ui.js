@@ -15,6 +15,91 @@
   let tierSerial = 0;
   let lastSelectedId = null;
   let workDaysSignature = "";
+  let imageController = null;
+  let imageResult = null;
+  let imagePreviewUrl = null;
+
+  function imageBusy(busy) {
+    byId("questImagePick").disabled = busy;
+    byId("questImageStop").hidden = !busy;
+    byId("questConfigForm").querySelector('button[type="submit"]').disabled = busy;
+  }
+  function resetImage() {
+    imageController?.abort(); imageController = null; imageResult = null;
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    imagePreviewUrl = null;
+    byId("questImageOriginal").removeAttribute("src");
+    byId("questImageFile").value = "";
+    for (const id of ["questImageResults", "questImageError", "questImagePreview", "questImageDateNote"]) byId(id).hidden = true;
+    byId("questImagePreview").open = false;
+    byId("questImageChoices").replaceChildren(); text("questImageStatus", ""); imageBusy(false);
+  }
+  function applyImageCandidate(index) {
+    const candidate = imageResult?.candidates[index];
+    if (!candidate) return;
+    const before = ["questStartDate", "questStartTime", "questEndDate", "questEndTime"].map(id => byId(id).value).join();
+    const period = imageResult.period;
+    if (period) {
+      for (const key of ["startDate", "startTime", "endDate", "endTime"]) byId(`quest${key[0].toUpperCase()}${key.slice(1)}`).value = period[key];
+      byId("questTemplate").value = period.template;
+      text("questImageDateNote", `画像には曜日だけが表示されているため、${period.startDate} ${period.startTime} 〜 ${period.endDate} ${period.endTime} を仮入力しました。対象の週を確認し、違う場合は日付を変更してください。`);
+    } else {
+      if (editingId === "new") for (const id of ["questStartDate", "questStartTime", "questEndDate", "questEndTime"]) byId(id).value = "";
+      text("questImageDateNote", "期間を読み取れませんでした。Uberの画面に合わせて開始・終了日時を確認して入力してください。");
+    }
+    byId("questImageDateNote").hidden = false;
+    byId("questTierInputs").replaceChildren();
+    candidate.tiers.forEach(tier => addTier(tier.target, tier.reward));
+    refreshTierLabels(candidate.tiers.length - 1);
+    checkPeriodEdit();
+    const after = ["questStartDate", "questStartTime", "questEndDate", "questEndTime"].map(id => byId(id).value).join();
+    if (editingId === "new" || before !== after) {
+      const future = Date.parse(`${byId("questStartDate").value}T${byId("questStartTime").value}:00+09:00`) > Date.now();
+      for (const id of ["questInitialTotal", "questInitialToday"]) byId(id).value = future ? "0" : "";
+    }
+    Array.from(byId("questImageChoices").children).forEach((button, i) => {
+      button.setAttribute("aria-pressed", String(i === index));
+      button.querySelector("small").textContent = i === index ? "入力済み" : "この候補を入力";
+    });
+    text("questImageStatus", `${candidate.label}を入力しました。日時・件数・報酬を確認して保存してください。`);
+    byId("questConfigError").hidden = true;
+    byId("questStartDate").focus();
+  }
+  async function readQuestImage(file) {
+    resetImage();
+    if (!file) return;
+    const controller = new AbortController(); imageController = controller;
+    imageBusy(true);
+    try {
+      const result = await UberQuestImage.recognize(file, { signal: controller.signal, onProgress: value => { if (imageController === controller) text("questImageStatus", value); } });
+      if (imageController !== controller) return;
+      if (!result.candidates.length) throw new Error("件数と報酬を読み取れませんでした。1つのクエストの全段階が写った、鮮明なスクリーンショットでお試しください。手入力もできます。");
+      imageResult = result;
+      imagePreviewUrl = URL.createObjectURL(file); byId("questImageOriginal").src = imagePreviewUrl; byId("questImagePreview").hidden = false;
+      byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
+        const button = document.createElement("button"); button.type = "button"; button.className = "questImageChoice"; button.setAttribute("aria-pressed", "false");
+        const title = document.createElement("strong"); title.textContent = candidate.label; button.append(title);
+        candidate.tiers.forEach((tier, i) => {
+          const row = document.createElement("span"); const count = document.createElement("em"); const reward = document.createElement("em");
+          count.textContent = i ? `＋${tier.target - candidate.tiers[i - 1].target}件` : `${tier.target}件`;
+          reward.textContent = `${i ? "＋" : ""}${yen(tier.reward)}`; row.append(count, reward); button.append(row);
+        });
+        const total = document.createElement("span"); total.textContent = `合計 ${candidate.tiers.at(-1).target}件・${yen(candidate.tiers.reduce((sum, tier) => sum + tier.reward, 0))}`;
+        const action = document.createElement("small"); action.textContent = "この候補を入力"; button.append(total, action);
+        button.addEventListener("click", () => applyImageCandidate(index)); return button;
+      }));
+      byId("questImageResults").hidden = false;
+      byId("questImageSkipped").hidden = !result.skipped;
+      text("questImageSkipped", `${result.skipped}候補は途中で切れているか、数字を確認できなかったため除外しました。`);
+      text("questImageStatus", `${result.candidates.length}件の候補を読み取りました。`);
+      if (result.candidates.length === 1) applyImageCandidate(0);
+      else byId("questImageChoices").firstElementChild.focus();
+    } catch (error) {
+      if (imageController !== controller) return;
+      text("questImageStatus", error.name === "AbortError" ? "読み取りを中止しました。" : "");
+      if (error.name !== "AbortError") errorMessage(error.message || "画像を読み取れませんでした。通信を確認して再度お試しください。", "questImageError");
+    } finally { if (imageController === controller) { imageController = null; imageBusy(false); } }
+  }
 
   function selected(state) {
     const now = Date.now();
@@ -150,6 +235,7 @@
     try {
       const state = store.read(); const quest = isNew ? null : selected(state);
       editingId = quest ? quest.id : "new";
+      resetImage();
       byId("questConfigForm").reset(); byId("questConfigForm").hidden = false;
       byId("questConfigError").hidden = true; byId("questTierInputs").replaceChildren();
       text("questFormTitle", quest ? "クエストを編集" : "クエストを登録");
@@ -164,7 +250,7 @@
       render(); byId("questTemplate").focus();
     } catch (error) { errorMessage(error); }
   }
-  function closeForm() { byId("questConfigForm").hidden = true; editingId = null; render(); byId("questNew").focus(); }
+  function closeForm() { resetImage(); byId("questConfigForm").hidden = true; editingId = null; render(); byId("questNew").focus(); }
   function checkPeriodEdit() {
     if (!editingId || editingId === "new") return;
     try {
@@ -184,6 +270,10 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
   window.setInterval(() => { if (!document.hidden) render(); }, 30000);
   if (!full) { render(); return; }
+
+  byId("questImagePick").addEventListener("click", () => byId("questImageFile").click());
+  byId("questImageFile").addEventListener("change", event => readQuestImage(event.target.files[0]));
+  byId("questImageStop").addEventListener("click", () => imageController?.abort());
 
   byId("progressTab").addEventListener("click", () => showTab(false));
   byId("questTab").addEventListener("click", () => showTab(true));
