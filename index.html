@@ -13,10 +13,10 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=70"></script>
-  <link rel="stylesheet" href="styles/main.css?v=70">
-  <link rel="stylesheet" href="styles/appearance.css?v=70">
-  <link rel="stylesheet" href="styles/quest.css?v=70">
+  <script src="src/appearance.js?v=71"></script>
+  <link rel="stylesheet" href="styles/main.css?v=71">
+  <link rel="stylesheet" href="styles/appearance.css?v=71">
+  <link rel="stylesheet" href="styles/quest.css?v=71">
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -65,6 +65,7 @@
     <div id="questEmpty" class="questCard"><h3>クエストを登録する</h3><p>期間・必要件数・報酬を登録すると、いつもの件数操作でクエストも進みます。</p><button id="questFirst" type="button" class="questPrimary">クエストを登録</button></div>
     <div id="questContent" hidden>
       <label class="questField questPeriodPicker" for="questSelect">クエスト期間<select id="questSelect"></select></label>
+      <p id="questAutoNotice" class="questMuted" role="status"></p>
       <div class="questCard">
         <div class="questBetween"><span id="questPeriod"></span><button id="questEdit" class="questTextButton" type="button">設定を編集</button></div>
         <p id="questPhase" class="questMuted"></p>
@@ -146,12 +147,12 @@
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>
   </section>
 </div>
-<script src="src/app-core.js?v=70"></script>
-<script src="src/quest-store.js?v=70"></script>
-<script src="src/main-app.js?v=70"></script>
-<script src="src/session-engine.js?v=70"></script>
-<script src="src/session-editors.js?v=70"></script>
-<script src="src/quest-image.js?v=70"></script>
-<script src="src/quest-ui.js?v=70"></script>
+<script src="src/app-core.js?v=71"></script>
+<script src="src/quest-store.js?v=71"></script>
+<script src="src/main-app.js?v=71"></script>
+<script src="src/session-engine.js?v=71"></script>
+<script src="src/session-editors.js?v=71"></script>
+<script src="src/quest-image.js?v=71"></script>
+<script src="src/quest-ui.js?v=71"></script>
 </body>
 </html>

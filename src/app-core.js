@@ -293,6 +293,12 @@
   function createQuestState(done = 0, at = Date.now()) {
     return { version: 1, counter: { done, epoch: 0, startedAt: at }, sequence: 0, entries: [], quests: [], selectedId: null };
   }
+  function currentQuest(quests, at = Date.now()) {
+    const ordered = quests.slice().sort((a, b) => a.startAt - b.startAt);
+    return ordered.find(quest => quest.startAt <= at && at < quest.endAt)
+      || ordered.find(quest => at < quest.startAt)
+      || ordered.at(-1);
+  }
   function changeQuestCount(state, nextDone, { reset = false, at = Date.now() } = {}) {
     const next = { ...state, counter: { ...state.counter }, entries: state.entries.map(entry => ({ ...entry })) };
     const done = Math.max(0, Math.floor(finite(nextDone)));
@@ -437,6 +443,7 @@
     questPeriodTimes,
     questDateKeys,
     createQuestState,
+    currentQuest,
     changeQuestCount,
     validateQuest,
     questDailyCounts,

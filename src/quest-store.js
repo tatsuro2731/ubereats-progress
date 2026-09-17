@@ -79,11 +79,11 @@
     try { return saveProgress({ ...readProgress(), done: "0" }, { reset: true }); }
     catch (error) { report(error); return false; }
   }
-  function putQuest(quest, { total, today, align = false } = {}) {
+  function putQuest(quest, { total, today, align = false, at = Date.now() } = {}) {
     return update(state => {
       const error = core.validateQuest(quest, state.quests);
       if (error) throw new Error(error);
-      if (align) quest = core.alignQuestCounts(quest, state.entries, total, today);
+      if (align) quest = core.alignQuestCounts(quest, state.entries, total, today, at);
       const exists = state.quests.some(item => item.id === quest.id);
       return { ...state, selectedId: quest.id, quests: exists ? state.quests.map(item => item.id === quest.id ? quest : item) : [...state.quests, quest] };
     });

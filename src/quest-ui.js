@@ -16,6 +16,10 @@
   let salesDirty = false;
   let tierSerial = 0;
   let lastSelectedId = null;
+  let manualSelection = null;
+  let selectionContext = null;
+  let boundaryTimer = null;
+  let alignAt = null;
   let workDaysSignature = "";
   let imageController = null;
   let imageResult = null;
@@ -126,10 +130,26 @@
   }
 
   function selected(state) {
-    const now = Date.now();
-    return state.quests.find(quest => quest.id === state.selectedId)
-      || state.quests.find(quest => quest.startAt <= now && now < quest.endAt)
-      || state.quests.slice().sort((a, b) => b.startAt - a.startAt)[0];
+    // Mutations belong to the period actually rendered, even at a time boundary.
+    const quest = state.quests.find(item => item.id === lastSelectedId);
+    if (!quest) throw new Error("表示するクエストを選び直してください。");
+    return quest;
+  }
+  function displayQuest(state, now) {
+    const automatic = core.currentQuest(state.quests, now);
+    const context = automatic ? `${automatic.id}:${automatic.startAt}:${automatic.endAt}:${now < automatic.startAt ? "upcoming" : now < automatic.endAt ? "active" : "ended"}` : "empty";
+    if (selectionContext !== context) { manualSelection = null; selectionContext = context; }
+    // Keep an in-progress form attached to its original period until saved/closed.
+    const editing = salesDirty || editingId || byId("questAlignDetails").open;
+    const held = editing && state.quests.find(item => item.id === lastSelectedId);
+    return held || state.quests.find(item => item.id === manualSelection) || automatic;
+  }
+  function scheduleBoundary(state, now) {
+    if (boundaryTimer !== null) window.clearTimeout(boundaryTimer);
+    boundaryTimer = null;
+    if (document.hidden) return;
+    const next = state.quests.flatMap(quest => [quest.startAt, quest.endAt]).filter(at => at > now).sort((a, b) => a - b)[0];
+    if (next !== undefined) boundaryTimer = window.setTimeout(render, Math.min(next - now, 2147483647));
   }
   function errorMessage(error, id = "questError") {
     const element = byId(id);
@@ -167,16 +187,25 @@
   function render() {
     let state;
     try { state = store.read(); } catch (error) { errorMessage(error); return; }
+    const now = Date.now();
+    scheduleBoundary(state, now);
     renderBrief(state);
     if (!full) return;
-    const quest = selected(state);
+    const quest = displayQuest(state, now);
     const formOpen = !byId("questConfigForm").hidden;
     byId("questEmpty").hidden = Boolean(quest) || formOpen;
     byId("questContent").hidden = !quest || formOpen;
     byId("questNew").hidden = formOpen;
     if (!quest) return;
-    if (quest.id !== lastSelectedId) { lastSelectedId = quest.id; displayDay = null; salesDirty = false; byId("questAlignDetails").open = false; }
-    const value = core.calculateQuest(quest, state.entries, Date.now(), displayDay);
+    const changedPeriod = quest.id !== lastSelectedId;
+    if (changedPeriod) { lastSelectedId = quest.id; displayDay = null; salesDirty = false; byId("questAlignDetails").open = false; }
+    const value = core.calculateQuest(quest, state.entries, now, displayDay);
+    const automatic = core.currentQuest(state.quests, now);
+    text("questAutoNotice", automatic && automatic.id !== quest.id && manualSelection !== quest.id && (salesDirty || editingId || byId("questAlignDetails").open)
+      ? "期間が変わりました。入力を保存するか閉じると、新しい期間へ切り替わります。"
+      : value.phase === "ended" && automatic?.id === quest.id
+        ? "この期間は終了しました。次のクエストを登録すると、開始日時に自動で切り替わります。"
+        : "登録済みのクエストへ、開始日時に自動で切り替わります。過去の期間も選んで確認できます。");
     options(byId("questSelect"), state.quests.slice().sort((a, b) => b.startAt - a.startAt).map(item => [item.id, periodLabel(item)]), quest.id);
     text("questPeriod", periodLabel(quest));
     text("questPhase", value.phase === "active" ? "進行中" : value.phase === "upcoming" ? "開始前" : "期間終了");
@@ -216,12 +245,13 @@
     text("questAllocationLabel", `クエスト配分${value.phase === "ended" ? "（達成分）" : "（見込み）"}`);
     text("questAllocation", value.allocation === null ? "未集計" : `＋${yen(value.allocation)}`);
     text("questRateNote", !value.shownDayVerified ? "過去分を累計で登録したため、この日への配分は未集計です。登録後の日別件数は自動で記録します。" : value.phase === "ended" ? `期間終了：記録上の達成報酬を全${value.total}件に配分。` : `${value.allocationGoal}件達成を前提に、約${value.rate.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}円/件で配分。達成済み報酬は重ねて加算しません。`);
-    if (!salesDirty && document.activeElement !== byId("questSalesInput")) byId("questSalesInput").value = value.sales === null ? "" : String(value.sales);
+    if (changedPeriod || (!salesDirty && document.activeElement !== byId("questSalesInput"))) byId("questSalesInput").value = value.sales === null ? "" : String(value.sales);
     const hh = String(Math.floor(quest.boundaryMinutes / 60)).padStart(2, "0"); const mm = String(quest.boundaryMinutes % 60).padStart(2, "0");
     text("questDayBoundary", `このクエストの「今日」は日本時間${hh}:${mm}に切り替わります。日次リセットでは期間累計を消しません。`);
     if (state.needsCountCheck) errorMessage("別の画面で件数が変更されました。クエスト累計を保持しています。公式アプリの件数に合わせて確認してください。");
   }
   function showTab(questTab, updateHash = true) {
+    if (questTab) manualSelection = null;
     byId("progressView").hidden = questTab; byId("questView").hidden = !questTab;
     byId("progressTab").setAttribute("aria-selected", String(!questTab)); byId("questTab").setAttribute("aria-selected", String(questTab));
     document.body.classList.toggle("questMode", questTab);
@@ -293,7 +323,11 @@
   });
   window.addEventListener("storage", event => { if (event.key === core.QUEST_STORAGE_KEY || event.key === core.STORAGE_KEYS.progress || event.key === null) render(); });
   window.addEventListener("pageshow", render);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+  window.addEventListener("focus", render);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) render();
+    else if (boundaryTimer !== null) { window.clearTimeout(boundaryTimer); boundaryTimer = null; }
+  });
   window.setInterval(() => { if (!document.hidden) render(); }, 30000);
   if (!full) { render(); return; }
 
@@ -310,7 +344,6 @@
   });
   window.addEventListener("hashchange", () => showTab(location.hash === "#quest", false));
   byId("questBrief").addEventListener("click", () => {
-    attempt(() => store.update(state => ({ ...state, selectedId: (state.quests.find(quest => quest.startAt <= Date.now() && Date.now() < quest.endAt) || selected(state)).id })), "");
     showTab(true);
   });
   byId("questNew").addEventListener("click", () => openForm(true)); byId("questFirst").addEventListener("click", () => openForm(true));
@@ -318,7 +351,10 @@
   byId("questTemplate").addEventListener("change", () => { fillTemplate(); checkPeriodEdit(); });
   for (const id of ["questStartDate", "questStartTime", "questEndDate", "questEndTime"]) byId(id).addEventListener("change", checkPeriodEdit);
   byId("questAddTier").addEventListener("click", () => { if (tierRows().length < 5) { addTier(); refreshTierLabels(tierRows().length - 1); } });
-  byId("questSelect").addEventListener("change", event => attempt(() => store.update(state => ({ ...state, selectedId: event.target.value })), "表示する期間を変更しました。"));
+  byId("questSelect").addEventListener("change", event => {
+    manualSelection = event.target.value; salesDirty = false; byId("questAlignDetails").open = false;
+    render(); text("questLive", "表示する期間を変更しました。");
+  });
   byId("questConfigForm").addEventListener("submit", event => {
     event.preventDefault();
     try {
@@ -347,6 +383,7 @@
   byId("questApplyTarget").addEventListener("click", () => attempt(() => {
     const state = store.read(); const value = core.calculateQuest(selected(state), state.entries);
     const target = store.currentDone() + (value.additionalToday || 0);
+    if (value.phase !== "active") throw new Error("現在の期間のクエストを表示してから、今日の目標に反映してください。");
     if (!value.additionalToday || target < 1 || target > 80) throw new Error("今回の目標を1〜80件に収められるよう、稼働日を確認してください。");
     const select = byId("target");
     if (!Array.from(select.options).some(option => Number(option.value) === target)) { const option = document.createElement("option"); option.value = String(target); option.textContent = `${target}件`; select.appendChild(option); }
@@ -355,7 +392,7 @@
     calc(); text("questLive", `今回の目標を${target}件に設定しました（ここからあと${value.additionalToday}件）。`);
   }, "進捗画面の目標に反映しました。"));
   byId("questSalesDay").addEventListener("change", event => { displayDay = event.target.value; salesDirty = false; render(); });
-  byId("questSalesInput").addEventListener("input", () => { salesDirty = true; });
+  byId("questSalesInput").addEventListener("input", () => { displayDay = byId("questSalesDay").value; salesDirty = true; });
   byId("questSalesForm").addEventListener("submit", event => {
     event.preventDefault(); attempt(() => {
       const amount = Number(byId("questSalesInput").value); if (!Number.isInteger(amount) || amount < 0 || amount > 9999999) throw new Error("配達売上を0〜9,999,999円の整数で入力してください。");
@@ -365,13 +402,13 @@
     }, "配達売上を保存しました。");
   });
   byId("questAlignDetails").addEventListener("toggle", () => {
-    if (!byId("questAlignDetails").open) return;
-    try { const state = store.read(); const value = core.calculateQuest(selected(state), state.entries); byId("questAlignTotal").value = String(value.total); byId("questAlignToday").value = String(value.today); } catch (error) { errorMessage(error); }
+    if (!byId("questAlignDetails").open) { alignAt = null; render(); return; }
+    try { alignAt = Date.now(); const state = store.read(); const value = core.calculateQuest(selected(state), state.entries, alignAt); byId("questAlignTotal").value = String(value.total); byId("questAlignToday").value = String(value.today); } catch (error) { errorMessage(error); }
   });
   byId("questAlignForm").addEventListener("submit", event => {
     event.preventDefault(); attempt(() => {
       const total = Number(byId("questAlignTotal").value); const today = Number(byId("questAlignToday").value);
-      const state = store.read(); store.putQuest(selected(state), { align: true, total, today });
+      const state = store.read(); store.putQuest(selected(state), { align: true, total, today, at: alignAt ?? Date.now() });
       if (state.needsCountCheck) store.update(next => ({ ...next, needsCountCheck: false }));
       byId("questAlignDetails").open = false;
     }, "公式アプリの件数に合わせました。進捗画面の完了件数は変更しません。");
