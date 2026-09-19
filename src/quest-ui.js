@@ -4,9 +4,11 @@
   const store = UberQuestStore;
   const byId = id => document.getElementById(id);
   const full = Boolean(byId("questView"));
-  const yen = value => `¥${Math.round(value).toLocaleString("ja-JP")}`;
-  const dateLabel = day => new Date(`${day}T12:00:00+09:00`).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" });
-  const timeLabel = at => new Date(at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+  // Reuse Intl formatters across renders, and create them only when needed.
+  let yenFormat, dateFormat, timeFormat, rateFormat;
+  const yen = value => `¥${(yenFormat ||= new Intl.NumberFormat("ja-JP")).format(Math.round(value))}`;
+  const dateLabel = day => (dateFormat ||= new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" })).format(new Date(`${day}T12:00:00+09:00`));
+  const timeLabel = at => (timeFormat ||= new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })).format(new Date(at));
   const periodLabel = quest => `${timeLabel(quest.startAt)} 〜 ${timeLabel(quest.endAt - 1)}まで`;
   const periodFields = () => Object.fromEntries(["startDate", "startTime", "endDate", "endTime"].map(key => [key, byId(`quest${key[0].toUpperCase()}${key.slice(1)}`).value]));
   const fillPeriod = fields => { for (const key of ["startDate", "startTime", "endDate", "endTime"]) byId(`quest${key[0].toUpperCase()}${key.slice(1)}`).value = fields[key]; };
@@ -25,6 +27,32 @@
   let imageResult = null;
   let imagePreviewUrl = null;
   let imageCountApplied = false;
+  let imageModulePromise = null;
+  let lastProgressDone = null;
+
+  function loadImageModule() {
+    if (window.UberQuestImage) return Promise.resolve(window.UberQuestImage);
+    if (!imageModulePromise) imageModulePromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      let settled = false;
+      const fail = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout); script.remove(); imageModulePromise = null;
+        reject(new Error("画像読み取り機能を準備できませんでした。通信を確認して、もう一度お試しください。"));
+      };
+      const timeout = window.setTimeout(fail, 20000);
+      script.src = "src/quest-image.js?v=72";
+      script.onload = () => {
+        if (settled) return;
+        if (!window.UberQuestImage) { fail(); return; }
+        settled = true; window.clearTimeout(timeout); resolve(window.UberQuestImage);
+      };
+      script.onerror = fail;
+      document.head.appendChild(script);
+    });
+    return imageModulePromise;
+  }
 
   function imageBusy(busy) {
     byId("questImagePick").disabled = busy;
@@ -96,7 +124,10 @@
     const controller = new AbortController(); imageController = controller;
     imageBusy(true);
     try {
-      const result = await UberQuestImage.recognize(file, { signal: controller.signal, onProgress: value => { if (imageController === controller) text("questImageStatus", value); } });
+      text("questImageStatus", "画像読み取り機能を準備しています…");
+      const imageModule = await loadImageModule();
+      if (imageController !== controller || controller.signal.aborted) return;
+      const result = await imageModule.recognize(file, { signal: controller.signal, onProgress: value => { if (imageController === controller) text("questImageStatus", value); } });
       if (imageController !== controller) return;
       byId("questImageDebugText").value = result.diagnosticText || "";
       byId("questImageDebug").hidden = !result.diagnosticText;
@@ -185,12 +216,16 @@
     else brief.textContent = `${count} · ${next}`;
   }
   function render() {
+    if (document.hidden) return;
     let state;
     try { state = store.read(); } catch (error) { errorMessage(error); return; }
     const now = Date.now();
+    lastProgressDone = store.currentDone();
     scheduleBoundary(state, now);
     renderBrief(state);
-    if (!full) return;
+    // The progress screen needs only the brief. Build the full quest screen on
+    // opening its tab, preserving any unsaved form until it becomes visible.
+    if (!full || byId("questView").hidden) return;
     const quest = displayQuest(state, now);
     const formOpen = !byId("questConfigForm").hidden;
     byId("questEmpty").hidden = Boolean(quest) || formOpen;
@@ -225,7 +260,7 @@
     }));
     text("questEarned", yen(value.earnedReward));
     text("questSuggested", value.suggestedToday === null ? "—" : `${value.suggestedToday}件`);
-    const target = store.currentDone() + (value.additionalToday || 0);
+    const target = lastProgressDone + (value.additionalToday || 0);
     const canApply = value.phase === "active" && value.additionalToday > 0 && target <= 80;
     byId("questApplyTarget").disabled = !canApply;
     text("questSuggestedNote", value.phase !== "active" ? "期間中に目標を計算します。" : !value.remaining ? "クエスト目標を達成しています。" : !value.worksToday ? "今日は休みの設定です。" : !value.remainingDays ? "残りの稼働日を選んでください。" : !value.additionalToday ? `今日の目安を達成 · 残り稼働${value.remainingDays}日` : target > 80 ? `今日あと${value.additionalToday}件。今回の上限80件を超えるため、稼働日を見直してください。` : `今日あと${value.additionalToday}件 · 残り稼働${value.remainingDays}日`);
@@ -244,7 +279,7 @@
     text("questBaseSales", value.sales === null ? "未入力" : yen(value.sales));
     text("questAllocationLabel", `クエスト配分${value.phase === "ended" ? "（達成分）" : "（見込み）"}`);
     text("questAllocation", value.allocation === null ? "未集計" : `＋${yen(value.allocation)}`);
-    text("questRateNote", !value.shownDayVerified ? "過去分を累計で登録したため、この日への配分は未集計です。登録後の日別件数は自動で記録します。" : value.phase === "ended" ? `期間終了：記録上の達成報酬を全${value.total}件に配分。` : `${value.allocationGoal}件達成を前提に、約${value.rate.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}円/件で配分。達成済み報酬は重ねて加算しません。`);
+    text("questRateNote", !value.shownDayVerified ? "過去分を累計で登録したため、この日への配分は未集計です。登録後の日別件数は自動で記録します。" : value.phase === "ended" ? `期間終了：記録上の達成報酬を全${value.total}件に配分。` : `${value.allocationGoal}件達成を前提に、約${(rateFormat ||= new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 })).format(value.rate)}円/件で配分。達成済み報酬は重ねて加算しません。`);
     if (changedPeriod || (!salesDirty && document.activeElement !== byId("questSalesInput"))) byId("questSalesInput").value = value.sales === null ? "" : String(value.sales);
     const hh = String(Math.floor(quest.boundaryMinutes / 60)).padStart(2, "0"); const mm = String(quest.boundaryMinutes % 60).padStart(2, "0");
     text("questDayBoundary", `このクエストの「今日」は日本時間${hh}:${mm}に切り替わります。日次リセットでは期間累計を消しません。`);
@@ -321,7 +356,9 @@
     if (event.detail && event.detail.error) errorMessage(event.detail.error);
     else render();
   });
-  window.addEventListener("storage", event => { if (event.key === core.QUEST_STORAGE_KEY || event.key === core.STORAGE_KEYS.progress || event.key === null) render(); });
+  window.addEventListener("storage", event => {
+    if (event.key === core.QUEST_STORAGE_KEY || event.key === null || (event.key === core.STORAGE_KEYS.progress && store.currentDone() !== lastProgressDone)) render();
+  });
   window.addEventListener("pageshow", render);
   window.addEventListener("focus", render);
   document.addEventListener("visibilitychange", () => {
@@ -333,7 +370,10 @@
 
   byId("questImagePick").addEventListener("click", () => byId("questImageFile").click());
   byId("questImageFile").addEventListener("change", event => readQuestImage(event.target.files[0]));
-  byId("questImageStop").addEventListener("click", () => imageController?.abort());
+  byId("questImageStop").addEventListener("click", () => {
+    imageController?.abort(); imageController = null;
+    text("questImageStatus", "読み取りを中止しました。"); imageBusy(false);
+  });
 
   byId("progressTab").addEventListener("click", () => showTab(false));
   byId("questTab").addEventListener("click", () => showTab(true));

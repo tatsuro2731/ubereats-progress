@@ -208,14 +208,20 @@ function setRemainingEditDisabled(disabled) {
   $("remainM").disabled = disabled;
 }
 
-function showEnhancedRemaining() {
-  const stored = readEnhancedClock();
-  const enhanced = stored ? migrateEnhancedClock(stored) : null;
+let displayedEnhancedClock = null;
+function showEnhancedRemaining(refresh = true) {
+  if (refresh) {
+    const stored = readEnhancedClock();
+    displayedEnhancedClock = stored ? migrateEnhancedClock(stored) : null;
+  }
+  const enhanced = displayedEnhancedClock;
   if (!enhanced) return false;
   const effective = effectiveEnhancedClock(enhanced);
   const minutes = Math.max(0, Math.min(Math.ceil(effective.remainingMs / 60000), MAX_REMAIN_INPUT_MINUTES));
-  $("remainH").value = String(Math.floor(minutes / 60));
-  $("remainM").value = String(minutes % 60);
+  const hours = String(Math.floor(minutes / 60));
+  const mins = String(minutes % 60);
+  if ($("remainH").value !== hours) $("remainH").value = hours;
+  if ($("remainM").value !== mins) $("remainM").value = mins;
   setRemainingEditDisabled(Boolean(enhanced.data.sessionEndedAt));
   return true;
 }
@@ -281,6 +287,7 @@ function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
     baseRemain: remainingMs / 60000,
     baseAt: updatedAt
   }));
+  displayedEnhancedClock = { data: state, remainingMs: state.remainingMs };
   setRemainingEditDisabled(false);
   return true;
 }
@@ -478,6 +485,7 @@ $("reset").addEventListener("click", () => {
 calc();
 
 window.addEventListener("storage", event => {
+  if (document.hidden) return;
   if (event.key === STORAGE_KEY) {
     load();
     showEnhancedRemaining();
@@ -488,13 +496,23 @@ window.addEventListener("storage", event => {
   calc(false);
 });
 
+function refreshCompactView() {
+  if (document.hidden) return;
+  load();
+  showEnhancedRemaining();
+  calc(false);
+}
+window.addEventListener("pageshow", refreshCompactView);
+document.addEventListener("visibilitychange", refreshCompactView);
+
 if (typeof window.setInterval === "function") {
   window.setInterval(() => {
+    if (document.hidden) return;
     const before = `${$("remainH").value}:${$("remainM").value}`;
-    if (showEnhancedRemaining() && before !== `${$("remainH").value}:${$("remainM").value}`) calc(false);
+    if (showEnhancedRemaining(false) && before !== `${$("remainH").value}:${$("remainM").value}`) calc(false);
   }, 1000);
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=71").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=72").catch(() => {}));
 }

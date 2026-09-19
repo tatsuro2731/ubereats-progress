@@ -32,6 +32,15 @@
   let historyEndEditorState = null;
 
   function nowMs() { return Date.now(); }
+  function setText(element, value) {
+    const text = String(value);
+    if (element.textContent !== text) element.textContent = text;
+  }
+  function setAttributeIfChanged(element, name, value) {
+    const text = String(value);
+    if (element.getAttribute && element.getAttribute(name) === text) return;
+    element.setAttribute(name, text);
+  }
   function totalClockUsedMs(remainingMs = clockState.remainingMs) {
     return usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
   }
@@ -243,7 +252,9 @@
   function persistEnhancedClock(force = false) {
     const now = nowMs();
     const sessionStartAdjusted = reconcileSessionStartWithUsage(now);
-    if (!force && !sessionStartAdjusted && now - lastSavedAt < SAVE_INTERVAL_MS) return;
+    // Open break segments and paused clocks already have a persisted anchor.
+    // Rewriting an unchanged OFF clock also wakes every other open view.
+    if (!force && !sessionStartAdjusted && (now - lastSavedAt < SAVE_INTERVAL_MS || (lastSavedAt > 0 && !clockState.on))) return;
     lastSavedAt = now;
     const anchorAt = Math.max(now, finite(clockState.lastTickAt, now));
     clockState.countMode = COUNT_MODE;
@@ -385,17 +396,31 @@
     return { text: "稼働中", sub: "時間ON", mode: "counting", state: "working", action: "タップで休憩" };
   }
 
+  let timeFormatter;
+  let dateTimeFormatter;
+  let formatterOffset;
+  function refreshTimeFormatters() {
+    const offset = new Date().getTimezoneOffset();
+    if (timeFormatter && formatterOffset === offset) return;
+    const options = { hour: "2-digit", minute: "2-digit", hour12: false };
+    timeFormatter = new Intl.DateTimeFormat("ja-JP", options);
+    dateTimeFormatter = new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", ...options });
+    formatterOffset = offset;
+  }
+
   function exhaustionText(at = nowMs()) {
     if (clockState.sessionEndedAt) return "終了済み";
     if (clockState.remainingMs <= 0) return "使い切り 到達";
     const now = new Date(at);
     const end = new Date(at + clockState.remainingMs);
-    const label = end.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+    refreshTimeFormatters();
+    const label = timeFormatter.format(end);
     return `使い切り ${end.toDateString() !== now.toDateString() ? "翌" : ""}${label}`;
   }
 
-  function renderEnhancedClock() {
-    tickClock();
+  function renderEnhancedClock(updateClock = true) {
+    if (updateClock) tickClock();
+    if (document.hidden) return;
     const status = currentStatus();
     const button = $("countToggle");
     const sub = $("countSub");
@@ -403,37 +428,38 @@
     const panel = $("countPanel");
     const ended = Boolean(clockState.sessionEndedAt);
     const counting = clockState.on && !clockState.breakOn && !ended;
-    $("countRemain").textContent = `残り ${remainingText(clockState.remainingMs)}`;
+    setText($("countRemain"), `残り ${remainingText(clockState.remainingMs)}`);
     // This is a live region; announce state changes, not every timer tick.
     if ($("countStatus").textContent !== status.text) $("countStatus").textContent = status.text;
     if ($("countStatusDetail").textContent !== status.sub) $("countStatusDetail").textContent = status.sub;
     $("sessionStatus").dataset.state = status.state;
     $("operationDock").dataset.state = status.state;
-    $("countEndClock").textContent = exhaustionText();
+    setText($("countEndClock"), exhaustionText());
     $("countEndClock").classList.toggle("run", counting);
     button.classList.toggle("off", clockState.on);
-    button.firstChild.nodeValue = clockState.paused ? "休憩する" : status.text;
-    sub.textContent = ended ? status.sub : `${counting ? "時間ON" : "時間OFF"}・${status.action}`;
-    button.setAttribute("aria-pressed", String(counting));
-    button.setAttribute("aria-label", `${status.text}。${status.sub}。${ended ? "履歴に保存済み" : status.action}`);
+    const buttonText = clockState.paused ? "休憩する" : status.text;
+    if (button.firstChild.nodeValue !== buttonText) button.firstChild.nodeValue = buttonText;
+    setText(sub, ended ? status.sub : `${counting ? "時間ON" : "時間OFF"}・${status.action}`);
+    setAttributeIfChanged(button, "aria-pressed", String(counting));
+    setAttributeIfChanged(button, "aria-label", `${status.text}。${status.sub}。${ended ? "履歴に保存済み" : status.action}`);
     button.disabled = ended;
-    button.setAttribute("aria-disabled", String(ended));
+    setAttributeIfChanged(button, "aria-disabled", String(ended));
     const pauseButton = $("countPause");
-    pauseButton.textContent = clockState.paused ? "▶ 再開" : "Ⅱ 一時停止";
-    pauseButton.setAttribute("aria-pressed", String(Boolean(clockState.paused)));
-    pauseButton.setAttribute("aria-label", clockState.paused ? "残り稼働時間のカウントを再開" : "残り稼働時間を一時停止。休憩時間に加算しません");
+    setText(pauseButton, clockState.paused ? "▶ 再開" : "Ⅱ 一時停止");
+    setAttributeIfChanged(pauseButton, "aria-pressed", String(Boolean(clockState.paused)));
+    setAttributeIfChanged(pauseButton, "aria-label", clockState.paused ? "残り稼働時間のカウントを再開" : "残り稼働時間を一時停止。休憩時間に加算しません");
     pauseButton.disabled = ended || (!clockState.on && !clockState.paused);
-    pauseButton.setAttribute("aria-disabled", String(pauseButton.disabled));
+    setAttributeIfChanged(pauseButton, "aria-disabled", String(pauseButton.disabled));
     ["remainMinus", "remainPlus", "remainH", "remainM"].forEach(id => {
       const control = $(id);
       if (!control) return;
       control.disabled = ended;
-      control.setAttribute("aria-disabled", String(ended));
+      setAttributeIfChanged(control, "aria-disabled", String(ended));
     });
     dot.classList.toggle("stop", !counting);
     panel.classList.toggle("run", counting);
     const detail = $("movementDetail");
-    if (detail) detail.textContent = ended
+    if (detail) setText(detail, ended
       ? "稼働終了・履歴に保存済み"
       : clockState.paused
         ? "残り時間を一時停止中です。休憩時間には加算しません"
@@ -443,7 +469,7 @@
             ? "移動・停車にかかわらず連続でカウントします"
             : clockState.breakOn
               ? "時間OFFのため休憩を記録中です"
-              : "時間OFF中は残り時間を止めています";
+              : "時間OFF中は残り時間を止めています");
     renderSessionPanel();
   }
 
@@ -679,12 +705,14 @@
 
   function formatDateTime(timestamp) {
     if (!timestamp) return "未開始";
-    return new Date(timestamp).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+    refreshTimeFormatters();
+    return dateTimeFormatter.format(new Date(timestamp));
   }
 
   function formatTime(timestamp) {
     if (!timestamp) return "--:--";
-    return new Date(timestamp).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+    refreshTimeFormatters();
+    return timeFormatter.format(new Date(timestamp));
   }
 
   function historyIdentity(item, index) {
@@ -1031,34 +1059,34 @@
     const totalUsed = clockUsedMs();
     const otherUsed = otherCompanyUsedMs(at, totalUsed);
     const uberUsed = Math.max(0, totalUsed - otherUsed);
-    $("workStartTime").textContent = clockState.sessionStartAt ? formatDateTime(clockState.sessionStartAt) : "未開始";
-    $("workActiveTime").textContent = durationText(totalUsed);
-    $("workUberTime").textContent = durationText(uberUsed);
-    $("workOtherCompanyTime").textContent = durationText(otherUsed);
-    $("workElapsedTime").textContent = durationText(sessionElapsedMs(at));
-    $("workRate").textContent = `${operationRate(at).toFixed(1)}%`;
-    $("workBreakTime").textContent = durationText(sessionBreakMs(at));
+    setText($("workStartTime"), clockState.sessionStartAt ? formatDateTime(clockState.sessionStartAt) : "未開始");
+    setText($("workActiveTime"), durationText(totalUsed));
+    setText($("workUberTime"), durationText(uberUsed));
+    setText($("workOtherCompanyTime"), durationText(otherUsed));
+    setText($("workElapsedTime"), durationText(sessionElapsedMs(at)));
+    setText($("workRate"), `${operationRate(at).toFixed(1)}%`);
+    setText($("workBreakTime"), durationText(sessionBreakMs(at)));
     const otherCompanyDisabled = !clockState.on || !clockState.sessionStartAt || ended;
-    $("otherCompanyToggle").textContent = clockState.otherCompanyOn ? "他社稼働 ON" : "他社稼働 OFF";
-    $("otherCompanyToggle").setAttribute("aria-pressed", String(clockState.otherCompanyOn));
+    setText($("otherCompanyToggle"), clockState.otherCompanyOn ? "他社稼働 ON" : "他社稼働 OFF");
+    setAttributeIfChanged($("otherCompanyToggle"), "aria-pressed", String(clockState.otherCompanyOn));
     $("otherCompanyToggle").classList.toggle("active", clockState.otherCompanyOn);
     $("otherCompanyToggle").disabled = otherCompanyDisabled;
-    $("otherCompanyToggle").setAttribute("aria-disabled", String(otherCompanyDisabled));
-    $("otherCompanyToggle").setAttribute("aria-label", clockState.otherCompanyOn ? "他社稼働の記録を終了" : "他社稼働の記録を開始");
-    $("finishWork").textContent = ended ? "稼働終了済み" : "稼働終了";
+    setAttributeIfChanged($("otherCompanyToggle"), "aria-disabled", String(otherCompanyDisabled));
+    setAttributeIfChanged($("otherCompanyToggle"), "aria-label", clockState.otherCompanyOn ? "他社稼働の記録を終了" : "他社稼働の記録を開始");
+    setText($("finishWork"), ended ? "稼働終了済み" : "稼働終了");
     $("finishWork").disabled = !clockState.sessionStartAt || ended;
-    $("finishWork").setAttribute("aria-disabled", String(!clockState.sessionStartAt || ended));
+    setAttributeIfChanged($("finishWork"), "aria-disabled", String(!clockState.sessionStartAt || ended));
     $("workSessionNotice").hidden = !ended;
-    if (ended) $("workSessionNotice").textContent = `${formatDateTime(clockState.sessionEndedAt)}に終了・履歴へ保存済み。次の稼働前に進捗をリセットしてください。`;
+    if (ended) setText($("workSessionNotice"), `${formatDateTime(clockState.sessionEndedAt)}に終了・履歴へ保存済み。次の稼働前に進捗をリセットしてください。`);
     const editButton = $("editStartTime");
     if (editButton) {
       editButton.disabled = !clockState.sessionStartAt || ended;
-      editButton.setAttribute("aria-disabled", String(!clockState.sessionStartAt || ended));
+      setAttributeIfChanged(editButton, "aria-disabled", String(!clockState.sessionStartAt || ended));
     }
     const breakEditButton = $("editBreakTime");
     if (breakEditButton) {
       breakEditButton.disabled = !clockState.sessionStartAt || ended;
-      breakEditButton.setAttribute("aria-disabled", String(!clockState.sessionStartAt || ended));
+      setAttributeIfChanged(breakEditButton, "aria-disabled", String(!clockState.sessionStartAt || ended));
     }
   }
 
@@ -1237,7 +1265,7 @@
     save();
   };
   toggleClock = enhancedToggleClock;
-  renderClock = function() { renderEnhancedClock(); };
+  renderClock = function() { renderEnhancedClock(false); };
   countEndLabel = function() { return exhaustionText(); };
   window.uberProgressSessionMetrics = function() {
     const at = nowMs();
@@ -1322,9 +1350,9 @@
   renderEnhancedClock();
 
   setInterval(() => {
-    tickClock();
-    calc();
-    renderEnhancedClock();
+    // calc reads the exact clock and renders it once. Hidden time is recovered
+    // from the saved timestamp on return, without drawing an invisible page.
+    if (!document.hidden) calc();
   }, 1000);
 
   document.addEventListener("visibilitychange", () => {

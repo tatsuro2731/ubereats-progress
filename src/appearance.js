@@ -114,16 +114,21 @@
     if (!dock) return;
     const overview = doc.getElementById("dashboardOverview");
     const metrics = doc.getElementById("metrics");
+    const progressView = doc.getElementById("progressView");
     let pending = false;
     const schedule = () => {
-      if (pending) return;
+      if (pending || doc.hidden || (progressView && progressView.hidden)) return;
       pending = true;
       root.requestAnimationFrame(fit);
     };
     function fit() {
       pending = false;
+      if (doc.hidden || (progressView && progressView.hidden)) return;
       const dockHeight = Math.ceil(dock.getBoundingClientRect().height);
-      doc.documentElement.style.setProperty("--operation-dock-height", `${dockHeight}px`);
+      const dockSize = `${dockHeight}px`;
+      if (doc.documentElement.style.getPropertyValue("--operation-dock-height") !== dockSize) {
+        doc.documentElement.style.setProperty("--operation-dock-height", dockSize);
+      }
       if (!overview || !metrics) return;
       // Do not move the cards underneath a drag, or compress the reorder handles.
       if (metrics.classList.contains("reorderMode")) {

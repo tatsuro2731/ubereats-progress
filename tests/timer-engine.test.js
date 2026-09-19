@@ -142,6 +142,7 @@ function timerHarness(options = {}) {
     }
   };
   const windowListeners = new Map();
+  const intervals = [];
   class FakeDate extends Date {
     constructor(...args) { super(...(args.length ? args : [now])); }
     static now() { return now; }
@@ -165,7 +166,7 @@ function timerHarness(options = {}) {
     },
     alert() {},
     confirm(message) { confirmMessages.push(String(message)); return true; },
-    setInterval: () => 1,
+    setInterval(callback, delay) { intervals.push({ callback, delay }); return intervals.length; },
     clearInterval() {},
     setTimeout: callback => { callback(); return 1; },
     clearTimeout() {},
@@ -208,6 +209,7 @@ function timerHarness(options = {}) {
 
   return {
     api: context.__timerTestApi,
+    runIntervals() { for (const interval of intervals) interval.callback(); },
     editor: context.__editorTestApi,
     context,
     storage,
@@ -1518,4 +1520,81 @@ test("history snapshot separates Uber and other-company time without double coun
   assert.deepEqual([...snapshot.workTypes], ["uber", "otherCompany"]);
   assert.equal(snapshot.actualPaceMinutes, 15);
   assert.ok(Math.abs(snapshot.rate - 50) < 0.001);
+});
+
+
+test("idle display refreshes do not rewrite saved clocks or unchanged card markup", () => {
+  const app = timerHarness({ fullMain: true });
+  let writes = 0;
+  const originalSave = app.storage.setItem.bind(app.storage);
+  app.storage.setItem = (...args) => { writes += 1; originalSave(...args); };
+  const metrics = app.element("metrics");
+  let markup = metrics.innerHTML;
+  let replacements = 0;
+  Object.defineProperty(metrics, "innerHTML", {
+    get: () => markup,
+    set(value) { markup = value; replacements += 1; }
+  });
+  const start = app.now();
+  for (let second = 1; second <= 60; second += 1) {
+    app.setNow(start + second * 1000);
+    app.runIntervals();
+  }
+  assert.equal(writes, 0, "an unchanged OFF clock needs no periodic persistence");
+  assert.equal(replacements, 0, "identical card nodes must survive periodic refreshes");
+});
+
+test("hidden refreshes preserve a running anchor and catch up exactly when shown", () => {
+  const app = timerHarness({ fullMain: true });
+  app.api.enhancedToggleClock();
+  const start = app.now();
+  app.context.document.hidden = true;
+  app.dispatchDocument("visibilitychange");
+  const saved = app.storage.getItem(ENHANCED_KEY);
+  let renders = 0;
+  const originalCalc = app.context.calc;
+  app.context.calc = () => { renders += 1; originalCalc(); };
+  for (let second = 1; second <= 60; second += 1) {
+    app.setNow(start + second * 1000);
+    app.runIntervals();
+  }
+  assert.equal(renders, 0);
+  assert.equal(app.storage.getItem(ENHANCED_KEY), saved);
+  app.context.document.hidden = false;
+  app.dispatchDocument("visibilitychange");
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+  app.dispatchWindow("pageshow");
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+});
+
+test("visible running refreshes keep exact time and the five-second persistence interval", () => {
+  const app = timerHarness({ fullMain: true });
+  app.api.enhancedToggleClock();
+  const start = app.now();
+  let anchors = 0;
+  const originalSave = app.storage.setItem.bind(app.storage);
+  app.storage.setItem = (key, value) => { if (key === ENHANCED_KEY) anchors += 1; originalSave(key, value); };
+  for (let second = 1; second <= 60; second += 1) {
+    app.setNow(start + second * 1000);
+    app.runIntervals();
+  }
+  assert.equal(anchors, 12);
+  assert.equal(app.api.getState().remainingMs, WORK_LIMIT_MS - 60000);
+});
+
+test("returning from achievement restores previously rendered progress markup", () => {
+  const app = timerHarness({ fullMain: true });
+  const initial = app.element("mainValue").innerHTML;
+  const guide = app.element("subValue").innerHTML;
+  app.element("done").value = app.element("target").value;
+  app.context.calc();
+  assert.equal(app.element("mainValue").textContent, "目標達成");
+  // The lightweight DOM harness does not automatically clear innerHTML on
+  // textContent writes; model the browser's clearing behavior here.
+  app.element("mainValue").innerHTML = "";
+  app.element("subValue").innerHTML = "";
+  app.element("done").value = "0";
+  app.context.calc();
+  assert.equal(app.element("mainValue").innerHTML, initial);
+  assert.equal(app.element("subValue").innerHTML, guide);
 });

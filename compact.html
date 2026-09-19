@@ -12,10 +12,14 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10" />
   <link rel="manifest" href="manifest.webmanifest?v=10" />
   <title>配達進捗｜コンパクト</title>
-  <script src="src/appearance.js?v=71"></script>
-  <link rel="stylesheet" href="styles/compact.css?v=71">
-  <link rel="stylesheet" href="styles/appearance.css?v=71">
-  <link rel="stylesheet" href="styles/quest.css?v=71">
+  <script src="src/appearance.js?v=72"></script>
+  <link rel="stylesheet" href="styles/compact.css?v=72">
+  <link rel="stylesheet" href="styles/appearance.css?v=72">
+  <link rel="stylesheet" href="styles/quest.css?v=72">
+  <script defer src="src/app-core.js?v=72"></script>
+  <script defer src="src/quest-store.js?v=72"></script>
+  <script defer src="src/compact-app.js?v=72"></script>
+  <script defer src="src/quest-ui.js?v=72"></script>
 </head>
 <body class="progressApp compactView">
   <div class="wrap">
@@ -33,9 +37,9 @@
     </div>
 
     <div class="chips">
-      <div class="chip"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=71#remaining"></use></svg>残り件数</div><div id="remainingOrders" class="v">-</div></div>
-      <div class="chip togglePace" data-pace-card="need" role="button" tabindex="0" aria-label="必要ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=71#need"></use></svg>必要ペース</div><div id="neededPace" class="v">-</div></div>
-      <div class="chip togglePace" data-pace-card="targetPace" role="button" tabindex="0" aria-label="目標ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=71#targetPace"></use></svg>目標ペース</div><div id="targetPace" class="v">-</div></div>
+      <div class="chip"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=72#remaining"></use></svg>残り件数</div><div id="remainingOrders" class="v">-</div></div>
+      <div class="chip togglePace" data-pace-card="need" role="button" tabindex="0" aria-label="必要ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=72#need"></use></svg>必要ペース</div><div id="neededPace" class="v">-</div></div>
+      <div class="chip togglePace" data-pace-card="targetPace" role="button" tabindex="0" aria-label="目標ペースの表示を切り替え" title="タップで分/件と件/時を切替"><div class="k"><svg class="metricIcon" aria-hidden="true"><use href="assets/ui-icons.svg?v=72#targetPace"></use></svg>目標ペース</div><div id="targetPace" class="v">-</div></div>
     </div>
 
     <div class="card actionsCard">
@@ -87,9 +91,5 @@
     <div class="compactAppearance"><label for="compactThemeMode">画面の明るさ</label><select id="compactThemeMode"><option value="auto">時間帯で自動</option><option value="light">ライト</option><option value="dark">ダーク</option></select><p class="settingHint">切替時刻は通常版の設定で変更できます。</p></div>
     <div class="footer">入力値は端末内に保存されます。通常版と同じ保存データを使います。</div>
   </div>
-<script src="src/app-core.js?v=71"></script>
-<script src="src/quest-store.js?v=71"></script>
-<script src="src/compact-app.js?v=71"></script>
-<script src="src/quest-ui.js?v=71"></script>
 </body>
 </html>

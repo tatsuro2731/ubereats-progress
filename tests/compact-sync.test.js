@@ -71,6 +71,7 @@ function runCompact(initial = {}, now = Date.now()) {
     return elements.get(id);
   };
   const windowListeners = new Map();
+  const documentListeners = new Map();
   const window = {
     addEventListener(type, listener) {
       const list = windowListeners.get(type) || [];
@@ -95,6 +96,12 @@ function runCompact(initial = {}, now = Date.now()) {
     window,
     confirm: () => true,
     document: {
+      hidden: false,
+      addEventListener(type, listener) {
+        const list = documentListeners.get(type) || [];
+        list.push(listener);
+        documentListeners.set(type, list);
+      },
       getElementById: element,
       createElement: () => new FakeElement(),
       querySelectorAll: () => []
@@ -104,6 +111,9 @@ function runCompact(initial = {}, now = Date.now()) {
   return {
     storage,
     element,
+    context,
+    dispatchDocument(type) { for (const listener of documentListeners.get(type) || []) listener({ type }); },
+    dispatchWindow(type) { for (const listener of windowListeners.get(type) || []) listener({ type }); },
     setNow(value) { currentNow = value; },
     advanceTime(milliseconds) { currentNow += milliseconds; },
     runIntervals(delay) {
@@ -710,4 +720,61 @@ test("reaching the target in compact stops the exact countdown and closes other-
     baseRemain: (remainingMs - 60000) / 60000,
     baseAt: now
   });
+});
+
+
+test("compact timer uses its anchor without repeatedly reading storage and catches up after a hidden edit", () => {
+  const now = 1800000000000;
+  const enhanced = {
+    countMode: COUNT_MODE, usageMode: USAGE_MODE, on: true,
+    remainingMs: 600 * 60000, sessionStartAt: now,
+    breakOn: false, breakMs: 0, breakSegments: [], updatedAt: now
+  };
+  const app = runCompact({ [ENHANCED_KEY]: JSON.stringify(enhanced) }, now);
+  let reads = 0;
+  const originalRead = app.storage.getItem.bind(app.storage);
+  app.storage.getItem = key => { if (key === ENHANCED_KEY) reads += 1; return originalRead(key); };
+  for (let second = 0; second < 60; second += 1) { app.advanceTime(1000); app.runIntervals(); }
+  assert.equal(reads, 0);
+  assert.equal(app.element("remainH").value, "9");
+  assert.equal(app.element("remainM").value, "59");
+
+  app.context.document.hidden = true;
+  app.storage.setItem(ENHANCED_KEY, JSON.stringify({ ...enhanced, on: false, paused: true, remainingMs: 500 * 60000, updatedAt: now + 60000 }));
+  app.dispatchStorage(ENHANCED_KEY);
+  app.advanceTime(600000);
+  app.runIntervals();
+  assert.equal(app.element("remainM").value, "59", "hidden timers do not change the UI");
+  app.context.document.hidden = false;
+  app.dispatchDocument("visibilitychange");
+  assert.equal(app.element("remainH").value, "8");
+  assert.equal(app.element("remainM").value, "20");
+  app.advanceTime(60000);
+  app.runIntervals();
+  assert.equal(app.element("remainM").value, "20", "a newer pause wins over the old running anchor");
+});
+
+
+test("compact local time corrections and resets remain the current timer anchor", () => {
+  const now = 1800000000000;
+  const enhanced = {
+    countMode: COUNT_MODE, usageMode: USAGE_MODE, on: true,
+    remainingMs: 600 * 60000, sessionStartAt: now,
+    breakOn: false, breakMs: 0, breakSegments: [], updatedAt: now
+  };
+  const app = runCompact({ [ENHANCED_KEY]: JSON.stringify(enhanced) }, now);
+  app.element("remainH").value = "8";
+  app.element("remainM").value = "0";
+  app.element("remainH").dispatch("change");
+  app.advanceTime(61000);
+  app.runIntervals();
+  assert.equal(app.element("remainH").value, "7");
+  assert.equal(app.element("remainM").value, "59");
+  assert.equal(JSON.parse(app.storage.getItem(ENHANCED_KEY)).remainingMs, 480 * 60000);
+  app.element("reset").dispatch("click");
+  app.advanceTime(61000);
+  app.runIntervals();
+  assert.equal(app.element("remainH").value, "11");
+  assert.equal(app.element("remainM").value, "59");
+  assert.equal(JSON.parse(app.storage.getItem(ENHANCED_KEY)).remainingMs, LIMIT_MS);
 });

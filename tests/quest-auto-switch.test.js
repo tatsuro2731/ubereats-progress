@@ -34,7 +34,7 @@ function stateFor(quests = periods()) {
 
 // Execute the shipped scripts unchanged. This small DOM only supports their
 // event/data contracts; these tests do not substitute for browser UI checks.
-function harness({ state = stateFor(), now = BOUNDARY - 1, compact = false } = {}) {
+function harness({ state = stateFor(), now = BOUNDARY - 1, compact = false, hash = "#quest" } = {}) {
   let time = now;
   let timerId = 0;
   let writes = 0;
@@ -75,6 +75,12 @@ function harness({ state = stateFor(), now = BOUNDARY - 1, compact = false } = {
     appendChild(child) { this.append(child); return child; }
     replaceChildren(...children) { this.children = [...children]; }
     setAttribute(name, value) { this.attributes[name] = String(value); }
+    removeAttribute(name) { delete this.attributes[name]; }
+    remove() { this.removed = true; }
+    querySelector(selector) {
+      if (selector === 'button[type="submit"]') return this.children.find(child => child.tagName === "button" && child.attributes.type === "submit") || null;
+      return this.querySelectorAll(selector)[0] || null;
+    }
     querySelectorAll(selector) {
       return this.children.flatMap(child => [child, ...(child.querySelectorAll?.("*") || [])])
         .filter(child => selector === "*" || child.tagName === selector);
@@ -89,6 +95,11 @@ function harness({ state = stateFor(), now = BOUNDARY - 1, compact = false } = {
     elements.set(element.id, element);
   }
   document.body = new Element("body");
+  document.head = new Element("head");
+  if (!compact) {
+    const submit = new Element("button"); submit.setAttribute("type", "submit");
+    elements.get("questConfigForm").appendChild(submit);
+  }
   document.activeElement = document.body;
   document.hidden = false;
   document.getElementById = id => elements.get(id) || null;
@@ -100,8 +111,8 @@ function harness({ state = stateFor(), now = BOUNDARY - 1, compact = false } = {
   }
   const window = new Events();
   Object.assign(window, {
-    window, document, Event, CustomEvent: Event, Date: FakeDate,
-    location: { hash: "#quest", pathname: compact ? "/compact.html" : "/", search: "" },
+    window, document, Event, CustomEvent: Event, Date: FakeDate, AbortController,
+    location: { hash, pathname: compact ? "/compact.html" : "/", search: "" },
     history: { replaceState() {} },
     alert: message => alerts.push(message),
     localStorage: {
@@ -130,11 +141,14 @@ function harness({ state = stateFor(), now = BOUNDARY - 1, compact = false } = {
   flushToggles();
   return {
     element, storage, alerts, document, timers, writes: () => writes,
+    saveProgress: (...args) => window.UberQuestStore.saveProgress(...args),
+    scripts: () => document.head.children.filter(script => !script.removed),
+    imageModule: value => { window.UberQuestImage = value; },
     read: () => JSON.parse(storage.get(QUEST_KEY)),
     selected: () => element("questSelect").value,
     emitWindow: (type, options) => emit(window, type, options),
     emitDocument: type => emit(document, type),
-    emit: (id, type) => emit(element(id), type),
+    emit: (id, type, options) => emit(element(id), type, options),
     choose(id) { element("questSelect").value = id; emit(element("questSelect"), "change"); },
     details(open) { element("questAlignDetails").open = open; flushToggles(); },
     periodic() { [...intervals.values()].forEach(callback => callback()); flushToggles(); },
@@ -185,6 +199,103 @@ test("startup ignores an old saved selection and automatic rendering never rewri
   assert.equal(app.storage.get(QUEST_KEY), JSON.stringify(state));
   assert.equal(app.storage.get(PROGRESS_KEY), progressBefore);
   assert.equal(app.writes(), 0);
+});
+
+test("progress startup renders only the brief, including period changes before opening the quest tab", () => {
+  const app = harness({ hash: "" });
+  assert.equal(app.element("questView").hidden, true);
+  assert.equal(app.element("questTiers").children.length, 0);
+  assert.match(app.element("questBriefCount").textContent, /7 \/ 100件/);
+  app.advanceTo(BOUNDARY);
+  assert.equal(app.element("questTiers").children.length, 0);
+  assert.match(app.element("questBriefCount").textContent, /0 \/ 60件/);
+  app.emit("questTab", "click");
+  assert.equal(app.selected(), "weekend");
+  assert.equal(app.element("questTiers").children.length, 1);
+  assert.equal(app.writes(), 0);
+});
+
+test("timer-only saves in either view do not rebuild quest rows, but delivery changes still render", () => {
+  const app = harness();
+  const firstTier = app.element("questTiers").children[0];
+  const before = JSON.parse(app.storage.get(PROGRESS_KEY));
+  assert.equal(app.saveProgress({ ...before, remainM: "30" }), true);
+  assert.equal(app.element("questTiers").children[0], firstTier);
+  app.storage.set(PROGRESS_KEY, JSON.stringify({ ...before, remainM: "29" }));
+  app.emitWindow("storage", { key: PROGRESS_KEY });
+  assert.equal(app.element("questTiers").children[0], firstTier);
+  assert.equal(app.saveProgress({ ...before, done: "8" }, { countChange: true }), true);
+  assert.notEqual(app.element("questTiers").children[0], firstTier);
+  assert.equal(app.element("questTotal").textContent, "8");
+});
+
+test("hidden quest forms retain unsaved sales across the boundary and save to their original period", () => {
+  const app = harness();
+  app.element("questSalesInput").value = "21000";
+  app.emit("questSalesInput", "input");
+  app.emit("progressTab", "click");
+  app.advanceTo(BOUNDARY);
+  assert.match(app.element("questBriefCount").textContent, /0 \/ 60件/);
+  app.emit("questTab", "click");
+  assert.equal(app.selected(), "weekday");
+  assert.equal(app.element("questSalesInput").value, "21000");
+  app.emit("questSalesForm", "submit");
+  assert.equal(app.read().quests.find(item => item.id === "weekday").sales["2026-09-17"], 21000);
+  assert.equal(app.selected(), "weekend");
+});
+
+test("background storage events wait until foreground recovery to update the quest screen", () => {
+  const app = harness();
+  const firstTier = app.element("questTiers").children[0];
+  app.document.hidden = true;
+  app.emitDocument("visibilitychange");
+  const state = app.read(); state.entries[0].quantity = 9;
+  app.storage.set(QUEST_KEY, JSON.stringify(state));
+  app.emitWindow("storage", { key: QUEST_KEY });
+  assert.equal(app.element("questTiers").children[0], firstTier);
+  app.document.hidden = false;
+  app.emitDocument("visibilitychange");
+  assert.equal(app.element("questTotal").textContent, "9");
+});
+
+test("image parsing loads only after file selection and cancelling a pending load never recognizes the old image", async () => {
+  const app = harness({ hash: "" });
+  assert.equal(app.scripts().length, 0);
+  const oldImage = { name: "old.png" }, nextImage = { name: "next.png" };
+  app.emit("questImageFile", "change", { target: { files: [oldImage] } });
+  assert.equal(app.scripts().length, 1);
+  const script = app.scripts()[0];
+  assert.match(script.src, /src\/quest-image\.js\?v=\d+/);
+  assert.equal(app.element("questImagePick").disabled, true);
+  app.emit("questImageStop", "click");
+  assert.equal(app.element("questImagePick").disabled, false);
+  assert.match(app.element("questImageStatus").textContent, /中止/);
+  app.emit("questImageFile", "change", { target: { files: [nextImage] } });
+  assert.equal(app.scripts().length, 1, "pending module loads must be shared");
+  const recognized = [];
+  app.imageModule({ recognize: async file => { recognized.push(file); return { candidates: [] }; } });
+  script.onload();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(recognized, [nextImage]);
+  assert.equal(app.element("questImagePick").disabled, false);
+  assert.equal(app.element("questImageError").hidden, false);
+});
+
+test("a failed lazy image module load leaves manual input usable and can be retried", async () => {
+  const app = harness();
+  const select = () => app.emit("questImageFile", "change", { target: { files: [{ name: "quest.png" }] } });
+  select();
+  const first = app.scripts()[0]; first.onerror();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.element("questImageError").hidden, false);
+  assert.match(app.element("questImageError").textContent, /準備できませんでした/);
+  assert.equal(app.element("questImagePick").disabled, false);
+  assert.equal(app.element("questConfigForm").querySelector('button[type="submit"]').disabled, false);
+  select();
+  assert.equal(app.scripts().length, 1);
+  assert.notEqual(app.scripts()[0], first);
+  app.scripts()[0].onerror();
+  await new Promise(resolve => setImmediate(resolve));
 });
 
 test("manual history viewing survives refreshes but releases at the next period boundary", () => {

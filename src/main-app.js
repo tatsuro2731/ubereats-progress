@@ -15,6 +15,23 @@ const STORAGE_KEY = STORAGE_KEYS.progress;
 const CLOCK_KEY = STORAGE_KEYS.legacyClock;
 const PACE_MODE_KEY_PREFIX = STORAGE_KEYS.paceModePrefix;
 const $ = id => document.getElementById(id);
+// Skip equal DOM writes so timer refreshes do not replace nodes or trigger layout.
+const renderedMarkup = new WeakMap();
+function setText(element, value) {
+  renderedMarkup.delete(element);
+  const text = String(value);
+  if (element.textContent !== text) element.textContent = text;
+}
+function setMarkup(element, value) {
+  if (renderedMarkup.get(element) === value) return;
+  element.innerHTML = value;
+  renderedMarkup.set(element, value);
+}
+function setAttributeIfChanged(element, name, value) {
+  const text = String(value);
+  if (element.getAttribute && element.getAttribute(name) === text) return;
+  element.setAttribute(name, text);
+}
 const LEGACY_DEFAULT_CARDS = ["remaining", "need", "eta", "safe", "project12", "targetPace"];
 const DEFAULT_CARDS = ["actualPace", "need", "remaining", "eta", "elapsed", "workRate"];
 const FOUR_CARD_DEFAULTS = ["actualPace", "need", "eta", "workRate"];
@@ -552,8 +569,15 @@ function togglePaceDisplayMode(cardId) {
   calc();
 }
 
+let clockFormatter;
+let clockFormatterOffset;
 function clock(date) {
-  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const offset = new Date().getTimezoneOffset();
+  if (!clockFormatter || clockFormatterOffset !== offset) {
+    clockFormatter = new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+    clockFormatterOffset = offset;
+  }
+  return clockFormatter.format(date);
 }
 
 function eta(minutes) {
@@ -617,7 +641,7 @@ function setTone(margin, left) {
 }
 
 function bikeIcon(count) {
-  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=71#scooter"></use></svg>';
+  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=72#scooter"></use></svg>';
   return `<span class="bikes" aria-hidden="true">${icon.repeat(count)}</span>`;
 }
 
@@ -661,7 +685,7 @@ function limits(targetPace, margin) {
 }
 
 function metricIcon(id) {
-  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=71#${id}"></use></svg></span>`;
+  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=72#${id}"></use></svg></span>`;
 }
 
 function slackMarkup(minutes) {
@@ -699,7 +723,11 @@ function renderClock(remaining) {
   }
 }
 
+let renderedSelectorKey = "";
 function renderCardSelectors() {
+  const key = JSON.stringify([cards, cardOrderMode]);
+  if (key === renderedSelectorKey) return;
+  renderedSelectorKey = key;
   const box = $("cardSelectors");
   box.innerHTML = "";
   for (let i = 0; i < 6; i++) {
@@ -749,17 +777,32 @@ function isPaceToggleCard(id) {
   return id === "need" || id === "targetPace" || id === "actualPace";
 }
 
+let renderedCardLayout = "";
 function drawCards(values) {
   if (cardDrag) return;
   const ids = fillCards(cards).slice(0, cardCount);
-  $("metrics").innerHTML = ids.map((id, index) => {
+  const layout = JSON.stringify([ids, cardOrderMode]);
+  const metrics = $("metrics");
+  const rendered = ids.map((id, index) => {
     const item = values[id] || values.remaining;
     const toggle = isPaceToggleCard(id) && !cardOrderMode;
     const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     const handle = cardOrderMode ? `<button class="dragHandle" type="button" aria-label="${item.k}を移動" title="長押しして移動">≡</button>` : "";
-    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=71#swap"></use></svg>' : "";
-    return `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}</div>`;
-  }).join("");
+    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=72#swap"></use></svg>' : "";
+    const content = `${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}`;
+    return { id, content, html: `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${content}</div>` };
+  });
+  const existing = rendered.map(item => metrics.querySelector(`.metric[data-card-id="${item.id}"]`));
+  if (layout !== renderedCardLayout || existing.some(element => !element)) {
+    setMarkup(metrics, rendered.map(item => item.html).join(""));
+    renderedCardLayout = layout;
+    rendered.forEach(item => {
+      const card = metrics.querySelector(`.metric[data-card-id="${item.id}"]`);
+      if (card) renderedMarkup.set(card, item.content);
+    });
+    return;
+  }
+  rendered.forEach((item, index) => setMarkup(existing[index], item.content));
 }
 
 function renderTodaySummary(target, done, used, actualPace) {
@@ -768,11 +811,11 @@ function renderTodaySummary(target, done, used, actualPace) {
   summary.hidden = !achieved;
   if (!achieved) return;
   const over = Math.max(done - target, 0);
-  $("todaySummaryLead").textContent = over ? `目標${target}件を${over}件上回って達成` : `目標${target}件を達成`;
-  $("todaySummaryDone").textContent = `${done}件`;
-  $("todaySummaryWork").textContent = elapsedText(used);
-  $("todaySummaryPace").textContent = Number.isFinite(actualPace) ? `${actualPace.toFixed(2)}分/件` : "計測なし";
-  $("todaySummaryHourly").textContent = Number.isFinite(actualPace) && actualPace > 0 ? `${(60 / actualPace).toFixed(1)}件/時` : "計測なし";
+  setText($("todaySummaryLead"), over ? `目標${target}件を${over}件上回って達成` : `目標${target}件を達成`);
+  setText($("todaySummaryDone"), `${done}件`);
+  setText($("todaySummaryWork"), elapsedText(used));
+  setText($("todaySummaryPace"), Number.isFinite(actualPace) ? `${actualPace.toFixed(2)}分/件` : "計測なし");
+  setText($("todaySummaryHourly"), Number.isFinite(actualPace) && actualPace > 0 ? `${(60 / actualPace).toFixed(1)}件/時` : "計測なし");
 }
 
 function cardLabel(id) {
@@ -932,6 +975,7 @@ function calc() {
   const left = progress.remainingOrders;
   if (wasCounting) setRemain(currentRemain);
   if (left === 0 && wasCounting) stopClock(currentRemain);
+  if (document.hidden) return;
 
   const effectiveRemain = active.m;
   const used = progress.actualUsedMinutes;
@@ -948,25 +992,25 @@ function calc() {
   const etaNote = left === 0 ? "目標達成済み" : active.over ? `${active.endLabel}を超過 / 稼働延長が必要` : !Number.isFinite(finish) ? "実績ペース計測待ち" : finish > etaCap ? "上限到達見込み" : "現ペース継続";
 
   setTone(margin, left);
-  $("constraintTag").textContent = constraintTag(active);
-  $("endText").textContent = active.endOn ? `${active.endLabel}上限` : "なし";
-  $("baselinePaceValue").innerHTML = paceCardText(targetPace, "targetPace");
-  $("baselinePace").setAttribute("aria-label", `目標ペース ${paceModeLabel("targetPace")}表示。タップで切り替え`);
-  $("heroDone").textContent = String(done);
-  $("heroTarget").textContent = `/ ${target}`;
-  $("heroRemaining").textContent = left ? `残り${left}件` : "目標達成";
-  $("heroProgressTrack").setAttribute("aria-valuenow", rate.toFixed(1));
-  $("heroProgressFill").setAttribute("style", `width:${rate.toFixed(1)}%`);
-  $("heroPercent").textContent = `${Math.round(rate)}%`;
+  setText($("constraintTag"), constraintTag(active));
+  setText($("endText"), active.endOn ? `${active.endLabel}上限` : "なし");
+  setMarkup($("baselinePaceValue"), paceCardText(targetPace, "targetPace"));
+  setAttributeIfChanged($("baselinePace"), "aria-label", `目標ペース ${paceModeLabel("targetPace")}表示。タップで切り替え`);
+  setText($("heroDone"), String(done));
+  setText($("heroTarget"), `/ ${target}`);
+  setText($("heroRemaining"), left ? `残り${left}件` : "目標達成");
+  setAttributeIfChanged($("heroProgressTrack"), "aria-valuenow", rate.toFixed(1));
+  setAttributeIfChanged($("heroProgressFill"), "style", `width:${rate.toFixed(1)}%`);
+  setText($("heroPercent"), `${Math.round(rate)}%`);
 
   if (left === 0) {
-    $("mainValue").textContent = "目標達成";
-    $("subValue").textContent = `${done}件完了`;
-    $("miniValue").textContent = "お疲れさまです";
+    setText($("mainValue"), "目標達成");
+    setText($("subValue"), `${done}件完了`);
+    setText($("miniValue"), "お疲れさまです");
   } else {
-    $("mainValue").innerHTML = slackMarkup(margin);
-    $("subValue").innerHTML = limits(targetPace, margin);
-    $("miniValue").textContent = active.over ? `残り${left}件 / ${active.endLabel}を超過` : `残り${left}件 / ${active.label}まで${remainingText(effectiveRemain)}`;
+    setMarkup($("mainValue"), slackMarkup(margin));
+    setMarkup($("subValue"), limits(targetPace, margin));
+    setText($("miniValue"), active.over ? `残り${left}件 / ${active.endLabel}を超過` : `残り${left}件 / ${active.label}まで${remainingText(effectiveRemain)}`);
   }
 
   renderTodaySummary(target, done, used, actualPace);
@@ -1005,7 +1049,6 @@ function setup() {
   syncCardCountControl();
   renderCardSelectors();
   calc();
-  setInterval(calc, 15000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && cardDrag) finishCardDrag(false);
   });
@@ -1107,5 +1150,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=71").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=72").catch(() => {}));
 }

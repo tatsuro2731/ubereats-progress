@@ -20,7 +20,11 @@
       throw new Error("クエストの保存データを読み込めません。データを上書きせず保持しています。");
     }
     if (state.entries.some(entry => !entry || !Number.isFinite(entry.at) || !Number.isInteger(entry.quantity) || !Number.isInteger(entry.epoch))) throw new Error("クエストの件数記録を読み込めません。");
-    if (state.quests.some(quest => core.validateQuest(quest) || !Array.isArray(quest.workDays) || new Set(quest.workDays).size !== quest.workDays.length || quest.workDays.some(day => !core.questDateKeys(quest).includes(day)) || !quest.adjustments || typeof quest.adjustments !== "object" || Array.isArray(quest.adjustments) || !quest.sales || typeof quest.sales !== "object" || Array.isArray(quest.sales))) throw new Error("クエストの設定を読み込めません。");
+    if (state.quests.some(quest => {
+      if (core.validateQuest(quest) || !Array.isArray(quest.workDays) || new Set(quest.workDays).size !== quest.workDays.length || !quest.adjustments || typeof quest.adjustments !== "object" || Array.isArray(quest.adjustments) || !quest.sales || typeof quest.sales !== "object" || Array.isArray(quest.sales)) return true;
+      const dates = new Set(core.questDateKeys(quest));
+      return quest.workDays.some(day => !dates.has(day));
+    })) throw new Error("クエストの設定を読み込めません。");
     return state;
   }
   function notify(error = "") {
@@ -60,7 +64,8 @@
       }
       localStorage.setItem(PROGRESS_KEY, JSON.stringify(data));
       lastError = "";
-      notify();
+      // Timer, theme and card saves do not change any quest data or its target.
+      if (changedQuest) notify();
       return true;
     } catch (error) {
       // Never leave an extra quest delivery when the original progress write fails.

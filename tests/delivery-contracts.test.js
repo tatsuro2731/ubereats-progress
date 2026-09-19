@@ -36,6 +36,19 @@ test("the first visit loads the modular application scripts in dependency order"
   assert.ok(positions.every(position => position > 0 && position < html.lastIndexOf("</body>")));
 });
 
+test("startup scripts download early without blocking document parsing", () => {
+  for (const file of ["index.html", "compact.html"]) {
+    const html = read(file);
+    const scripts = [...html.matchAll(/<script\b([^>]*\bsrc=["']([^"']+)["'][^>]*)><\/script>/gi)];
+    for (const script of scripts) {
+      assert.ok(script.index < html.indexOf("</head>"), `${script[2]} is discovered in the head`);
+      if (script[2].includes("appearance.js")) continue; // Set the theme before paint.
+      assert.match(script[1], /\bdefer\b/, `${script[2]} preserves order without blocking parsing`);
+    }
+    assert.doesNotMatch(html, /<script[^>]+src=["'][^"']*quest-image\.js/, "image parsing is not on the startup path");
+  }
+});
+
 test("a fresh visit starts at zero deliveries with the full 12 hours in both views", () => {
   const index = read("src/main-app.js");
   const compact = read("src/compact-app.js");
@@ -105,7 +118,7 @@ test("the service worker cache revision and assets match direct script URLs", ()
     ...[...page.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi)].map(match => match[1]),
     ...[...page.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1])
   ]).map(normalizedAsset);
-  assert.equal(pageAssets.length, 19, "both pages load shared assets; the full page also loads quest image import");
+  assert.equal(pageAssets.length, 18, "both pages load shared assets; image parsing loads only when requested");
   for (const page of [html, compact]) {
     assert.match(page, /src\/quest-store\.js/);
     assert.match(page, /src\/quest-ui\.js/);
@@ -239,7 +252,7 @@ test("remaining and work-session displays stop at minutes while calculations kee
   assert.match(index, /function\s+remainingText\s*\([^)]*\)\s*\{[\s\S]{0,180}Math\.ceil/);
   assert.match(index, /function\s+elapsedText\s*\([^)]*\)\s*\{[\s\S]{0,180}Math\.floor/);
   assert.match(index, /countRemain"\)\.textContent\s*=\s*`残り \$\{remainingText\(remaining\)\}`/);
-  assert.match(index, /todaySummaryWork"\)\.textContent\s*=\s*elapsedText\(used\)/);
+  assert.match(index, /setText\(\$\("todaySummaryWork"\),\s*elapsedText\(used\)\)/);
   assert.match(index, /active\.label}まで\$\{remainingText\(effectiveRemain\)\}/);
   assert.match(compact, /Math\.ceil\(effective\.remainingMs\s*\/\s*60000\)/);
   assert.match(enhancements, /id="workActiveTime">0時間00分<\/strong>/);
