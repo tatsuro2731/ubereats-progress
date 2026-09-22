@@ -44,6 +44,9 @@ body.progressApp .questBrief { display:flex; justify-content:space-between; flex
 .questImageChoice span { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
 .questImageChoice em { font-style:normal; font-variant-numeric:tabular-nums; }
 .questImageChoice small { font-size:14px; color:var(--muted); }
+.questImageChoice .questImageTier { display:grid; gap:2px; padding:5px 0; }
+.questAverage,.questImageChoice .questAverage { display:block; color:var(--accent); font-size:14px; font-weight:650; font-variant-numeric:tabular-nums; }
+.questTier > div { min-width:0; }.questTier > em { flex-shrink:0; }
 .questImport img { display:block; width:100%; max-width:430px; height:auto; border-radius:8px; }
 .questImport textarea { display:block; width:100%; max-width:100%; box-sizing:border-box; padding:10px; font-size:16px; color:var(--text); background:var(--input); border:1px solid var(--line); border-radius:8px; }
 .questImportNotice { padding:10px 12px; border-left:3px solid var(--accent); background:var(--card2); border-radius:5px; font-size:14px; }

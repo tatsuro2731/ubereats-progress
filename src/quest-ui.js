@@ -7,6 +7,7 @@
   // Reuse Intl formatters across renders, and create them only when needed.
   let yenFormat, dateFormat, timeFormat, rateFormat;
   const yen = value => `¥${(yenFormat ||= new Intl.NumberFormat("ja-JP")).format(Math.round(value))}`;
+  const averageLabel = value => `平均 ${(rateFormat ||= new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 })).format(value)}円/件`;
   const dateLabel = day => (dateFormat ||= new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" })).format(new Date(`${day}T12:00:00+09:00`));
   const timeLabel = at => (timeFormat ||= new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })).format(new Date(at));
   const periodLabel = quest => `${timeLabel(quest.startAt)} 〜 ${timeLabel(quest.endAt - 1)}まで`;
@@ -42,7 +43,7 @@
         reject(new Error("画像読み取り機能を準備できませんでした。通信を確認して、もう一度お試しください。"));
       };
       const timeout = window.setTimeout(fail, 20000);
-      script.src = "src/quest-image.js?v=73";
+      script.src = "src/quest-image.js?v=74";
       script.onload = () => {
         if (settled) return;
         if (!window.UberQuestImage) { fail(); return; }
@@ -138,13 +139,15 @@
         const button = document.createElement("button"); button.type = "button"; button.className = "questImageChoice"; button.setAttribute("aria-pressed", "false");
         const title = document.createElement("strong"); title.textContent = candidate.label; button.append(title);
         if (Number.isInteger(candidate.completed)) { const progress = document.createElement("span"); progress.textContent = `現在の累計 ${candidate.completed}件`; button.append(progress); }
-        candidate.tiers.forEach((tier, i) => {
+        core.questTierTotals(candidate.tiers).forEach(tier => {
+          const group = document.createElement("span"); group.className = "questImageTier";
           const row = document.createElement("span"); const count = document.createElement("em"); const reward = document.createElement("em");
-          count.textContent = i ? `＋${tier.target - candidate.tiers[i - 1].target}件` : `${tier.target}件`;
-          reward.textContent = `${i ? "＋" : ""}${yen(tier.reward)}`; row.append(count, reward); button.append(row);
+          count.textContent = `累計${tier.target}件`;
+          reward.textContent = `報酬合計 ${yen(tier.totalReward)}`; row.append(count, reward);
+          const average = document.createElement("span"); average.className = "questAverage"; average.textContent = averageLabel(tier.averageReward);
+          group.append(row, average); button.append(group);
         });
-        const total = document.createElement("span"); total.textContent = `合計 ${candidate.tiers.at(-1).target}件・${yen(candidate.tiers.reduce((sum, tier) => sum + tier.reward, 0))}`;
-        const action = document.createElement("small"); action.textContent = "この候補を入力"; button.append(total, action);
+        const action = document.createElement("small"); action.textContent = "この候補を入力"; button.append(action);
         button.addEventListener("click", () => applyImageCandidate(index)); return button;
       }));
       byId("questImageResults").hidden = false;
@@ -251,12 +254,13 @@
     byId("questProgress").setAttribute("aria-valuetext", `${value.total}件 / ${value.goal}件`);
     text("questRemaining", value.phase === "ended" ? (value.remaining ? `${value.remaining}件未達で終了` : "目標を達成して終了") : value.remaining ? `目標まであと${value.remaining}件` : "設定した目標を達成");
     text("questNext", value.phase === "ended" ? "達成済み報酬は公式アプリでも確認してください。" : value.nextTier ? `次の追加報酬 ${yen(value.nextTier.reward)} まで${value.nextTier.target - value.total}件` : "全段階を達成しました");
-    byId("questTiers").replaceChildren(...quest.tiers.map((tier, index) => {
+    byId("questTiers").replaceChildren(...core.questTierTotals(quest.tiers).map((tier, index) => {
       const row = document.createElement("div"); row.className = "questTier"; row.dataset.reached = String(value.total >= tier.target);
       const copy = document.createElement("div"); const name = document.createElement("span"); const amount = document.createElement("strong"); const status = document.createElement("em");
       name.textContent = `${index + 1}段目 · 累計${tier.target}件${index === quest.goalIndex ? "（目標）" : ""}`;
-      amount.textContent = `＋${yen(tier.reward)}`; status.textContent = value.total >= tier.target ? "達成済み" : "未達成";
-      copy.append(name, amount); row.append(copy, status); return row;
+      amount.textContent = `報酬合計 ${yen(tier.totalReward)}`; status.textContent = value.total >= tier.target ? "達成済み" : "未達成";
+      const average = document.createElement("span"); average.className = "questAverage"; average.textContent = averageLabel(tier.averageReward);
+      copy.append(name, amount, average); row.append(copy, status); return row;
     }));
     text("questEarned", yen(value.earnedReward));
     text("questSuggested", value.suggestedToday === null ? "—" : `${value.suggestedToday}件`);

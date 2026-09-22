@@ -215,6 +215,18 @@ test("progress startup renders only the brief, including period changes before o
   assert.equal(app.writes(), 0);
 });
 
+test("saved quest tiers display cumulative rewards and average per delivery without changing storage", () => {
+  const state = stateFor();
+  state.quests.find(item => item.id === 'weekday').tiers = [{target:120,reward:20190},{target:130,reward:2650}];
+  const app = harness({state});
+  const rows = app.element('questTiers').children;
+  assert.equal(rows[0].children[0].children[1].textContent, '報酬合計 ¥20,190');
+  assert.equal(rows[0].children[0].children[2].textContent, '平均 168.25円/件');
+  assert.equal(rows[1].children[0].children[1].textContent, '報酬合計 ¥22,840');
+  assert.equal(rows[1].children[0].children[2].textContent, '平均 175.69円/件');
+  assert.equal(app.writes(), 0);
+});
+
 test("timer-only saves in either view do not rebuild quest rows, but delivery changes still render", () => {
   const app = harness();
   const firstTier = app.element("questTiers").children[0];

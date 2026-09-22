@@ -382,6 +382,13 @@
     }
     return { ...quest, adjustments, unverifiedDays: [...unverifiedDays].sort() };
   }
+  function questTierTotals(tiers) {
+    let totalReward = 0;
+    return tiers.map(tier => {
+      totalReward += tier.reward;
+      return { ...tier, totalReward, averageReward: totalReward / tier.target };
+    });
+  }
   function calculateQuest(quest, entries, at = Date.now(), displayDay) {
     const raw = questDailyCounts(quest, entries);
     const counts = Object.fromEntries(Object.entries(raw).map(([day, count]) => [day, Math.max(0, count)]));
@@ -448,6 +455,7 @@
     validateQuest,
     questDailyCounts,
     alignQuestCounts,
+    questTierTotals,
     calculateQuest
   });
 });

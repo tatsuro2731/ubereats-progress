@@ -13,6 +13,7 @@
   function normalize(text) {
     return String(text || "").normalize("NFKC").replace(/\r/g, "").replace(/クエス卜/g, "クエスト")
       .replace(/クエスト\s*[Il|](?=\s|$)/g, "クエスト1")
+      .replace(/([+＋]?)\s*ギ\s*(?=[¥￥\\半])/g, "$1")
       .replace(/([+＋]?)\s*[Y羊]\s*(?=\d{1,3}[,.]\d{3})/g, "$1¥");
   }
 
@@ -106,7 +107,8 @@
       current = null; pending = null;
     }
     for (const line of lines) {
-      const heading = line.match(/^クエスト([1-9]\d?)(?:$|[^\d])/);
+      // The selected badge may include a check mark and a doubled/small エ.
+      const heading = line.match(/^[✓✔☑\[|【「(ソンレ]*ク[エェ]+スト[」|]*([1-9]\d?)(?:$|[^\d])/);
       if (heading) {
         finish(); current = { label: `クエスト${heading[1]}`, tiers: [], invalid: false }; continue;
       }
@@ -120,7 +122,9 @@
         pending = { count: Number(count[2]), extra: Boolean(count[1]) };
       }
       if (current && pending && amount) {
-        const number = amount[2];
+        // A single printed thousands comma can be split into dot + comma.
+        // Normalize only that punctuation pair; never repair amount digits.
+        const number = amount[2].replace(/\.,|,\./g, ",");
         const reward = Number(number.replace(/[,.]/g, ""));
         const previous = current.tiers.at(-1);
         const target = pending.extra && previous ? previous.target + pending.count : pending.count;
@@ -226,8 +230,11 @@
           for (let i = 0; i < pixels.data.length; i += 400) { if (Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]) < 128) dark++; samples++; }
           const invert = dark > samples / 2;
           for (let i = 0; i < pixels.data.length; i += 4) {
-            let value = Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]);
-            if (invert) value = 255 - value;
+            // Keep colored rewards dark against a light background. Taking the
+            // brightest channel here washes out the pale green bonus amounts.
+            const value = invert
+              ? 255 - Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2])
+              : Math.min(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]);
             pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = value;
           }
           context.putImageData(pixels, 0, 0);
@@ -265,7 +272,9 @@
           errorHandler: () => {}
         });
         if (stopped) { await worker.terminate(); return; }
-        await worker.setParameters({ tessedit_pageseg_mode: "11" });
+        // Japanese quest screens use numerals, not Latin letters. Excluding
+        // letters lets OCR resolve a 7-shaped glyph instead of emitting Z.
+        await worker.setParameters({ tessedit_pageseg_mode: "11", tessedit_char_blacklist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" });
         const attempts = [];
         const inputSize = `${canvas.width}×${canvas.height}`;
         async function read(input) {
@@ -292,7 +301,7 @@
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v73（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        return { ...parsed, diagnosticText: `読み取り v74（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {
@@ -301,5 +310,5 @@
     }
   }
 
-  return { version: "73", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "74", parseText, readPeriod, textFromBlocks, recognize };
 });

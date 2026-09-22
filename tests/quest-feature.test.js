@@ -39,6 +39,25 @@ function allocationSum(item, entries, time) {
   return core.questDateKeys(item).reduce((sum, day) => sum + core.calculateQuest(item, entries, time, day).allocation, 0);
 }
 
+test("quest averages use cumulative rewards and cumulative deliveries for both screenshot formats", () => {
+  const examples = [
+    [[110, 9310], [120, 1910]],
+    [[120, 20190], [130, 2650]],
+    [[110, 17130], [120, 2450]],
+    [[100, 14330], [110, 2240]]
+  ];
+  const expected = [[9310, 11220], [20190, 22840], [17130, 19580], [14330, 16570]];
+  examples.forEach((example, index) => {
+    const tiers = example.map(([target, reward]) => Object.freeze({ target, reward }));
+    const totals = core.questTierTotals(tiers);
+    assert.deepEqual(totals.map(tier => tier.totalReward), expected[index]);
+    assert.equal(totals[0].averageReward, expected[index][0] / tiers[0].target);
+    assert.equal(totals[1].averageReward, expected[index][1] / tiers[1].target);
+    assert.notEqual(totals[1].averageReward, tiers[1].reward / 10);
+    assert.deepEqual(tiers.map(tier => [tier.target, tier.reward]), example);
+  });
+});
+
 test("quest registration baseline never backfills the existing progress count", () => {
   const item = quest();
   const initial = core.createQuestState(12, NOW);

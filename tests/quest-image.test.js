@@ -32,6 +32,30 @@ const LOW_CONTRAST_PROGRESS = `クエ スト の 進捗
 ロ g 10 回 の 乗車 +\\1.910
 詳細`;
 
+test("light selection OCR preserves all three choices including the selected badge", () => {
+  const text = String.raw`次 の クエ スト を 選択 する
+金曜 日 午前 4 時 00 分 へ 月 曜日 午前 4 時 00 分
+[ ソ クエ ェ スト 」1|
+る 120 回 の 乗車 \\20.,190
+ら +10 回 の 乗車 + 半 \\2.650
+クエ スト 2
+る 110 回 の 乗車 \\17130
+ら +10 回 の 乗車 + ギ \\\\2.,450
+クエ スト 3
+る 100 回 の 乗車 半 14.330
+ら +10 回 の 乗車 +\\\\2,240`;
+  const result = image.parseText(text, NOW);
+  assert.deepEqual(result.candidates, [
+    {label: 'クエスト1', tiers: [{target:120, reward:20190}, {target:130, reward:2650}]},
+    {label: 'クエスト2', tiers: [{target:110, reward:17130}, {target:120, reward:2450}]},
+    {label: 'クエスト3', tiers: [{target:100, reward:14330}, {target:110, reward:2240}]}
+  ]);
+  assert.equal(result.skipped, 0);
+  for (const amount of ['1Z7130', '17.,13', '2..450', '20.,19O']) {
+    assert.equal(image.parseText(`クエスト1\n120回 ¥${amount}`).candidates.length, 0, amount);
+  }
+});
+
 test("low-contrast progress reward is recovered from its matching remaining-count sentence", () => {
   for (const text of [LOW_CONTRAST_PROGRESS, LOW_CONTRAST_PROGRESS.replace(' +\\1.910', '\n\n+\\1.910')]) {
     const result = image.parseText(text, Date.parse('2026-09-22T12:00:00+09:00'));
