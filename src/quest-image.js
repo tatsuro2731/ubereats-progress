@@ -140,6 +140,8 @@
     const period = readPeriod(text, now);
     const reject = () => ({ candidates: [], skipped: 1, period });
     const converted = ["クエスト1"];
+    const header = [];
+    let bonusStart = null;
     let completed = null; let target = null;
     for (const row of rows) {
       const compact = row.replace(/\s/g, "");
@@ -154,13 +156,34 @@
       } else if (completed !== null) {
         const count = row.match(/(?:^|[^\d.,+\-−A-Za-z])(\+)?(\d{1,4})\s*(?:回|件)/);
         // Locked bonus tiers omit '+' on the count but retain it on the reward.
-        if (count) converted.push(`+${Number(count[2])}回${row.slice(count.index + count[0].length)}`);
+        if (count) {
+          if (bonusStart === null) bonusStart = converted.length;
+          converted.push(`+${Number(count[2])}回${row.slice(count.index + count[0].length)}`);
+        }
         else converted.push(row);
-      }
+      } else header.push(row);
     }
     if (completed === null) return reject();
-    const remaining = normalize(text).replace(/\s/g, "").match(/あと(\d{1,4})回/);
+    const description = header.join("").replace(/\s/g, "");
+    const remaining = description.match(/あと(\d{1,4})(?:回|件)/);
     if (remaining && Number(remaining[1]) + completed !== target) return reject();
+
+    // Dark green reward text can disappear in OCR. The sentence above the
+    // progress row repeats that reward, but use it only with an exact count
+    // match and a complete currency/amount/獲得 phrase, never a guessed amount.
+    const summaries = [...description.matchAll(/あと(\d{1,4})(?:回|件)の(?:乗車サービス|乗車|配達)を完了すると[、,]?[¥￥\\半]+([\d,.]+)を獲得/g)];
+    if (summaries.length > 1) return reject();
+    if (summaries.length === 1) {
+      const summary = summaries[0];
+      if (Number(summary[1]) + completed !== target) return reject();
+      const summaryTier = parseText(`クエスト1\n${target}回¥${summary[2]}`, now).candidates[0]?.tiers[0];
+      const baseRows = converted.slice(0, bonusStart ?? converted.length).join("\n");
+      const baseTier = parseText(baseRows, now).candidates[0]?.tiers[0];
+      if (summaryTier && baseTier && summaryTier.reward !== baseTier.reward) return reject();
+      // Keep malformed or conflicting visible amounts rejected. Only a missing
+      // base reward can be recovered; bonus rewards must still be read in full.
+      if (summaryTier && !/[+¥￥\\半]/.test(baseRows)) converted[1] += ` ¥${summaryTier.reward}`;
+    }
     const result = parseText(converted.join("\n"), now);
     return { ...result, period, candidates: result.candidates.map(candidate => ({ ...candidate, label: "進行中のクエスト", completed })) };
   }
@@ -269,7 +292,7 @@
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v70（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        return { ...parsed, diagnosticText: `読み取り v73（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {
@@ -278,5 +301,5 @@
     }
   }
 
-  return { version: "70", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "73", parseText, readPeriod, textFromBlocks, recognize };
 });

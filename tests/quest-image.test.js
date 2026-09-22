@@ -21,6 +21,46 @@ const PROGRESS = `クエストの進捗
 0 10 回の乗車 +¥1,380
 詳細`;
 
+// Actual OCR output: the dark green base reward becomes unrelated characters,
+// while the explanatory sentence and the locked bonus remain legible.
+const LOW_CONTRAST_PROGRESS = `クエ スト の 進捗
+9 月 21 日 (月 ) 4:00 へ 9 月 25 日 ( 金 ) 4:.00
+あと 92 回 の 乗車 サー ビス を 完了 する と 、\\9.310 を 獲
+得 で き 、 別 の 特典 が 利用 可能 に な り ま す
+18/110 回 の 乗車
+画 間 問
+ロ g 10 回 の 乗車 +\\1.910
+詳細`;
+
+test("low-contrast progress reward is recovered from its matching remaining-count sentence", () => {
+  for (const text of [LOW_CONTRAST_PROGRESS, LOW_CONTRAST_PROGRESS.replace(' +\\1.910', '\n\n+\\1.910')]) {
+    const result = image.parseText(text, Date.parse('2026-09-22T12:00:00+09:00'));
+    assert.deepEqual(result.candidates, [{label:'進行中のクエスト', completed:18, tiers:[{target:110,reward:9310},{target:120,reward:1910}]}]);
+    assert.equal(result.period.startDate, '2026-09-21');
+    assert.equal(result.period.endDate, '2026-09-25');
+    assert.equal(result.period.endTime, '04:00');
+  }
+});
+
+test("summary recovery requires an intact amount, matching count, and complete bonus", () => {
+  for (const text of [
+    LOW_CONTRAST_PROGRESS.replace('あと 92', 'あと 82'),
+    LOW_CONTRAST_PROGRESS.replace('\\9.310', '\\9.31'),
+    LOW_CONTRAST_PROGRESS.replace('\\9.310 を 獲\n得', '\\9.310'),
+    LOW_CONTRAST_PROGRESS.replace('18/110 回 の 乗車', ''),
+    LOW_CONTRAST_PROGRESS.replace('+\\1.910', ''),
+    LOW_CONTRAST_PROGRESS.replace('+\\1.910', '\\1.910'),
+    LOW_CONTRAST_PROGRESS.replace('画 間 問', '\\9.31'),
+    LOW_CONTRAST_PROGRESS.replace('画 間 問', '+\\9.310'),
+    LOW_CONTRAST_PROGRESS.replace('ロ g 10 回', '2/10 回')
+  ]) assert.equal(image.parseText(text, NOW).candidates.length, 0, text);
+});
+
+test("conflicting summary and displayed rewards are rejected instead of choosing one", () => {
+  assert.equal(image.parseText(LOW_CONTRAST_PROGRESS.replace('画 間 問', '\\9.810'), NOW).candidates.length, 0);
+  assert.equal(image.parseText(PROGRESS.replace('9/100回の乗車 ¥9,590', '9/100回の乗車 ¥9,580'), NOW).candidates.length, 0);
+});
+
 test("progress fractions identify the screen even when the title is not recognized", () => {
   assert.deepEqual(image.parseText(PROGRESS.replace('クエストの進捗', 'クエストの進歩'), NOW).candidates, image.parseText(PROGRESS, NOW).candidates);
 });
