@@ -31,7 +31,9 @@
     if (typeof root.dispatchEvent === "function" && typeof root.CustomEvent === "function") root.dispatchEvent(new root.CustomEvent("questchange", { detail: { error } }));
   }
   function report(error) {
-    const message = error && error.message ? error.message : "クエストを保存できませんでした。端末の空き容量を確認してください。";
+    // Browser storage errors carry English, browser-specific text; show our own.
+    const ownMessage = error && error.name === "Error" && error.message;
+    const message = ownMessage || "記録を保存できませんでした。端末の空き容量を確認してください。";
     notify(message);
     if (message !== lastError && typeof root.alert === "function") root.alert(message);
     lastError = message;

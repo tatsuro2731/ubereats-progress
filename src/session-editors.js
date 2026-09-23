@@ -100,12 +100,14 @@
       lastBackfillAt: null,
       updatedAt: anchorAt
     };
-    localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
-    localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
-      on: state.on,
-      baseRemain: state.remainingMs / 60000,
-      baseAt: now
-    }));
+    UberProgressCore.storeItems([
+      [ENHANCED_CLOCK_KEY, JSON.stringify(state)],
+      [LEGACY_CLOCK_KEY, JSON.stringify({
+        on: state.on,
+        baseRemain: state.remainingMs / 60000,
+        baseAt: now
+      })]
+    ], localStorage, globalThis.alert);
     if (typeof save === "function") save();
     if (typeof calc === "function") calc();
   }

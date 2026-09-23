@@ -20,6 +20,7 @@
 | `src/compact-app.js` | コンパクト版の入力・描画と通常版との同期 |
 | `src/session-engine.js` | 連続時計、休憩・他社稼働、履歴、稼働終了 |
 | `src/session-editors.js` | 開始時刻・休憩時間の編集ダイアログ |
+| `src/data-backup.js` | 保存データのJSON書き出し・読み込み（キーと形式はそのまま複製） |
 | `sw.js` | オフラインキャッシュと更新世代 |
 | `tests/` | 計算、保存互換、時計、同期、UI契約の回帰テスト |
 
@@ -31,6 +32,8 @@
 2. `main-app.js`
 3. `session-engine.js`
 4. `session-editors.js`
+
+`quest-ui.js`と`data-backup.js`はその後に読み込みます。
 
 後段は前段の公開値や画面要素を利用します。順番を変更する場合は、依存関係を先に解消してください。コンパクト版は `app-core.js`、`compact-app.js` の順です。
 
@@ -53,6 +56,10 @@
 - 配信ファイルを追加・変更したら、HTMLの `?v=`、`sw.js` のキャッシュ世代、`ASSETS` を同時に更新する。
 
 ## 既知の設計上の判断
+
+- `main-app.js` の `remain`・`syncClock`・`stopClock`・`saveClock`・`loadClock` は旧時計（`ubereatsProgressClockState`）の互換処理。起動時だけ動き、`session-engine.js` が旧データを連続時計へ移行するために使う。その後は `session-engine.js` が置き換える。`adjustRemain`・`toggleClock` は置き換え先の宣言だけを残している。
+- localStorageへの時計の書き込みは `app-core.js` の `storeItems` を通す。失敗時は関連キーを元に戻し、通知は失敗が続く間1回だけにする。バックアップ復元中は書き込みを止め、再読み込み前の時計が復元データを上書きしないようにする。
+- Service Workerは画面遷移だけクエリを無視して照合し、それ以外は `?v=` まで完全一致で照合する。クエリを無視した照合はオフライン時の代替だけに使う。
 
 - フレームワークやバンドラーは導入していない。GitHub Pagesへそのまま配信でき、障害点を増やさないため。
 - `app-core.js` はブラウザのグローバルとCommonJSの両方に公開する。追加依存なしでNode.jsテストを実行するため。

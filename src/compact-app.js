@@ -194,12 +194,14 @@ function migrateEnhancedClock(enhanced, now = Date.now()) {
     lastBackfillAt: null,
     updatedAt
   };
-  localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
-  localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
-    on: state.on,
-    baseRemain: state.remainingMs / 60000,
-    baseAt: updatedAt
-  }));
+  UberProgressCore.storeItems([
+    [ENHANCED_CLOCK_KEY, JSON.stringify(state)],
+    [LEGACY_CLOCK_KEY, JSON.stringify({
+      on: state.on,
+      baseRemain: state.remainingMs / 60000,
+      baseAt: updatedAt
+    })]
+  ], localStorage, globalThis.alert);
   return { data: state, remainingMs: state.remainingMs };
 }
 
@@ -281,12 +283,14 @@ function syncEnhancedRemainingFromControls({ resetEnded = false } = {}) {
     lastBackfillAt: null,
     updatedAt
   };
-  localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
-  localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
-    on,
-    baseRemain: remainingMs / 60000,
-    baseAt: updatedAt
-  }));
+  UberProgressCore.storeItems([
+    [ENHANCED_CLOCK_KEY, JSON.stringify(state)],
+    [LEGACY_CLOCK_KEY, JSON.stringify({
+      on,
+      baseRemain: remainingMs / 60000,
+      baseAt: updatedAt
+    })]
+  ], localStorage, globalThis.alert);
   displayedEnhancedClock = { data: state, remainingMs: state.remainingMs };
   setRemainingEditDisabled(false);
   return true;
@@ -357,12 +361,14 @@ function stopEnhancedClockAtGoal() {
     lastBackfillAt: null,
     updatedAt
   };
-  localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(state));
-  localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
-    on: false,
-    baseRemain: state.remainingMs / 60000,
-    baseAt: updatedAt
-  }));
+  UberProgressCore.storeItems([
+    [ENHANCED_CLOCK_KEY, JSON.stringify(state)],
+    [LEGACY_CLOCK_KEY, JSON.stringify({
+      on: false,
+      baseRemain: state.remainingMs / 60000,
+      baseAt: updatedAt
+    })]
+  ], localStorage, globalThis.alert);
   showEnhancedRemaining();
   return true;
 }
@@ -514,5 +520,5 @@ if (typeof window.setInterval === "function") {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=74").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=75").catch(() => {}));
 }

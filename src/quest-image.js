@@ -301,7 +301,7 @@
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v74（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        return { ...parsed, diagnosticText: `読み取り v75（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {

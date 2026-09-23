@@ -5,7 +5,7 @@
   "description": "Uber Eats 配達進捗を確認する静的 PWA",
   "scripts": {
     "dev": "vite",
-    "check": "node --check src/app-core.js && node --check src/quest-store.js && node --check src/quest-image.js && node --check src/quest-ui.js && node --check src/appearance.js && node --check src/main-app.js && node --check src/compact-app.js && node --check src/session-engine.js && node --check src/session-editors.js && node --check sw.js && node --check vite.config.mjs && node --check dev/preview.js",
+    "check": "node --check src/app-core.js && node --check src/quest-store.js && node --check src/quest-image.js && node --check src/quest-ui.js && node --check src/data-backup.js && node --check src/appearance.js && node --check src/main-app.js && node --check src/compact-app.js && node --check src/session-engine.js && node --check src/session-editors.js && node --check sw.js && node --check vite.config.mjs && node --check dev/preview.js",
     "test": "node --test tests/*.test.js",
     "verify": "npm run check && npm test"
   },

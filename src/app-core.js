@@ -234,6 +234,44 @@
     return segments;
   }
 
+  let storageFailureShown = false;
+  let storageFrozen = false;
+
+  // While a backup is being restored the page is about to reload. Freezing
+  // stops the running clock from writing its old in-memory state over the
+  // restored data on its last tick or on pagehide.
+  function setStorageFrozen(frozen) {
+    storageFrozen = Boolean(frozen);
+  }
+
+  // Writes related keys together. On failure (quota, private mode) the keys are
+  // restored, the caller keeps running on its in-memory state, and the user is
+  // told once per failure streak instead of on every clock tick.
+  function storeItems(pairs, storage = globalThis.localStorage, notify = globalThis.alert) {
+    if (storageFrozen) return false;
+    const previous = [];
+    try {
+      for (const [key, value] of pairs) {
+        previous.push([key, storage.getItem(key)]);
+        storage.setItem(key, value);
+      }
+      storageFailureShown = false;
+      return true;
+    } catch (_) {
+      for (const [key, value] of previous.reverse()) {
+        try {
+          if (value === null) storage.removeItem(key);
+          else storage.setItem(key, value);
+        } catch (__) {}
+      }
+      if (!storageFailureShown && typeof notify === "function") {
+        storageFailureShown = true;
+        try { notify("記録を端末に保存できませんでした。空き容量やプライベートブラウズの設定を確認してください。画面の時計はこのまま動き続けます。"); } catch (__) {}
+      }
+      return false;
+    }
+  }
+
   function formatDurationMs(milliseconds, rounding = "floor") {
     const rawMinutes = Math.max(0, finite(milliseconds, 0)) / 60000;
     const totalMinutes = rounding === "ceil" ? Math.ceil(rawMinutes) : Math.floor(rawMinutes);
@@ -440,6 +478,8 @@
     overlapDurationMs,
     breakDurationMs,
     normalizeSegments,
+    storeItems,
+    setStorageFrozen,
     formatDurationMs,
     toLocalMinuteInputValue,
     timestamp,

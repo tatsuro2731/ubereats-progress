@@ -13,16 +13,17 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=74"></script>
-  <link rel="stylesheet" href="styles/main.css?v=74">
-  <link rel="stylesheet" href="styles/appearance.css?v=74">
-  <link rel="stylesheet" href="styles/quest.css?v=74">
-  <script defer src="src/app-core.js?v=74"></script>
-  <script defer src="src/quest-store.js?v=74"></script>
-  <script defer src="src/main-app.js?v=74"></script>
-  <script defer src="src/session-engine.js?v=74"></script>
-  <script defer src="src/session-editors.js?v=74"></script>
-  <script defer src="src/quest-ui.js?v=74"></script>
+  <script src="src/appearance.js?v=75"></script>
+  <link rel="stylesheet" href="styles/main.css?v=75">
+  <link rel="stylesheet" href="styles/appearance.css?v=75">
+  <link rel="stylesheet" href="styles/quest.css?v=75">
+  <script defer src="src/app-core.js?v=75"></script>
+  <script defer src="src/quest-store.js?v=75"></script>
+  <script defer src="src/main-app.js?v=75"></script>
+  <script defer src="src/session-engine.js?v=75"></script>
+  <script defer src="src/session-editors.js?v=75"></script>
+  <script defer src="src/quest-ui.js?v=75"></script>
+  <script defer src="src/data-backup.js?v=75"></script>
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -148,6 +149,12 @@
         <div class="cardCountField"><label id="cardCountLabel" class="cardCountLabel">表示枚数</label><div id="cardCountSegment" class="cardCountSegment" role="group" aria-labelledby="cardCountLabel"><button class="cardCountOption" type="button" data-card-count="3" aria-pressed="false"><strong>3枚</strong><small>3×1</small></button><button class="cardCountOption" type="button" data-card-count="4" aria-pressed="false"><strong>4枚</strong><small>2×2</small></button><button class="cardCountOption" type="button" data-card-count="6" aria-pressed="false"><strong>6枚</strong><small>3×2</small></button></div><select id="cardCount" hidden aria-hidden="true" tabindex="-1"><option value="3">3枚</option><option value="4">4枚（2×2）</option><option value="6">6枚（3×2）</option></select></div>
         <div id="cardSelectors" class="settingsGrid"></div>
         <div class="cardChoiceHelp">同じカードを選ぶと、元のカードと自動で入れ替わります。</div>
+      </section>
+      <section class="settingsSection backupSection" aria-labelledby="backupTitle">
+        <div class="settingsSectionHead"><span class="settingsSectionIcon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg></span><div><h3 id="backupTitle" class="settingsSectionTitle">データのバックアップ</h3><p class="settingsSectionNote">機種変更や記録の消失に備えて保存</p></div></div>
+        <div class="backupActions"><button id="backupExport" class="clearEnd backupButton" type="button">書き出す</button><button id="backupImport" class="clearEnd backupButton" type="button">読み込む</button></div>
+        <input id="backupFile" class="backupFile" type="file" accept="application/json,.json" tabindex="-1" aria-hidden="true">
+        <p id="backupStatus" class="settingHint backupStatus" role="status">件数・時計・履歴・クエスト・表示設定をまとめて1つのファイルに保存します。読み込むと今の記録は置き換わります。</p>
       </section>
     </div>
     <div class="settingsFooter"><button id="settingsDone" class="settingsDone" type="button">完了</button></div>

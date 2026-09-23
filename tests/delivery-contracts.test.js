@@ -118,7 +118,7 @@ test("the service worker cache revision and assets match direct script URLs", ()
     ...[...page.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi)].map(match => match[1]),
     ...[...page.matchAll(/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1])
   ]).map(normalizedAsset);
-  assert.equal(pageAssets.length, 18, "both pages load shared assets; image parsing loads only when requested");
+  assert.equal(pageAssets.length, 19, "both pages load shared assets plus the main-page backup tool; image parsing loads only when requested");
   for (const page of [html, compact]) {
     assert.match(page, /src\/quest-store\.js/);
     assert.match(page, /src\/quest-ui\.js/);
@@ -129,6 +129,12 @@ test("the service worker cache revision and assets match direct script URLs", ()
     assert.ok(assets.includes(source), `${source} must be pre-cached exactly as referenced`);
   }
   assert.ok(assets.some(asset => asset.split("?")[0] === "compact.html"), "compact.html must remain available offline");
+  const pageLinks = [html, compact].flatMap(page => [...page.matchAll(/<link\b[^>]*\brel=["'](?:icon|apple-touch-icon|manifest)["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi)].map(match => match[1]));
+  assert.ok(pageLinks.length >= 3);
+  for (const href of pageLinks) {
+    assert.ok(assets.includes(normalizedAsset(href)), `${href} must be pre-cached exactly because the worker matches ?v= exactly`);
+  }
+  assert.doesNotMatch(serviceWorker, /caches\.match\(event\.request,\{ignoreSearch:true\}\);\s*let response=cached/, "sub-resources must not ignore ?v= before trying the network");
 });
 
 test("timer UI includes the 440px iPhone breakpoint and start-time editor hooks", () => {

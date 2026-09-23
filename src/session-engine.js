@@ -262,14 +262,18 @@
     clockState.baseRemain = clockState.remainingMs / 60000;
     clockState.baseAt = anchorAt;
     clockState.updatedAt = anchorAt;
-    localStorage.setItem(ENHANCED_CLOCK_KEY, JSON.stringify(serializableState()));
-    localStorage.setItem(LEGACY_CLOCK_KEY, JSON.stringify({
-      on: clockState.on,
-      baseRemain: clockState.remainingMs / 60000,
-      baseAt: now
-    }));
+    const stored = UberProgressCore.storeItems([
+      [ENHANCED_CLOCK_KEY, JSON.stringify(serializableState())],
+      [LEGACY_CLOCK_KEY, JSON.stringify({
+        on: clockState.on,
+        baseRemain: clockState.remainingMs / 60000,
+        baseAt: now
+      })]
+    ], localStorage, globalThis.alert);
     if (typeof setRemain === "function") setRemain(clockState.remainingMs / 60000);
-    if (typeof save === "function") save();
+    // A failed clock write means storage is unavailable; skip the progress write
+    // so one tick does not raise a second storage alert.
+    if (stored && typeof save === "function") save();
   }
 
   function tickClock(at = nowMs()) {

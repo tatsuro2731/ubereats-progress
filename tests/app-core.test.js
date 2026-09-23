@@ -12,6 +12,7 @@ const {
   overlapDurationMs,
   progressTone,
   resolveEndLimit,
+  storeItems,
   timestamp,
   usedMsFromRemaining
 } = require("../src/app-core.js");
@@ -142,4 +143,33 @@ test("time and history helpers retain exact engine semantics", () => {
   assert.equal(formatDurationMs(61.9 * 60000), "1時間01分");
   assert.equal(formatDurationMs(61.1 * 60000, "ceil"), "1時間02分");
   assert.equal(timestamp("2026-08-18T10:30"), new Date("2026-08-18T10:30").getTime());
+});
+
+test("storeItems restores related keys and alerts once per failure streak", () => {
+  const values = new Map([["a", "old-a"]]);
+  let failKey = "b";
+  const storage = {
+    getItem: key => values.has(key) ? values.get(key) : null,
+    setItem(key, value) {
+      if (key === failKey) throw new Error("QuotaExceededError");
+      values.set(key, String(value));
+    },
+    removeItem: key => values.delete(key)
+  };
+  const alerts = [];
+  const notify = message => alerts.push(message);
+
+  assert.equal(storeItems([["a", "new-a"], ["b", "new-b"]], storage, notify), false);
+  assert.equal(values.get("a"), "old-a", "the first key is rolled back");
+  assert.equal(values.has("b"), false);
+  assert.equal(storeItems([["a", "new-a"], ["b", "new-b"]], storage, notify), false);
+  assert.equal(alerts.length, 1, "repeated clock ticks alert only once");
+
+  failKey = null;
+  assert.equal(storeItems([["a", "new-a"], ["b", "new-b"]], storage, notify), true);
+  assert.equal(values.get("b"), "new-b");
+  failKey = "a";
+  assert.equal(storeItems([["a", "x"]], storage, notify), false);
+  assert.equal(alerts.length, 2, "a new failure after a success alerts again");
+  assert.doesNotThrow(() => storeItems([["a", "x"]], { getItem() { throw new Error("denied"); } }, null));
 });

@@ -327,6 +327,10 @@ function setRemain(minutes) {
   $("remainM").value = String(value % 60);
 }
 
+// Legacy clock (ubereatsProgressClockState): remain, syncClock, stopClock,
+// saveClock and loadClock only run during startup, before session-engine.js
+// replaces them. They let the engine migrate data saved by very old versions,
+// so keep them while that storage key is still supported.
 function remain() {
   if (!clockState.on) return manualRemain();
   const elapsed = Math.floor((Date.now() - clockState.baseAt) / 60000);
@@ -345,14 +349,9 @@ function syncClock() {
   saveClock();
 }
 
-function adjustRemain(delta) {
-  const current = remain();
-  const value = Math.max(0, Math.min(current + delta, MAX_REMAIN_INPUT_MINUTES));
-  setRemain(value);
-  if (value !== current) syncClock();
-  save();
-  calc();
-}
+// session-engine.js always replaces adjustRemain and toggleClock before the
+// first user interaction. The declarations stay because the engine assigns them.
+function adjustRemain(_delta) {}
 
 function adjustDone(delta) {
   const current = typeof UberQuestStore !== "undefined" ? UberQuestStore.currentDone() : n("done");
@@ -369,11 +368,15 @@ function enableHoldRepeat(buttonId, action) {
   let holdTimer = null;
   let repeatTimer = null;
   let repeated = false;
+  // Browsers disagree on click.detail for taps, so remember that the pointer
+  // path already handled this press and swallow its compatibility click.
+  let pointerHandledAt = -Infinity;
 
   function stopHold(event, applyTap = false) {
     if (pointerId === null || (event && event.pointerId !== pointerId)) return;
     const activePointerId = pointerId;
     pointerId = null;
+    pointerHandledAt = Date.now();
     clearTimeout(holdTimer);
     clearInterval(repeatTimer);
     holdTimer = null;
@@ -400,7 +403,9 @@ function enableHoldRepeat(buttonId, action) {
   button.addEventListener("lostpointercapture", event => stopHold(event));
   button.addEventListener("contextmenu", event => event.preventDefault());
   button.addEventListener("click", event => {
-    if (event.detail !== 0) {
+    // Keyboard and assistive activations have no pointer sequence; run them once.
+    if (pointerId !== null || Date.now() - pointerHandledAt < 1000) {
+      pointerHandledAt = -Infinity;
       event.preventDefault();
       return;
     }
@@ -416,17 +421,10 @@ function stopClock(remaining) {
   save();
 }
 
-function toggleClock() {
-  const value = remain();
-  setRemain(value);
-  clockState = { on: !clockState.on, baseRemain: value, baseAt: Date.now() };
-  saveClock();
-  save();
-  calc();
-}
+function toggleClock() {}
 
 function saveClock() {
-  localStorage.setItem(CLOCK_KEY, JSON.stringify(clockState));
+  UberProgressCore.storeItems([[CLOCK_KEY, JSON.stringify(clockState)]], localStorage, globalThis.alert);
 }
 
 function loadClock() {
@@ -641,7 +639,7 @@ function setTone(margin, left) {
 }
 
 function bikeIcon(count) {
-  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=74#scooter"></use></svg>';
+  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=75#scooter"></use></svg>';
   return `<span class="bikes" aria-hidden="true">${icon.repeat(count)}</span>`;
 }
 
@@ -685,7 +683,7 @@ function limits(targetPace, margin) {
 }
 
 function metricIcon(id) {
-  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=74#${id}"></use></svg></span>`;
+  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=75#${id}"></use></svg></span>`;
 }
 
 function slackMarkup(minutes) {
@@ -788,7 +786,7 @@ function drawCards(values) {
     const toggle = isPaceToggleCard(id) && !cardOrderMode;
     const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     const handle = cardOrderMode ? `<button class="dragHandle" type="button" aria-label="${item.k}を移動" title="長押しして移動">≡</button>` : "";
-    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=74#swap"></use></svg>' : "";
+    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=75#swap"></use></svg>' : "";
     const content = `${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}`;
     return { id, content, html: `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${content}</div>` };
   });
@@ -1127,19 +1125,7 @@ function setup() {
   enableHoldRepeat("remainPlus", () => adjustRemain(1));
   enableHoldRepeat("minus", () => adjustDone(-1));
   enableHoldRepeat("plus", () => adjustDone(1));
-  $("reset").onclick = () => {
-    if (!confirm("完了件数と残り時間をリセットしますか？")) return;
-    if (typeof UberQuestStore !== "undefined" && !UberQuestStore.resetCounter()) return;
-    $("done").value = "0";
-    $("remainH").value = "12";
-    $("remainM").value = "0";
-    $("endLimit").value = "";
-    clockState = { on: false, baseRemain: WORK_LIMIT_MINUTES, baseAt: Date.now() };
-    saveClock();
-    save();
-    calc();
-  };
-  $("countToggle").onclick = toggleClock;
+  // Reset and the ON/OFF button are bound by session-engine.js.
   $("helpBtn").onclick = () => {
     const help = $("helpText");
     const open = help.hidden;
@@ -1150,5 +1136,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=74").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=75").catch(() => {}));
 }
