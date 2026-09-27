@@ -7,10 +7,12 @@ const {
   STORAGE_KEYS,
   activeConstraint,
   calculateProgress,
+  estimateFinish,
   formatDurationMs,
   normalizeSegments,
   overlapDurationMs,
   progressTone,
+  relativeDayPrefix,
   resolveEndLimit,
   storeItems,
   timestamp,
@@ -78,6 +80,85 @@ test("edited work changes actual forecasts while preserving progress and end-lim
   const unmeasured = calculateProgress({ ...inputs, actualUsedMinutes: 0 });
   assert.ok(Number.isNaN(unmeasured.actualPaceMinutes));
   assert.ok(Number.isNaN(unmeasured.projectedCount));
+});
+
+test("the finish estimate converts Uber time to the wall clock with the operation rate", () => {
+  const minute = 60000;
+  const at = new Date(2026, 8, 27, 15, 0).getTime();
+  const inputs = { at, done: 20, remainingOrders: 20, usedMs: 255 * minute, elapsedMs: 300 * minute, remainingMs: 465 * minute };
+  const estimate = estimateFinish(inputs);
+  const progress = calculateProgress({ target: 40, done: 20, currentRemainingMinutes: 465, actualUsedMinutes: 255 });
+
+  assert.equal(estimate.ready, true);
+  assert.equal(estimate.rate, 0.85);
+  assert.equal(estimate.paceMinutes, 15, "elapsed time without breaks ÷ done");
+  assert.equal(estimate.finishAt, at + 300 * minute);
+  assert.ok(Math.abs(estimate.finishAt - at - progress.minutesToTarget / estimate.rate * minute) < 1e-6, "actual pace ÷ operation rate");
+  assert.equal(progress.minutesToTarget, 255, "the existing forecast still assumes an unstopped Uber clock");
+  assert.equal(estimate.reachesLimit, false);
+  assert.equal(estimate.displayAt, estimate.finishAt);
+
+  const unstopped = estimateFinish({ ...inputs, usedMs: 300 * minute, remainingMs: 420 * minute });
+  const unstoppedProgress = calculateProgress({ target: 40, done: 20, currentRemainingMinutes: 420, actualUsedMinutes: 300 });
+  assert.equal(unstopped.rate, 1);
+  assert.equal(unstopped.finishAt - at, unstoppedProgress.minutesToTarget * minute, "at 100% it matches the existing forecast");
+});
+
+test("the finish estimate stops at the earlier wall-clock limit", () => {
+  const minute = 60000;
+  const at = new Date(2026, 8, 27, 15, 0).getTime();
+  const inputs = { at, done: 20, remainingOrders: 20, usedMs: 255 * minute, elapsedMs: 300 * minute, remainingMs: 200 * minute };
+
+  const clock = estimateFinish(inputs);
+  assert.equal(clock.reachesLimit, true, "255 Uber minutes are needed but 200 remain");
+  assert.equal(clock.limitKind, "12h");
+  assert.ok(Math.abs(clock.displayAt - (at + 200 * minute / 0.85)) < 1e-6, "the 12-hour clock empties remaining ÷ rate later");
+
+  const endLimit = estimateFinish({ ...inputs, remainingMs: 465 * minute, endLimitAt: at + 120 * minute });
+  assert.equal(endLimit.reachesLimit, true);
+  assert.equal(endLimit.limitKind, "end");
+  assert.equal(endLimit.displayAt, at + 120 * minute);
+
+  // 300 Uber minutes last 375 minutes at 80%, so a 330-minute end limit comes first.
+  const wallClock = estimateFinish({ at, done: 10, remainingOrders: 40, usedMs: 240 * minute, elapsedMs: 300 * minute, remainingMs: 300 * minute, endLimitAt: at + 330 * minute });
+  assert.equal(wallClock.limitKind, "end");
+  assert.equal(wallClock.displayAt, at + 330 * minute);
+
+  const laterEnd = estimateFinish({ ...inputs, endLimitAt: at + 600 * minute });
+  assert.equal(laterEnd.limitKind, "12h", "an end limit after the clock empties is not the limit");
+  const pastEnd = estimateFinish({ ...inputs, remainingMs: 465 * minute, endLimitAt: at - minute });
+  assert.equal(pastEnd.reachesLimit, false, "a passed end limit is reported by the caller");
+  assert.equal(pastEnd.displayAt, at + 300 * minute);
+
+  const empty = estimateFinish({ ...inputs, remainingMs: 0 });
+  assert.equal(empty.reachesLimit, true);
+  assert.equal(empty.displayAt, at);
+  const achieved = estimateFinish({ ...inputs, remainingOrders: 0 });
+  assert.equal(achieved.reachesLimit, false);
+  assert.equal(achieved.displayAt, at);
+});
+
+test("the finish estimate waits for a delivery and measured Uber time", () => {
+  const minute = 60000;
+  const inputs = { at: 1_000_000, done: 5, remainingOrders: 10, usedMs: 50 * minute, elapsedMs: 60 * minute, remainingMs: 600 * minute };
+  for (const missing of [{ done: 0 }, { usedMs: 0 }, { elapsedMs: 0 }, { done: undefined }]) {
+    const estimate = estimateFinish({ ...inputs, ...missing });
+    assert.equal(estimate.ready, false, JSON.stringify(missing));
+    assert.ok(Number.isNaN(estimate.finishAt));
+    assert.ok(Number.isNaN(estimate.displayAt));
+    assert.equal(estimate.reachesLimit, false);
+  }
+  const overlapping = estimateFinish({ ...inputs, usedMs: 90 * minute });
+  assert.equal(overlapping.rate, 1, "Uber time never exceeds the elapsed time");
+  assert.equal(overlapping.finishAt, inputs.at + 120 * minute);
+});
+
+test("finish labels mark later calendar days", () => {
+  const now = new Date(2026, 8, 27, 23, 30).getTime();
+  assert.equal(relativeDayPrefix(new Date(2026, 8, 27, 23, 59).getTime(), now), "");
+  assert.equal(relativeDayPrefix(new Date(2026, 8, 28, 0, 15).getTime(), now), "翌");
+  assert.equal(relativeDayPrefix(new Date(2026, 8, 29, 9, 0).getTime(), now), "2日後");
+  assert.equal(relativeDayPrefix(new Date(2026, 9, 1, 9, 0).getTime(), now), "4日後");
 });
 
 test("progress tone keeps 18 minutes orange and changes at 19", () => {

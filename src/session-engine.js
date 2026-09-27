@@ -1273,9 +1273,15 @@
   countEndLabel = function() { return exhaustionText(); };
   window.uberProgressSessionMetrics = function() {
     const at = nowMs();
+    const elapsedMs = sessionElapsedMs(at);
     return {
+      at,
       started: Boolean(clockState.sessionStartAt),
-      elapsedText: durationText(sessionElapsedMs(at)),
+      ended: Boolean(clockState.sessionEndedAt),
+      elapsedMs,
+      usedMs: clockUsedMs(),
+      remainingMs: clockState.remainingMs,
+      elapsedText: durationText(elapsedMs),
       rate: operationRate(at)
     };
   };

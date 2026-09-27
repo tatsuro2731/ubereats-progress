@@ -486,6 +486,80 @@ test("main pace, forecast, achievement summary and history use the same edited w
   assert.equal(entry.actualPaceMinutes, 6);
 });
 
+function metricCard(app, id) {
+  const match = app.element("metrics").innerHTML.match(new RegExp(`data-card-id="${id}"[^>]*>[\\s\\S]*?<div class="v">([\\s\\S]*?)</div>(?:<div class="note">([\\s\\S]*?)</div>)?`));
+  const text = html => (html || "").replace(/<[^>]+>/g, "");
+  return match ? { v: text(match[1]), n: text(match[2]) } : null;
+}
+
+test("the rate-adjusted finish card converts the remaining Uber time to the wall clock", () => {
+  const minute = 60000;
+  const start = new Date(2026, 8, 27, 10, 0).getTime();
+  const now = start + 300 * minute;
+  // 255 of 300 minutes without breaks consumed the Uber clock: 85%.
+  const app = timerHarness({ now, fullMain: true,
+    enhanced: state({ remainingMs: 465 * minute, sessionStartAt: start, lastTickAt: now, updatedAt: now }),
+    regular: { target: "40", done: "20", remainH: "7", remainM: "45" }
+  });
+  vm.runInContext('cards = ["eta", "rateEta", "workRate", "elapsed", "actualPace", "need"];', app.context);
+  app.context.calc();
+  assert.deepEqual(metricCard(app, "eta"), { v: "19:15", n: "現ペース継続" }, "the existing forecast is unchanged");
+  assert.deepEqual(metricCard(app, "rateEta"), { v: "20:00", n: "稼働率85.0%で換算" }, "300 minutes ÷ 20 done × 20 remaining");
+  assert.match(app.element("metrics").innerHTML, /<span class="phrase">稼働率85\.0%<\/span><span class="phrase">で換算<\/span>/, "narrow cards wrap between phrases");
+
+  app.api.enhancedToggleClock();
+  app.setNow(now + 30 * minute);
+  app.context.calc();
+  assert.equal(app.api.getState().breakOn, true);
+  assert.deepEqual(metricCard(app, "rateEta"), { v: "20:30", n: "稼働率85.0%で換算" }, "a break moves the finish later without changing the rate");
+
+  app.api.enhancedToggleClock();
+  app.element("countPause").onclick();
+  assert.equal(app.api.getState().paused, true);
+  app.setNow(now + 60 * minute);
+  app.context.calc();
+  assert.deepEqual(metricCard(app, "eta"), { v: "20:15", n: "現ペース継続" });
+  assert.deepEqual(metricCard(app, "rateEta"), { v: "21:30", n: "稼働率77.3%で換算" }, "a pause counts as elapsed time without Uber time");
+
+  app.element("countPause").onclick();
+  app.api.finishSession();
+  assert.deepEqual(metricCard(app, "rateEta"), { v: "稼働終了", n: "履歴に保存済み" });
+});
+
+test("the rate-adjusted finish card waits for a session and a delivery", () => {
+  const minute = 60000;
+  const now = new Date(2026, 8, 27, 12, 0).getTime();
+  const idle = timerHarness({ now, fullMain: true, regular: { target: "40", done: "3", remainH: "12", remainM: "0" } });
+  vm.runInContext('cards = ["rateEta", "eta", "workRate", "elapsed", "actualPace", "need"];', idle.context);
+  idle.context.calc();
+  assert.deepEqual(metricCard(idle, "rateEta"), { v: "未開始", n: "時間ONで計測開始" });
+
+  const app = timerHarness({ now, fullMain: true,
+    enhanced: state({ remainingMs: 660 * minute, sessionStartAt: now - 60 * minute, lastTickAt: now, updatedAt: now }),
+    regular: { target: "40", done: "0", remainH: "11", remainM: "0" }
+  });
+  vm.runInContext('cards = ["rateEta", "eta", "workRate", "elapsed", "actualPace", "need"];', app.context);
+  app.context.calc();
+  assert.deepEqual(metricCard(app, "rateEta"), { v: "計測待ち", n: "実績ペース計測待ち" });
+  app.element("done").value = "40";
+  app.context.calc();
+  assert.deepEqual(metricCard(app, "rateEta"), { v: "達成済み", n: "目標達成済み" });
+});
+
+test("a far rate-adjusted finish names the day and keeps the time together", () => {
+  const minute = 60000;
+  const now = new Date(2026, 8, 27, 14, 10).getTime();
+  // Paused for most of 310 minutes: 10 Uber minutes, 3.2%.
+  const app = timerHarness({ now, fullMain: true,
+    enhanced: state({ on: false, paused: true, remainingMs: 710 * minute, sessionStartAt: now - 310 * minute, lastTickAt: now, updatedAt: now }),
+    regular: { target: "20", done: "1", remainH: "11", remainM: "50" }
+  });
+  vm.runInContext('cards = ["rateEta", "eta", "workRate", "elapsed", "actualPace", "need"];', app.context);
+  app.context.calc();
+  assert.deepEqual(metricCard(app, "rateEta"), { v: "4日後16:20", n: "稼働率3.2%で換算" });
+  assert.match(app.element("metrics").innerHTML, /<div class="v"><span class="phrase">4日後<\/span><span class="phrase">16:20<\/span><\/div>/);
+});
+
 test("saving an unchanged history end retains its original seconds and closes the editor", () => {
   const minute = 60000;
   const start = new Date(2026, 8, 4, 10, 0).getTime();

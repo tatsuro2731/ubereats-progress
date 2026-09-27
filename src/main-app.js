@@ -3,7 +3,9 @@ const {
   STORAGE_KEYS,
   activeConstraint: resolveActiveConstraint,
   calculateProgress,
+  estimateFinish,
   progressTone,
+  relativeDayPrefix,
   sessionUsedMsFromRemaining,
   resolveEndLimit
 } = UberProgressCore;
@@ -39,6 +41,7 @@ const CARD_OPTIONS = [
   ["remaining", "進捗件数"],
   ["need", "必要ペース"],
   ["eta", "終了予測"],
+  ["rateEta", "終了予定（稼働率込み）"],
   ["actualPace", "実績ペース"],
   ["safe", "狙える件数"],
   ["targetPace", "目標ペース"],
@@ -639,7 +642,7 @@ function setTone(margin, left) {
 }
 
 function bikeIcon(count) {
-  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=75#scooter"></use></svg>';
+  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=76#scooter"></use></svg>';
   return `<span class="bikes" aria-hidden="true">${icon.repeat(count)}</span>`;
 }
 
@@ -683,7 +686,7 @@ function limits(targetPace, margin) {
 }
 
 function metricIcon(id) {
-  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=75#${id}"></use></svg></span>`;
+  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=76#${id}"></use></svg></span>`;
 }
 
 function slackMarkup(minutes) {
@@ -786,7 +789,7 @@ function drawCards(values) {
     const toggle = isPaceToggleCard(id) && !cardOrderMode;
     const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     const handle = cardOrderMode ? `<button class="dragHandle" type="button" aria-label="${item.k}を移動" title="長押しして移動">≡</button>` : "";
-    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=75#swap"></use></svg>' : "";
+    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=76#swap"></use></svg>' : "";
     const content = `${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}`;
     return { id, content, html: `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${content}</div>` };
   });
@@ -953,6 +956,34 @@ function handleCardOrderKey(event) {
   return true;
 }
 
+// Finish time on the wall clock at the session's operation rate (elapsed time
+// without breaks ÷ done × remaining orders). It moves later while on a break.
+function rateEtaCard(done, left, session, end, active) {
+  const card = (v, n) => ({ k: "終了予定", v, n });
+  // Narrow cards wrap between phrases, not inside a word or a time.
+  const phrases = (...parts) => parts.map(part => `<span class="phrase">${part}</span>`).join("");
+  if (left === 0) return card("達成済み", "目標達成済み");
+  if (!session || !session.started) return card("未開始", phrases("時間ONで", "計測開始"));
+  if (session.ended) return card("稼働終了", phrases("履歴に", "保存済み"));
+  const estimate = estimateFinish({
+    at: session.at,
+    done,
+    remainingOrders: left,
+    usedMs: session.usedMs,
+    elapsedMs: session.elapsedMs,
+    remainingMs: session.remainingMs,
+    endLimitAt: end ? end.d.getTime() : null
+  });
+  if (!estimate.ready) return card("計測待ち", phrases("実績ペース", "計測待ち"));
+  const day = relativeDayPrefix(estimate.displayAt, Date.now());
+  const time = clock(new Date(estimate.displayAt));
+  return card(day ? phrases(day, time) : time, active.over
+    ? `${active.endLabel}を超過`
+    : estimate.reachesLimit
+      ? phrases(estimate.limitKind === "end" ? "終了上限" : "12時間上限", "到達見込み")
+      : phrases(`稼働率${(estimate.rate * 100).toFixed(1)}%`, "で換算"));
+}
+
 function calc() {
   const wasCounting = clockState.on;
   const currentRemain = remain();
@@ -1020,6 +1051,7 @@ function calc() {
     remaining: { k: "進捗件数", v: `<span class="progressCurrent">${done}</span><span class="progressGoal">/ ${target}件</span>`, p: `<div class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate.toFixed(1)}" aria-valuetext="${rate.toFixed(1)}%達成"><span class="progressFill" style="width:${rate.toFixed(1)}%"></span></div>`, n: `<span>残り${left}件</span><span class="progressPercent">${Math.round(rate)}%</span>` },
     need: { k: "必要ペース", v: left ? paceCardText(neededPace, "need") : "達成済み", n: `タップで切替 / ${paceModeLabel("need")} / ${active.label}基準` },
     eta: { k: "終了予測", v: etaText, n: etaNote },
+    rateEta: rateEtaCard(done, left, session, end, active),
     actualPace: { k: "実績ペース", v: Number.isFinite(actualPace) ? paceCardText(actualPace, "actualPace") : "計測待ち", n: Number.isFinite(projection) ? `現ペースなら${projection.toFixed(1)}件` : "配達完了後に表示" },
     safe: { k: "狙える件数", v: Number.isFinite(safe) ? `${safe}件まで` : "計測待ち", n: "実績ペース基準" },
     targetPace: { k: "目標ペース", v: paceCardText(targetPace, "targetPace"), n: `タップで切替 / ${paceModeLabel("targetPace")} / ${active.label}反映` },
@@ -1136,5 +1168,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=75").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=76").catch(() => {}));
 }

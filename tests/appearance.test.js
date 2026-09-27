@@ -148,7 +148,7 @@ test("invalid schedule edits are rejected, valid edits persist and storage failu
 test("each card uses a semantic sprite and a shared optical icon slot", () => {
   const icons = read("assets/ui-icons.svg");
   const main = read("src/main-app.js");
-  for (const id of ["actualPace", "need", "eta", "workRate", "remaining", "elapsed", "safe", "targetPace", "project12", "constraint", "scooter", "swap"]) {
+  for (const id of ["actualPace", "need", "eta", "rateEta", "workRate", "remaining", "elapsed", "safe", "targetPace", "project12", "constraint", "scooter", "swap"]) {
     assert.match(icons, new RegExp(`<symbol id="${id}"`));
   }
   assert.match(main, /icon\.repeat\(count\)/, "single/double repeat exactly the same scooter");

@@ -100,6 +100,60 @@
     });
   }
 
+  // Wall-clock finish time for the running session. The Uber clock runs only
+  // while counting, so the Uber time still needed (actual pace × remaining
+  // orders) is divided by the operation rate (Uber time ÷ elapsed time without
+  // breaks), which equals elapsed time without breaks ÷ done × remaining orders.
+  // Future breaks are not predicted. The 12-hour clock empties remaining ÷ rate
+  // later on the wall clock; a future end limit is compared as a clock time and
+  // a past one is left to the caller.
+  function estimateFinish({
+    at = Date.now(),
+    done,
+    remainingOrders,
+    usedMs,
+    elapsedMs,
+    remainingMs,
+    endLimitAt = null
+  }) {
+    const now = finite(at, Date.now());
+    const normalizedDone = Math.max(0, finite(done, 0));
+    const orders = Math.max(0, finite(remainingOrders, 0));
+    const elapsed = Math.max(0, finite(elapsedMs, 0));
+    const used = clamp(finite(usedMs, 0), 0, elapsed);
+    const remaining = Math.max(0, finite(remainingMs, 0));
+    const ready = normalizedDone > 0 && used > 0;
+    const rate = elapsed > 0 ? used / elapsed : NaN;
+    const finishAt = ready ? now + elapsed / normalizedDone * orders : NaN;
+    const clockLimitAt = ready ? now + remaining / rate : NaN;
+    const endAt = endLimitAt === null || endLimitAt === undefined ? NaN : finite(endLimitAt, NaN);
+    const endFirst = endAt > now && endAt < clockLimitAt;
+    const limitAt = endFirst ? endAt : clockLimitAt;
+    const reachesLimit = ready && finishAt > limitAt;
+
+    return Object.freeze({
+      ready,
+      rate,
+      paceMinutes: ready ? elapsed / normalizedDone / 60000 : NaN,
+      finishAt,
+      limitAt,
+      limitKind: endFirst ? "end" : "12h",
+      reachesLimit,
+      displayAt: reachesLimit ? limitAt : finishAt
+    });
+  }
+
+  // "" for today, "翌" for tomorrow and "N日後" beyond, by local calendar day.
+  function relativeDayPrefix(timestampValue, nowValue = Date.now()) {
+    const dayStart = value => {
+      const date = new Date(value);
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    };
+    const days = Math.round((dayStart(timestampValue) - dayStart(nowValue)) / 86400000);
+    if (days >= 2) return `${days}日後`;
+    return days === 1 ? "翌" : "";
+  }
+
   function progressTone(
     slackMinutes,
     remainingOrders,
@@ -471,6 +525,8 @@
     usedMsFromRemaining,
     sessionUsedMsFromRemaining,
     calculateProgress,
+    estimateFinish,
+    relativeDayPrefix,
     progressTone,
     clockLabel,
     resolveEndLimit,

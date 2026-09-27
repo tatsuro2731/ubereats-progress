@@ -16,6 +16,11 @@
       <path d="M5 4h4.67v5H5Zm4.67 5h4.66v5H9.67Zm4.66-5H19v5h-4.67Z" fill="currentColor" stroke="none"/>
     </g>
   </symbol>
+  <symbol id="rateEta" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10" cy="14" r="7"/><path d="M10 10.5V14l2.5 1.5M16 9.5v-7h5l-1.4 2 1.4 2h-5"/>
+    </g>
+  </symbol>
   <symbol id="workRate" viewBox="0 0 24 24">
     <path d="M11 3a9 9 0 1 0 10 10H11ZM13 2v9h9a9 9 0 0 0-9-9Z" fill="currentColor"/>
   </symbol>
