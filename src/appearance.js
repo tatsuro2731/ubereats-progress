@@ -110,6 +110,7 @@
   }
 
   function setupDashboardLayout() {
+    const DENSITIES = ["comfortable", "compact", "dense", "tight"];
     const dock = doc.getElementById("operationDock");
     if (!dock) return;
     const overview = doc.getElementById("dashboardOverview");
@@ -129,33 +130,22 @@
       if (doc.documentElement.style.getPropertyValue("--operation-dock-height") !== dockSize) {
         doc.documentElement.style.setProperty("--operation-dock-height", dockSize);
       }
-      if (!overview || !metrics) return;
+      if (!metrics) return;
       // Do not move the cards underneath a drag, or compress the reorder handles.
-      if (metrics.classList.contains("reorderMode")) {
-        overview.style.removeProperty("max-height");
-        return;
-      }
-      const scrollTop = overview.scrollTop;
-      overview.style.removeProperty("max-height");
+      if (metrics.classList.contains("reorderMode")) return;
       const viewport = root.visualViewport;
-      const height = viewport && viewport.scale === 1
-        ? Math.min(root.innerHeight, viewport.height) : root.innerHeight;
+      // A pinch zoom shrinks the visible height only while zoomed. Keep the
+      // layout still until the page is back at its normal scale.
+      if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
+      const height = viewport ? Math.min(root.innerHeight, viewport.height) : root.innerHeight;
       const bottom = height - dockHeight - 8;
       // Measure document coordinates so scrolling to the history cannot change density.
-      for (const density of ["comfortable", "compact", "dense"]) {
+      // The card never scrolls or clips its own details; when even the tight
+      // step does not fit, the whole page scrolls instead.
+      for (const density of DENSITIES) {
         doc.body.dataset.dashboardDensity = density;
         if (metrics.getBoundingClientRect().bottom + root.scrollY <= bottom) break;
       }
-      const cardRect = metrics.getBoundingClientRect();
-      const overflow = cardRect.bottom + root.scrollY - bottom;
-      if (overflow > 0) {
-        // Only pace/guide details scroll. The count header, +/- controls,
-        // progress bar and target-pace footer stay outside this region.
-        // Reserve their measured space as well as the quest summary and cards.
-        const overviewHeight = overview.getBoundingClientRect().height;
-        overview.style.setProperty("max-height", `${Math.max(44, Math.floor(overviewHeight - overflow))}px`);
-      }
-      overview.scrollTop = scrollTop;
     }
     if (root.ResizeObserver) {
       const observer = new root.ResizeObserver(schedule);

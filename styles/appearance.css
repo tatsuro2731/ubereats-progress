@@ -74,15 +74,11 @@ body.progressApp {
 body.progressApp [hidden] { display: none !important; }
 body.progressApp .wrap { max-width: 620px; }
 body.mainView .wrap { padding-bottom: calc(var(--operation-dock-height) + 20px); }
-body.mainView .dashboardOverview {
-  display: flow-root; overflow: auto; scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch; overflow-anchor: none;
-}
-/* Count controls and target pace stay outside the scrollable pace details. */
+/* Never an inner scroll area: clipped details moved on touch and pinch gestures. */
+body.mainView .dashboardOverview { display: flow-root; }
 body.mainView .hero > .heroProgress { padding-top: 2px; }
 body.mainView .heroProgressLabel { line-height: 1.5; }
 body.mainView .hero > .baselinePace { max-width: 100%; white-space: normal; }
-body.mainView .dashboardOverview:focus-visible { outline: 2px solid var(--good); outline-offset: 2px; }
 body.progressApp .header {
   position: relative;
   top: auto;
@@ -400,38 +396,51 @@ body.compactView .detailItem .v { color: var(--text); }
 }
 /* Fit the overview and both card rows above the measured dock. These rules follow
    the theme overrides so short-screen spacing cannot be overridden by the palette. */
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .header { margin-bottom: 5px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .sessionStatus { margin-bottom: 7px; min-height: 34px; padding-block: 3px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .sessionStatusBadge { min-height: 28px; padding-block: 3px; font-size: 17px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .hero { padding: 10px 12px; margin-bottom: 8px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .heroCount strong { font-size: clamp(34px, 10vw, 44px); }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .heroProgressLine { margin: 6px 0 7px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .main { margin: 2px 0 8px; font-size: clamp(34px, 10vw, 46px); }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .lim { min-height: 52px; padding: 6px; gap: 6px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .mini { margin-top: 6px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .baselinePace { margin-top: 3px; padding: 3px 8px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metrics { gap: 7px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metrics .metric { min-height: 94px; padding: 9px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metrics .metric .k { gap: 5px; font-size: 12px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metrics .metric .v { margin-top: 5px; font-size: clamp(22px, 6.5vw, 30px); }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metrics:not([data-card-count="4"]) .metric .v { font-size: clamp(19px, 5.7vw, 25px); }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metrics .metric .note { margin-top: 4px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metric[data-card-id="remaining"] .progressTrack { margin-top: 5px; }
-body.mainView[data-dashboard-density="dense"] .hero { padding: 8px 10px; margin-bottom: 6px; }
-body.mainView[data-dashboard-density="dense"] .heroCount strong { font-size: 34px; }
-body.mainView[data-dashboard-density="dense"] .heroCount > span { font-size: 22px; }
-body.mainView[data-dashboard-density="dense"] .heroProgressLine { margin: 3px 0; }
-body.mainView[data-dashboard-density="dense"] .main { margin: 0 0 5px; font-size: 34px; }
-body.mainView[data-dashboard-density="dense"] .sub { margin-top: 3px; }
-body.mainView[data-dashboard-density="dense"] .lim { min-height: 48px; padding: 4px; }
-body.mainView[data-dashboard-density="dense"] .mini { margin-top: 4px; }
-body.mainView[data-dashboard-density="dense"] .baselinePace { margin-top: 1px; padding-block: 2px; }
-body.mainView[data-dashboard-density="dense"] .metrics { gap: 6px; }
-body.mainView[data-dashboard-density="dense"] .metrics .metric { min-height: 86px; padding: 7px 8px; }
-body.mainView[data-dashboard-density="dense"] .metrics .metric .v { margin-top: 3px; font-size: clamp(22px, 6vw, 27px); }
-body.mainView[data-dashboard-density="dense"] .metrics:not([data-card-count="4"]) .metric .v { font-size: clamp(19px, 5.7vw, 25px); }
-body.mainView[data-dashboard-density="dense"] .metrics .metric .note { margin-top: 3px; }
-body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"]) .metrics.reorderMode .metric { padding-bottom: 62px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .header { margin-bottom: 5px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .sessionStatus { margin-bottom: 7px; min-height: 34px; padding-block: 3px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .sessionStatusBadge { min-height: 28px; padding-block: 3px; font-size: 17px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .hero { padding: 10px 12px; margin-bottom: 8px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .heroCount strong { font-size: clamp(34px, 10vw, 44px); }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .heroProgressLine { margin: 6px 0 7px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .main { margin: 2px 0 8px; font-size: clamp(34px, 10vw, 46px); }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .lim { min-height: 52px; padding: 6px; gap: 6px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .mini { margin-top: 6px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .baselinePace { margin-top: 3px; padding: 3px 8px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics { gap: 7px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics .metric { min-height: 94px; padding: 9px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics .metric .k { gap: 5px; font-size: 12px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics .metric .v { margin-top: 5px; font-size: clamp(22px, 6.5vw, 30px); }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics:not([data-card-count="4"]) .metric .v { font-size: clamp(19px, 5.7vw, 25px); }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics .metric .note { margin-top: 4px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metric[data-card-id="remaining"] .progressTrack { margin-top: 5px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .hero { padding: 8px 10px; margin-bottom: 6px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .heroCount strong { font-size: 34px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .heroCount > span { font-size: 22px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .heroProgressLine { margin: 3px 0; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .main { margin: 0 0 5px; font-size: 34px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .sub { margin-top: 3px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .lim { min-height: 48px; padding: 4px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .mini { margin-top: 4px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .baselinePace { margin-top: 1px; padding-block: 2px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics { gap: 6px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics .metric { min-height: 86px; padding: 7px 8px; }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics .metric .v { margin-top: 3px; font-size: clamp(22px, 6vw, 27px); }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics:not([data-card-count="4"]) .metric .v { font-size: clamp(19px, 5.7vw, 25px); }
+body.mainView:is([data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics .metric .note { margin-top: 3px; }
+body.mainView:is([data-dashboard-density="compact"], [data-dashboard-density="dense"], [data-dashboard-density="tight"]) .metrics.reorderMode .metric { padding-bottom: 62px; }
+
+/* Tight: the last step before the whole page scrolls. The caption shares the
+   slack value's line and the guide boxes carry their own labels. */
+body.mainView[data-dashboard-density="tight"] .hero { padding-block: 6px; }
+body.mainView[data-dashboard-density="tight"] .heroProgressLine { margin: 2px 0; }
+body.mainView[data-dashboard-density="tight"] .dashboardOverview { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; }
+body.mainView[data-dashboard-density="tight"] .dashboardOverview > :not(.caption, .main) { grid-column: 1 / -1; }
+body.mainView[data-dashboard-density="tight"] .main { margin: 0; font-size: 30px; text-align: center; }
+body.mainView[data-dashboard-density="tight"] .guideCaption { display: none; }
+body.mainView[data-dashboard-density="tight"] .sub { margin-top: 2px; }
+body.mainView[data-dashboard-density="tight"] .lim { min-height: 42px; padding: 3px 4px; }
+body.mainView[data-dashboard-density="tight"] .mini { margin-top: 2px; }
+body.mainView[data-dashboard-density="tight"] .baselinePace { margin-top: 0; padding-block: 1px; }
 
 @media (max-height: 550px) and (orientation: landscape) {
   body.progressApp .operationDock { padding-top: 5px; }

@@ -13,17 +13,17 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=76"></script>
-  <link rel="stylesheet" href="styles/main.css?v=76">
-  <link rel="stylesheet" href="styles/appearance.css?v=76">
-  <link rel="stylesheet" href="styles/quest.css?v=76">
-  <script defer src="src/app-core.js?v=76"></script>
-  <script defer src="src/quest-store.js?v=76"></script>
-  <script defer src="src/main-app.js?v=76"></script>
-  <script defer src="src/session-engine.js?v=76"></script>
-  <script defer src="src/session-editors.js?v=76"></script>
-  <script defer src="src/quest-ui.js?v=76"></script>
-  <script defer src="src/data-backup.js?v=76"></script>
+  <script src="src/appearance.js?v=77"></script>
+  <link rel="stylesheet" href="styles/main.css?v=77">
+  <link rel="stylesheet" href="styles/appearance.css?v=77">
+  <link rel="stylesheet" href="styles/quest.css?v=77">
+  <script defer src="src/app-core.js?v=77"></script>
+  <script defer src="src/quest-store.js?v=77"></script>
+  <script defer src="src/main-app.js?v=77"></script>
+  <script defer src="src/session-engine.js?v=77"></script>
+  <script defer src="src/session-editors.js?v=77"></script>
+  <script defer src="src/quest-ui.js?v=77"></script>
+  <script defer src="src/data-backup.js?v=77"></script>
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -41,7 +41,7 @@
       <div class="heroCounter" role="group" aria-label="完了件数の変更"><button id="minus" class="minus" type="button" aria-label="完了件数を1件減らす。長押しで連続して減らす" title="長押しで連続変更">−</button><button id="plus" class="plus" type="button" aria-label="完了件数を1件増やす。長押しで連続して増やす" title="長押しで連続変更">＋</button></div>
     </div>
     <div class="heroProgressLine"><div id="heroProgressTrack" class="progressTrack" role="progressbar" aria-label="目標達成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="heroProgressFill" class="progressFill"></span></div><span id="heroPercent">0%</span></div>
-    <div id="dashboardOverview" class="dashboardOverview" tabindex="0" role="region" aria-label="ペースと案件時間の目安（高さが足りない場合はスクロールできます）">
+    <div id="dashboardOverview" class="dashboardOverview" role="region" aria-label="ペースと案件時間の目安">
     <div class="caption">目標ペースに対して</div><div id="mainValue" class="main">-</div><div class="guideCaption">案件時間の目安</div><div id="subValue" class="sub">-</div><div id="miniValue" class="mini">-</div>
     </div>
     <button id="baselinePace" class="baselinePace" type="button" title="タップで分/件と件/時を切替">目標ペース <strong id="baselinePaceValue">-</strong></button>

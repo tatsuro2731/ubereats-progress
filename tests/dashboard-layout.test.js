@@ -7,7 +7,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 // Exercise the real resize callbacks with measured-box fixtures. Pixel rendering
-// is separate; these fixtures cover the fit budget, scrolling and resize lifecycle.
+// is separate; these fixtures cover the fit budget and resize lifecycle.
 function layoutHarness({ height = 956, top = 62, dockHeight = 188, footerHeight = 0, questHeight = 0, headerHeight = 0 } = {}) {
   const events = new Map();
   const frames = [];
@@ -25,8 +25,8 @@ function layoutHarness({ height = 956, top = 62, dockHeight = 188, footerHeight 
   });
   const body = { dataset: {} };
   const documentElement = { style: style(), setAttribute() {} };
-  const overviewHeights = { comfortable: 480, compact: 360, dense: 304 };
-  const cardHeights = { comfortable: 274, compact: 228, dense: 212 };
+  const overviewHeights = { comfortable: 480, compact: 360, dense: 304, tight: 250 };
+  const cardHeights = { comfortable: 274, compact: 228, dense: 212, tight: 206 };
   const density = () => body.dataset.dashboardDensity || "comfortable";
   const overview = {
     style: style(), scrollTop: 0,
@@ -96,16 +96,25 @@ test("two card rows fit above the dock including top and bottom safe areas", () 
   assert.deepEqual(app.storageWrites, [], "layout must never write preferences, deliveries or timers");
 });
 
-test("very short screens scroll the overview, then restore full spacing when enlarged", () => {
+test("the tight step is used only when dense does not fit and keeps every detail", () => {
+  const tight = layoutHarness({ height: 740 });
+  assert.equal(tight.body.dataset.dashboardDensity, "tight");
+  assert.ok(tight.cardsClearDock());
+  assert.equal(tight.overview.style.getPropertyValue("max-height"), "");
+  assert.equal(tight.overview.getBoundingClientRect().height, tight.overviewHeights.tight, "the details are shown in full");
+  const dense = layoutHarness({ height: 800 });
+  assert.equal(dense.body.dataset.dashboardDensity, "dense");
+  assert.ok(dense.cardsClearDock());
+});
+
+test("when even the tight step cannot fit, the page scrolls instead of clipping the details", () => {
   const app = layoutHarness({ height: 650 });
-  assert.ok(app.cardsClearDock());
-  assert.ok(Number.parseFloat(app.overview.style.getPropertyValue("max-height")) >= 44);
-  app.overview.scrollTop = 90;
-  app.notifyResize(); app.flush();
-  assert.equal(app.overview.scrollTop, 90, "remeasuring must preserve the user's overview scroll position");
+  assert.equal(app.body.dataset.dashboardDensity, "tight");
+  assert.equal(app.overview.style.getPropertyValue("max-height"), "", "the card never becomes its own scroll area");
+  assert.equal(app.overview.getBoundingClientRect().height, app.overviewHeights.tight);
+  assert.equal(app.cardsClearDock(), false, "the whole page scrolls the lower cards above the dock");
   app.setHeight(1100);
   assert.equal(app.body.dataset.dashboardDensity, "comfortable");
-  assert.equal(app.overview.style.getPropertyValue("max-height"), "");
   assert.ok(app.cardsClearDock());
 });
 
@@ -122,74 +131,97 @@ test("changed card text, browser chrome and page resume all recompute available 
   assert.ok(app.observed.includes(app.hero));
   assert.ok(app.observed.includes(app.metrics));
   assert.ok(app.observed.includes(app.dock));
-  for (const density of ["comfortable", "compact", "dense"]) app.cardHeights[density] += 160;
+  for (const density of ["comfortable", "compact", "dense", "tight"]) app.cardHeights[density] += 160;
   app.notifyResize(); app.notifyResize();
   assert.equal(app.frames.length, 1, "multiple size notifications are batched into one frame");
   app.flush();
+  assert.equal(app.body.dataset.dashboardDensity, "dense");
   assert.ok(app.cardsClearDock());
-  app.window.visualViewport.height = 700;
+  app.window.visualViewport.height = 900;
   app.emit("viewport:resize"); app.flush();
-  assert.ok(app.metrics.getBoundingClientRect().bottom <= 700 - 188 - 8);
-  app.window.visualViewport.scale = 2;
-  app.emit("viewport:resize"); app.flush();
-  assert.ok(app.cardsClearDock(), "pinch zoom must not permanently compress the underlying layout");
+  assert.equal(app.body.dataset.dashboardDensity, "tight");
+  assert.ok(app.metrics.getBoundingClientRect().bottom <= 900 - 188 - 8);
+  app.window.visualViewport.height = 956;
   app.emit("window:pageshow"); app.emit("document:visibilitychange");
   assert.equal(app.frames.length, 1);
   app.flush();
+  assert.equal(app.body.dataset.dashboardDensity, "dense");
   assert.ok(app.cardsClearDock());
 });
 
-test("reorder mode releases the overview limit without moving density during a drag", () => {
-  const app = layoutHarness({ height: 650 });
-  app.setReorder(true);
+test("pinch zoom leaves the layout still until the page returns to its normal scale", () => {
+  const app = layoutHarness();
+  assert.equal(app.body.dataset.dashboardDensity, "compact");
+  // While zoomed, iOS reports only the magnified visible area.
+  app.window.visualViewport.scale = 2;
+  app.window.visualViewport.height = 478;
+  app.window.innerHeight = 478;
+  app.emit("viewport:resize"); app.flush();
   app.notifyResize(); app.flush();
+  assert.equal(app.body.dataset.dashboardDensity, "compact", "zooming must not reflow or clip the card");
   assert.equal(app.overview.style.getPropertyValue("max-height"), "");
-  assert.equal(app.body.dataset.dashboardDensity, "dense");
+  app.window.visualViewport.scale = 1;
+  app.window.visualViewport.height = 956;
+  app.window.innerHeight = 956;
+  app.emit("viewport:resize"); app.flush();
+  assert.equal(app.body.dataset.dashboardDensity, "compact");
+  assert.ok(app.cardsClearDock());
+});
+
+test("reorder mode keeps the density still during a drag", () => {
+  const app = layoutHarness({ height: 740 });
+  assert.equal(app.body.dataset.dashboardDensity, "tight");
+  app.setReorder(true);
+  app.setHeight(1100);
+  assert.equal(app.body.dataset.dashboardDensity, "tight", "cards must not move underneath the finger");
+  assert.equal(app.overview.style.getPropertyValue("max-height"), "");
   app.setReorder(false);
   app.notifyResize(); app.flush();
+  assert.equal(app.body.dataset.dashboardDensity, "comfortable");
   assert.ok(app.cardsClearDock());
 });
 
-test("a visible target-pace footer retains its full height above both card rows", () => {
+test("a visible target-pace footer keeps its full height between the details and the cards", () => {
   for (const footerHeight of [28, 52]) {
     const app = layoutHarness({ height: 740, top: 164, footerHeight, questHeight: 52 });
-    assert.ok(Number.parseFloat(app.overview.style.getPropertyValue("max-height")) >= 44);
+    assert.equal(app.overview.style.getPropertyValue("max-height"), "");
     assert.equal(app.metrics.getBoundingClientRect().top - app.overview.getBoundingClientRect().bottom, footerHeight);
-    assert.ok(app.cardsClearDock(), "target pace, including a wrapped label, must not push the card rows behind the dock");
+    assert.equal(app.overview.getBoundingClientRect().height, app.overviewHeights[app.body.dataset.dashboardDensity], "the details are shown in full");
     assert.deepEqual(app.storageWrites, []);
   }
 });
 
 test("showing or wrapping the quest summary remeasures the footer and card budget", () => {
-  const app = layoutHarness({ height: 852, top: 164, footerHeight: 32 });
+  const app = layoutHarness({ height: 956, top: 164, footerHeight: 32 });
   assert.ok(app.observed.includes(app.questBrief));
-  for (const questHeight of [52, 76, 0]) {
+  for (const [questHeight, density] of [[52, "tight"], [76, "tight"], [0, "dense"]]) {
     app.setQuestHeight(questHeight);
+    assert.equal(app.body.dataset.dashboardDensity, density);
     assert.ok(app.cardsClearDock());
   }
 });
 
 test("the fixed count header fits with the footer, quest summary and two card rows when space permits", () => {
-  for (const height of [780, 852, 956]) {
+  for (const [height, density] of [[1000, "tight"], [1100, "compact"]]) {
     const app = layoutHarness({ height, top: 120, headerHeight: 110, footerHeight: 28, questHeight: 52 });
+    assert.equal(app.body.dataset.dashboardDensity, density);
     assert.ok(app.cardsClearDock());
-    assert.equal(app.overview.getBoundingClientRect().top, 282, "only details below the count header are capped");
-    app.overview.scrollTop = 30;
-    app.notifyResize(); app.flush();
-    assert.equal(app.overview.scrollTop, 30);
-    assert.equal(app.overview.getBoundingClientRect().top, 282);
+    assert.equal(app.overview.getBoundingClientRect().top, 282, "the details start below the count header");
+    assert.equal(app.overview.style.getPropertyValue("max-height"), "");
     assert.deepEqual(app.storageWrites, []);
   }
 });
 
-test("on an impossibly short viewport content remains scrollable rather than being hidden", () => {
+test("on an impossibly short viewport the details stay complete and the page scrolls", () => {
   const app = layoutHarness({ height: 568, top: 160, headerHeight: 110, footerHeight: 28, questHeight: 76 });
-  assert.equal(app.overview.style.getPropertyValue("max-height"), "44px");
+  assert.equal(app.body.dataset.dashboardDensity, "tight");
+  assert.equal(app.overview.style.getPropertyValue("max-height"), "");
+  assert.equal(app.overview.getBoundingClientRect().height, app.overviewHeights.tight);
   assert.ok(app.metrics.getBoundingClientRect().height > 0);
   assert.equal(app.document.documentElement.style.getPropertyValue("--operation-dock-height"), "188px");
 });
 
-test("count label, buttons and progress bar are structurally outside the scrolled details", () => {
+test("count label, buttons and progress bar stay outside the pace details, which never scroll by themselves", () => {
   const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
   const stack = [];
   const ancestors = new Map();
@@ -202,9 +234,13 @@ test("count label, buttons and progress bar are structurally outside the scrolle
   }
   for (const id of ["heroProgress", "heroDone", "heroTarget", "heroRemaining", "plus", "minus", "heroProgressTrack", "baselinePace"]) {
     assert.ok(ancestors.get(id).includes("hero"), `${id} remains within the hero card`);
-    assert.ok(!ancestors.get(id).includes("dashboardOverview"), `${id} cannot be scrolled out of its own card`);
+    assert.ok(!ancestors.get(id).includes("dashboardOverview"), `${id} stays outside the pace details`);
   }
   for (const id of ["mainValue", "subValue", "miniValue"]) assert.ok(ancestors.get(id).includes("dashboardOverview"));
+  assert.doesNotMatch(html, /id="dashboardOverview"[^>]*tabindex/, "nothing to scroll, so no extra focus stop");
+  const appearance = fs.readFileSync(path.join(__dirname, "../styles/appearance.css"), "utf8");
+  assert.doesNotMatch(appearance, /\.dashboardOverview\s*\{[^}]*overflow/, "touch and pinch gestures cannot scroll or clip the details");
+  assert.match(appearance, /\[data-dashboard-density="tight"\] \.guideCaption \{ display: none; \}/);
   const css = fs.readFileSync(path.join(__dirname, "../styles/quest.css"), "utf8");
   assert.match(css, /@media\(max-width:440px\)\s*\{\s*\.questView \.questDateTimeFields\s*\{\s*grid-template-columns:minmax\(0,1fr\)/);
 });
