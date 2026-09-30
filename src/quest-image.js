@@ -231,10 +231,11 @@
           const invert = dark > samples / 2;
           for (let i = 0; i < pixels.data.length; i += 4) {
             // Keep colored rewards dark against a light background. Taking the
-            // brightest channel here washes out the pale green bonus amounts.
+            // brightest channel here washes out the pale green bonus amounts,
+            // and doubling their distance from white keeps them through OCR binarization.
             const value = invert
               ? 255 - Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2])
-              : Math.min(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]);
+              : Math.max(0, 2 * Math.min(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]) - 255);
             pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = value;
           }
           context.putImageData(pixels, 0, 0);
@@ -292,16 +293,17 @@
         }
         let parsed = await read(canvas);
         canvas.width = canvas.height = 1;
-        if ((!parsed.candidates.length || !parsed.period) && !stopped) {
+        // Excluded candidates are also retried; each read is validated independently and never merged.
+        if ((!parsed.candidates.length || !parsed.period || parsed.skipped) && !stopped) {
           onProgress("別の画像処理で、もう一度読み取り中…");
           const original = await imageCanvas(file, false);
           if (stopped) return;
           const alternative = await read(original);
-          if (!parsed.candidates.length) parsed = alternative;
+          if (alternative.candidates.length > parsed.candidates.length) parsed = { ...alternative, period: alternative.period || parsed.period };
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v77（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        return { ...parsed, diagnosticText: `読み取り v78（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {
@@ -310,5 +312,5 @@
     }
   }
 
-  return { version: "74", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "78", parseText, readPeriod, textFromBlocks, recognize };
 });

@@ -216,3 +216,43 @@ test("imported tiers retain existing reward and count semantics without double-c
     assert.equal(value.total, index === 0 ? 130 : 120);
   }
 });
+
+function loadRecognizer({ texts, pixels = [255, 255, 255, 255] }) {
+  const vm = require('node:vm'); const fs = require('node:fs');
+  const calls = { reads: 0, terminated: 0, drawn: [] };
+  const ctx = {fillRect(){},drawImage(){},getImageData(){return {data:new Uint8ClampedArray(pixels)};},putImageData(data){calls.drawn.push(Array.from(data.data));}};
+  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:{text:texts[calls.reads++]}}),terminate:async()=>{calls.terminated++;}})}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=1320;naturalHeight=2868;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,setTimeout,clearTimeout,console};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../src/quest-image.js'),'utf8'),scope);
+  return { calls, recognize: () => scope.module.exports.recognize({name:'test.png',type:'image/png',size:100}) };
+}
+
+test("pale colored text on a light screen is darkened before OCR while white and dark mode are unchanged", async () => {
+  // white, pale green bonus, base green, mid gray, black
+  const light = loadRecognizer({ texts: [SCREEN.replace(/\nクエスト3$/, '')], pixels: [255,255,255,255, 163,212,174,255, 59,129,75,255, 128,128,128,255, 0,0,0,255] });
+  await light.recognize();
+  assert.deepEqual(light.calls.drawn[0].filter((_, i) => i % 4 === 0), [255, 71, 0, 1, 0]);
+  const dark = loadRecognizer({ texts: [SCREEN.replace(/\nクエスト3$/, '')], pixels: [0,0,0,255, 163,212,174,255, 255,255,255,255] });
+  await dark.recognize();
+  assert.deepEqual(dark.calls.drawn[0].filter((_, i) => i % 4 === 0), [255, 43, 0]);
+});
+
+test("a read with excluded candidates is retried and only a read with more complete candidates replaces it", async () => {
+  const complete = SCREEN.replace(/クエスト3$/, 'クエスト3\n100回の乗車 ¥14,280\n+10回の乗車 +¥2,240');
+  const lostBonus = SCREEN.replace('+¥5,300', '').replace('+¥3,740', '').replace(/クエスト3$/, 'クエスト3\n100回の乗車 ¥14,280');
+  const improved = loadRecognizer({ texts: [lostBonus, complete] });
+  const result = await improved.recognize();
+  assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
+  assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
+  assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
+  assert.match(result.diagnosticText, /読み取り v78[\s\S]*結果1[\s\S]*結果2/);
+
+  const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
+  const kept = await worse.recognize();
+  assert.equal(worse.calls.reads, 2);
+  assert.deepEqual(Array.from(kept.candidates, item => item.label), ['クエスト3']); assert.equal(kept.skipped, 2);
+  assert.equal(kept.period.template, 'weekend');
+
+  const clean = loadRecognizer({ texts: [complete] });
+  await clean.recognize();
+  assert.equal(clean.calls.reads, 1);
+});
