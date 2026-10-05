@@ -46,22 +46,36 @@
 
   function readPeriod(text, now = Date.now()) {
     const compact = normalize(text).replace(/\s/g, "").replace(/(\d{1,2}):[.,](\d{2})/g, "$1:$2");
-    const dated = compact.match(/(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})[〜~～へー\-–—]+(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日(?:\(([日月火水木金土])\))?(\d{1,2}):(\d{2})/);
+    // Both Uber screens and Japanese OCR mix colon clocks with 時/分 clocks.
+    // Keep every digit mandatory as printed; only punctuation and weekday
+    // spelling may vary, so an unreadable time never becomes a guessed 04:00.
+    const weekdayPattern = prefix => `(?<${prefix}Weekday>\\([日月火水木金土](?:曜日|曜)?\\)|[日月火水木金土](?:曜日|曜))`;
+    const timePattern = prefix => `(?<${prefix}Meridiem>午前|午後)?(?<${prefix}Hour>\\d{1,2})(?:[:.,](?<${prefix}Minute>\\d{2})|時(?:(?<${prefix}JapaneseMinute>\\d{1,2})分)?)(?![\\d:.,時分])`;
+    const datePattern = prefix => `(?<!\\d)(?:(?<${prefix}Year>\\d{4})年)?(?<${prefix}Month>\\d{1,2})月(?<${prefix}Day>\\d{1,2})日(?:${weekdayPattern(prefix)})?${timePattern(prefix)}`;
+    const rangePattern = "(?:から|[〜~～へー−\\-–—→⇒]+)";
+    const timeFrom = (parts, prefix) => clock(parts[`${prefix}Meridiem`], parts[`${prefix}Hour`], parts[`${prefix}Minute`] ?? parts[`${prefix}JapaneseMinute`]);
+    const weekdayFrom = value => value?.match(/[日月火水木金土]/)?.[0];
+    const dated = compact.match(new RegExp(`${datePattern("start")}${rangePattern}${datePattern("end")}`));
     if (dated) {
-      const startTime = clock(null, dated[5], dated[6]); const endTime = clock(null, dated[11], dated[12]);
+      const parts = dated.groups;
+      const startTime = timeFrom(parts, "start"); const endTime = timeFrom(parts, "end");
       if (!startTime || !endTime) return null;
+      const startMonth = Number(parts.startMonth); const startDay = Number(parts.startDay);
+      const endMonth = Number(parts.endMonth); const endDay = Number(parts.endDay);
+      const startWeekday = weekdayFrom(parts.startWeekday); const endWeekday = weekdayFrom(parts.endWeekday);
       const currentYear = new Date(now + JST).getUTCFullYear();
-      const years = dated[1] ? [Number(dated[1])] : [currentYear - 1, currentYear, currentYear + 1];
+      const crossesYear = endMonth < startMonth;
+      const years = parts.startYear ? [Number(parts.startYear)] : parts.endYear ? [Number(parts.endYear) - Number(crossesYear)] : [currentYear - 1, currentYear, currentYear + 1];
       const periods = years.flatMap(year => {
-        const endYear = dated[7] ? Number(dated[7]) : year + (Number(dated[8]) < Number(dated[2]) ? 1 : 0);
-        const start = new Date(Date.UTC(year, Number(dated[2]) - 1, Number(dated[3])));
-        const end = new Date(Date.UTC(endYear, Number(dated[8]) - 1, Number(dated[9])));
-        if (start.getUTCMonth() + 1 !== Number(dated[2]) || start.getUTCDate() !== Number(dated[3]) || end.getUTCMonth() + 1 !== Number(dated[8]) || end.getUTCDate() !== Number(dated[9]) ||
-            (dated[4] && start.getUTCDay() !== "日月火水木金土".indexOf(dated[4])) || (dated[10] && end.getUTCDay() !== "日月火水木金土".indexOf(dated[10]))) return [];
+        const endYear = parts.endYear ? Number(parts.endYear) : year + Number(crossesYear);
+        const start = new Date(Date.UTC(year, startMonth - 1, startDay));
+        const end = new Date(Date.UTC(endYear, endMonth - 1, endDay));
+        if (start.getUTCMonth() + 1 !== startMonth || start.getUTCDate() !== startDay || end.getUTCMonth() + 1 !== endMonth || end.getUTCDate() !== endDay ||
+            (startWeekday && start.getUTCDay() !== "日月火水木金土".indexOf(startWeekday)) || (endWeekday && end.getUTCDay() !== "日月火水木金土".indexOf(endWeekday))) return [];
         const startDate = start.toISOString().slice(0, 10); const endDate = end.toISOString().slice(0, 10);
         const startAt = Date.parse(`${startDate}T${startTime}:00+09:00`); const endAt = Date.parse(`${endDate}T${endTime}:00+09:00`);
         if (endAt <= startAt || endAt - startAt > 35 * DAY) return [];
-        return [{ startDate, endDate, startTime, endTime, inferred: !dated[1] || !dated[7], dateSource: "calendar", next: false,
+        return [{ startDate, endDate, startTime, endTime, inferred: !parts.startYear || !parts.endYear, dateSource: "calendar", next: false,
           template: start.getUTCDay() === 1 && end.getUTCDay() === 5 ? "weekday" : start.getUTCDay() === 5 && end.getUTCDay() === 1 ? "weekend" : "custom", distance: Math.abs(now - startAt) }];
       });
       const best = periods.sort((a, b) => a.distance - b.distance)[0];
@@ -69,14 +83,17 @@
       delete best.distance; return best;
     }
     // A selection deadline contains one weekday; it must never become the quest period.
-    const pattern = /([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?[〜~～へー\-–—]+([日月火水木金土])曜日(午前|午後)?(\d{1,2})時(?:(\d{1,2})分)?/;
-    const match = compact.match(pattern);
+    const match = compact.match(new RegExp(`${weekdayPattern("start")}${timePattern("start")}${rangePattern}${weekdayPattern("end")}${timePattern("end")}`));
     if (!match) return null;
-    const startTime = clock(match[2], match[3], match[4]);
-    const endTime = clock(match[6], match[7], match[8]);
+    // A partially recognized calendar range still contains its starting
+    // weekday. Do not strip its date and silently infer a different week.
+    if (/\d{1,2}月\d{1,2}日[\p{P}\p{S}]*$/u.test(compact.slice(0, match.index))) return null;
+    const parts = match.groups;
+    const startTime = timeFrom(parts, "start");
+    const endTime = timeFrom(parts, "end");
     if (!startTime || !endTime) return null;
-    const startDay = "日月火水木金土".indexOf(match[1]);
-    const endDay = "日月火水木金土".indexOf(match[5]);
+    const startDay = "日月火水木金土".indexOf(weekdayFrom(parts.startWeekday));
+    const endDay = "日月火水木金土".indexOf(weekdayFrom(parts.endWeekday));
     const date = new Date(now + JST);
     const midnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
     const minutes = value => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
@@ -282,12 +299,15 @@
           const { data } = await worker.recognize(input, {}, { text: true, blocks: true });
           const arranged = textFromBlocks(data);
           attempts.push(arranged || data.text || "（文字を読み取れませんでした）");
-          // If row grouping is unsuccessful, also try the engine's original line order.
+          // Row grouping can recover rewards while splitting or reordering the
+          // period. Recover that period independently from the original text;
+          // never mix candidates or reward tiers from the two arrangements.
           let parsed = parseText(arranged);
-          if (!parsed.candidates.length && data.text && data.text !== arranged) {
+          if ((!parsed.candidates.length || !parsed.period) && data.text && data.text !== arranged) {
             const original = parseText(data.text);
             attempts.push(data.text);
-            if (original.candidates.length) parsed = original;
+            if (!parsed.candidates.length && original.candidates.length) parsed = { ...original, period: original.period || parsed.period };
+            else if (!parsed.period && original.period) parsed = { ...parsed, period: original.period };
           }
           return parsed;
         }
@@ -303,7 +323,7 @@
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v78（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        return { ...parsed, diagnosticText: `読み取り v79（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {
@@ -312,5 +332,5 @@
     }
   }
 
-  return { version: "78", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "79", parseText, readPeriod, textFromBlocks, recognize };
 });

@@ -137,6 +137,72 @@ test("calendar dates validate actual days and roll over the year rather than gue
   assert.equal(image.readPeriod('9月14日4:90〜9月18日4:00', NOW), null);
 });
 
+test("calendar periods accept Japanese clocks, shortened weekdays, and mixed OCR punctuation without losing 03:59", () => {
+  const now = Date.parse('2026-10-06T08:25:00+09:00');
+  for (const text of [
+    '10月5日(月)午前4時00分〜10月9日(金)午前3時59分',
+    '10月5日(月曜日)4:00から10月9日(金曜日)午前3時59分まで',
+    '10月5日(月曜)午前4時→10月9日(金曜)3:59',
+    '10月5日月曜日4時00分〜10月9日金曜日3:59',
+    '１０月５日（月）午前４：００～１０月９日（金）午前３：５９',
+    '10 月 5 日 ( 月 曜 日 ) 午 前 4 時 00 分\nー\n10 月 9 日 ( 金 曜 ) 3 :. 59',
+    '10月5日(月)4.00〜10月9日(金)3,59'
+  ]) {
+    const period = image.readPeriod(text, now);
+    assert.deepEqual(period, { startDate: '2026-10-05', endDate: '2026-10-09', startTime: '04:00', endTime: '03:59', inferred: true, dateSource: 'calendar', next: false, template: 'weekday' }, text);
+  }
+});
+
+test("weekday periods accept colon clocks and Japanese clock combinations while retaining the cutoff minute", () => {
+  const now = Date.parse('2026-10-06T08:25:00+09:00');
+  for (const text of [
+    '月曜日4:00〜金曜日3:59',
+    '月曜午前4時から金曜午前3時59分まで',
+    '(月)午前4:00→(金)午前3:59',
+    '月曜日午前4時00分〜金曜日午前3:59'
+  ]) {
+    assert.deepEqual(image.readPeriod(text, now), { startDate: '2026-10-05', endDate: '2026-10-09', startTime: '04:00', endTime: '03:59', inferred: true, next: false, template: 'weekday' }, text);
+  }
+  const period = at => image.readPeriod('月曜4:00〜金曜3:59', Date.parse(at + '+09:00'));
+  assert.equal(period('2026-10-09T03:59:59').startDate, '2026-10-05');
+  assert.equal(period('2026-10-09T04:00:00').startDate, '2026-10-12');
+  assert.equal(image.readPeriod('次のクエスト\n月曜4:00〜金曜3:59', now).startDate, '2026-10-12');
+});
+
+test("Japanese calendar clocks retain noon, midnight, and explicit year-end dates", () => {
+  const period = image.readPeriod('2026年10月5日(月曜)午前12時〜2026年10月9日(金曜)午後12時00分', NOW);
+  assert.equal(period.startTime, '00:00'); assert.equal(period.endTime, '12:00'); assert.equal(period.inferred, false);
+  const rollover = image.readPeriod('2026年12月28日(月曜日)午前4時00分から2027年1月1日(金曜日)午前3時59分', NOW);
+  assert.equal(rollover.startDate, '2026-12-28'); assert.equal(rollover.endDate, '2027-01-01'); assert.equal(rollover.endTime, '03:59');
+  const endYear = image.readPeriod('12月30日(月曜)4時〜2025年1月3日(金曜)3:59', NOW);
+  assert.equal(endYear.startDate, '2024-12-30'); assert.equal(endYear.endDate, '2025-01-03');
+});
+
+test("expanded period syntax still rejects incomplete clocks, impossible dates, and a single selection deadline", () => {
+  for (const text of [
+    '月曜午前12時00分まで変更できます',
+    '月曜4:00〜金曜',
+    '月曜午前4時〜金曜午前3時59',
+    '月曜午前14時〜金曜午前3時59分',
+    '月曜4:000〜金曜3:59',
+    '月曜4:00〜金曜3:590',
+    '月曜4:00〜金曜3:59分0',
+    '月曜4:00〜金曜3時59分分',
+    '月曜午前4時〜金曜午前3時99分',
+    '月曜4..00〜金曜3:59',
+    '10月5日(月)午前O時00分〜10月9日(金)午前3時59分',
+    '2026年9月14日(月曜)4:00〜金曜3:59',
+    '10月5日月曜日4:00〜金曜日3:59',
+    '2026年9月28日(月曜4:00〜金曜3:59',
+    '2026年9月28日(月曜日4:00〜金曜日3:59',
+    '2026年9月28日:(月)4:00〜(金)3:59',
+    '2026年2月30日(月曜)午前4時〜2026年3月3日(金曜)午前3時59分',
+    '2026年10月5日(火曜)午前4時〜2026年10月9日(金曜)午前3時59分',
+    '2026年10月5日(月曜)午後12時〜2026年10月5日(月曜)午前12時',
+    '2026年10月5日(月曜)4:00〜2027年10月9日(土曜)3:59'
+  ]) assert.equal(image.readPeriod(text, NOW), null, text);
+});
+
 test("quest selection screenshot produces independent candidates and incremental rewards", () => {
   const result = image.parseText(SCREEN, NOW);
   assert.deepEqual(result.candidates, [
@@ -217,14 +283,47 @@ test("imported tiers retain existing reward and count semantics without double-c
   }
 });
 
-function loadRecognizer({ texts, pixels = [255, 255, 255, 255] }) {
+function loadRecognizer({ texts, results, pixels = [255, 255, 255, 255] }) {
   const vm = require('node:vm'); const fs = require('node:fs');
   const calls = { reads: 0, terminated: 0, drawn: [] };
   const ctx = {fillRect(){},drawImage(){},getImageData(){return {data:new Uint8ClampedArray(pixels)};},putImageData(data){calls.drawn.push(Array.from(data.data));}};
-  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:{text:texts[calls.reads++]}}),terminate:async()=>{calls.terminated++;}})}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=1320;naturalHeight=2868;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,setTimeout,clearTimeout,console};
+  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:results ? results[calls.reads++] : {text:texts[calls.reads++]}}),terminate:async()=>{calls.terminated++;}})}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=1320;naturalHeight=2868;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,setTimeout,clearTimeout,console};
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/quest-image.js'),'utf8'),scope);
   return { calls, recognize: () => scope.module.exports.recognize({name:'test.png',type:'image/png',size:100}) };
 }
+
+test("a period lost by spatial grouping is recovered without replacing its valid reward candidates", async () => {
+  const line = (text, x0, y0) => ({text, bbox:{x0, x1:x0+180, y0, y1:y0+40}});
+  const data = {
+    // Deliberately different valid amounts verify that only the period is recovered.
+    text: '2026年10月5日(月)午前4時00分〜2026年10月9日(金)午前3時59分\nクエスト1\n110回 ¥99999',
+    blocks: [{paragraphs:[{lines:[line('クエスト1',20,100),line('110回 ¥11,550',20,180),line('+10回 +¥1,500',20,260)]}]}]
+  };
+  const recognizer = loadRecognizer({results:[data,data]});
+  const result = await recognizer.recognize();
+  assert.equal(recognizer.calls.reads, 1);
+  assert.equal(recognizer.calls.terminated, 1);
+  assert.deepEqual(Array.from(result.candidates[0].tiers, tier => ({...tier})), [{target:110,reward:11550},{target:120,reward:1500}]);
+  assert.equal(result.period.startDate, '2026-10-05');
+  assert.equal(result.period.endDate, '2026-10-09');
+  assert.equal(result.period.endTime, '03:59');
+  assert.match(result.diagnosticText, /結果1[\s\S]*結果2/);
+});
+
+test("recovering original reward rows retains a period recognized only by spatial grouping", async () => {
+  const data = {
+    text: 'クエスト1\n110回 ¥11,550\n+10回 +¥1,500',
+    blocks: [{paragraphs:[{lines:[{text:'2026年10月5日(月)4:00〜2026年10月9日(金)3:59',bbox:{x0:20,x1:500,y0:100,y1:140}}]}]}]
+  };
+  const recognizer = loadRecognizer({results:[data,data]});
+  const result = await recognizer.recognize();
+  assert.equal(recognizer.calls.reads, 1);
+  assert.equal(recognizer.calls.terminated, 1);
+  assert.equal(result.candidates[0].tiers[1].target, 120);
+  assert.equal(result.period.startDate, '2026-10-05');
+  assert.equal(result.period.endDate, '2026-10-09');
+  assert.equal(result.period.endTime, '03:59');
+});
 
 test("pale colored text on a light screen is darkened before OCR while white and dark mode are unchanged", async () => {
   // white, pale green bonus, base green, mid gray, black
@@ -244,7 +343,7 @@ test("a read with excluded candidates is retried and only a read with more compl
   assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
   assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
   assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
-  assert.match(result.diagnosticText, /読み取り v78[\s\S]*結果1[\s\S]*結果2/);
+  assert.match(result.diagnosticText, /読み取り v79[\s\S]*結果1[\s\S]*結果2/);
 
   const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
   const kept = await worse.recognize();
