@@ -332,3 +332,143 @@ test("a manual downward correction never makes counts negative or redistributes 
   assert.deepEqual(counts, { "2026-09-07": 10, "2026-09-08": 0, "2026-09-09": 6, "2026-09-10": 0 });
   assert.equal(core.calculateQuest(aligned, entries, NOW).total, 16);
 });
+
+// Run the shipped registration/import event handlers. The DOM checks data flow,
+// and does not replace browser or iPhone screen verification.
+function imageImportHarness({ period = null } = {}) {
+  class Events {
+    constructor() { this.listeners = new Map(); }
+    addEventListener(type, callback) {
+      if (!this.listeners.has(type)) this.listeners.set(type, []);
+      this.listeners.get(type).push(callback);
+    }
+    dispatchEvent(event) {
+      if (!event.target) event.target = this;
+      return Promise.all((this.listeners.get(event.type) || []).map(callback => callback(event)));
+    }
+  }
+  const document = new Events();
+  class Element extends Events {
+    constructor(tagName = "div") {
+      super();
+      Object.assign(this, { tagName, value: "", textContent: "", hidden: false, children: [], dataset: {}, attributes: {}, className: "", open: false });
+      this.classList = { toggle() {} };
+    }
+    append(...children) { this.children.push(...children); }
+    appendChild(child) { this.append(child); return child; }
+    replaceChildren(...children) { this.children = [...children]; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    removeAttribute(name) { delete this.attributes[name]; }
+    focus() { document.activeElement = this; }
+    set innerHTML(markup) { this.children = parseElements(markup); }
+    querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+    querySelectorAll(selector) {
+      return this.children.flatMap(child => [child, ...child.querySelectorAll("*")]).filter(child => {
+        if (selector === "*") return true;
+        if (selector.startsWith(".")) return child.className.split(/\s+/).includes(selector.slice(1));
+        const match = selector.match(/^(\w+)?\[([^=\]]+)(?:="([^"]*)")?\]$/);
+        if (match) return (!match[1] || child.tagName === match[1]) && Object.hasOwn(child.attributes, match[2]) && (match[3] === undefined || child.attributes[match[2]] === match[3]);
+        return child.tagName === selector;
+      });
+    }
+  }
+  function parseElements(markup) {
+    return Array.from(markup.matchAll(/<([a-z][a-z0-9]*)\b([^>]*)>/g), match => {
+      const element = new Element(match[1]);
+      for (const attribute of match[2].matchAll(/([\w-]+)(?:="([^"]*)")?/g)) element.setAttribute(attribute[1], attribute[2] ?? "");
+      element.id = element.attributes.id || ""; element.className = element.attributes.class || "";
+      element.hidden = Object.hasOwn(element.attributes, "hidden"); element.value = element.attributes.value || "";
+      return element;
+    });
+  }
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const elements = new Map(parseElements(html).filter(element => element.id).map(element => [element.id, element]));
+  const formHtml = html.match(/<form\b[^>]*id="questConfigForm"[^>]*>([\s\S]*?)<\/form>/)[1];
+  const formElements = parseElements(formHtml);
+  const form = elements.get("questConfigForm"); form.children = formElements;
+  form.reset = () => {
+    for (const field of formElements.filter(item => item.id && ["input", "select"].includes(item.tagName))) {
+      const options = formHtml.match(new RegExp(`<select\\b[^>]*id="${field.id}"[^>]*>([\\s\\S]*?)<\\/select>`));
+      elements.get(field.id).value = options?.[1].match(/<option\b[^>]*value="([^"]*)"/)?.[1] ?? field.value;
+    }
+  };
+  document.body = new Element("body"); document.head = new Element("head");
+  document.hidden = false; document.activeElement = document.body;
+  document.getElementById = id => elements.get(id) || null; document.createElement = tag => new Element(tag);
+  class FakeDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [NOW])); }
+    static now() { return NOW; }
+  }
+  class Event { constructor(type, options = {}) { this.type = type; Object.assign(this, options); } preventDefault() {} }
+  const storage = seedStore();
+  const window = new Events();
+  Object.assign(window, { window, document, Date: FakeDate, Event, CustomEvent: Event, AbortController,
+    localStorage: storage, location: { hash: "#quest", pathname: "/", search: "" }, history: { replaceState() {} },
+    URL: { createObjectURL: () => "blob:quest-test", revokeObjectURL() {} }, setTimeout() {}, clearTimeout() {}, setInterval() {},
+    UberQuestImage: { recognize: async () => ({ candidates: [{ label: "進行中のクエスト", tiers: [{ target: 110, reward: 11550 }, { target: 120, reward: 1500 }] }], period, skipped: 0, diagnosticText: "テスト用の読み取り結果" }) }
+  });
+  const context = vm.createContext(window);
+  for (const name of ["app-core.js", "quest-store.js", "quest-ui.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, "src", name), "utf8"), context, { filename: `src/${name}` });
+  const element = id => { assert.ok(elements.has(id), `Missing real HTML element: ${id}`); return elements.get(id); };
+  return { element, storage, emit: (id, type) => element(id).dispatchEvent(new Event(type)),
+    period: () => Object.fromEntries(["StartDate", "StartTime", "EndDate", "EndTime"].map(key => [key, element(`quest${key}`).value])),
+    importImage: () => element("questImageFile").dispatchEvent(new Event("change", { target: { files: [{ name: "quest.png", type: "image/png", size: 100 }] } }))
+  };
+}
+
+test("image import keeps template dates and times when OCR has no period", async () => {
+  const app = imageImportHarness();
+  await app.emit("questNew", "click");
+  const before = app.period();
+  assert.deepEqual(before, { StartDate: "2026-09-07", StartTime: "04:00", EndDate: "2026-09-11", EndTime: "03:59" });
+  const stored = app.storage.getItem(QUEST_KEY);
+  await app.importImage();
+  assert.deepEqual(app.period(), before);
+  assert.equal(app.element("questTemplate").value, "weekday");
+  assert.equal(app.element("questTierInputs").querySelectorAll("[data-tier-count]")[1].value, "120");
+  assert.equal(app.element("questImageDateNote").hidden, false);
+  assert.match(app.element("questImageDateNote").textContent, /読み取れなかった.*入力済みの日時を保持.*確認してください/);
+  assert.equal(app.element("questImageError").hidden, true);
+  assert.equal(app.storage.getItem(QUEST_KEY), stored, "import must remain an unsaved form edit");
+});
+
+test("image import preserves manual dates, times, and custom template when OCR has no period", async () => {
+  const app = imageImportHarness();
+  await app.emit("questNew", "click");
+  app.element("questTemplate").value = "custom"; await app.emit("questTemplate", "change");
+  for (const [key, value] of Object.entries({ StartDate: "2026-09-09", StartTime: "07:30", EndDate: "2026-09-12", EndTime: "23:45" })) {
+    app.element(`quest${key}`).value = value; await app.emit(`quest${key}`, "change");
+  }
+  const before = app.period();
+  await app.importImage();
+  assert.deepEqual(app.period(), before);
+  assert.equal(app.element("questTemplate").value, "custom");
+  assert.match(app.element("questImageStatus").textContent, /入力しました/);
+});
+
+test("image import leaves missing dates and times empty instead of filling unread OCR values", async () => {
+  const app = imageImportHarness();
+  await app.emit("questNew", "click");
+  app.element("questTemplate").value = "custom"; await app.emit("questTemplate", "change");
+  for (const [key, value] of Object.entries({ StartDate: "", StartTime: "07:30", EndDate: "", EndTime: "" })) {
+    app.element(`quest${key}`).value = value; await app.emit(`quest${key}`, "change");
+  }
+  const before = app.period();
+  await app.importImage();
+  assert.deepEqual(app.period(), before);
+  assert.equal(app.element("questTemplate").value, "custom");
+  assert.match(app.element("questImageDateNote").textContent, /未入力の日時は入力してください/);
+});
+
+test("image import replaces entered dates with its recognized period and presents the 04:00 boundary as 03:59", async () => {
+  const period = { startDate: "2026-09-11", startTime: "04:00", endDate: "2026-09-14", endTime: "04:00", dateSource: "calendar", template: "weekend", inferred: false };
+  const app = imageImportHarness({ period });
+  await app.emit("questNew", "click");
+  const before = app.period();
+  await app.importImage();
+  assert.notDeepEqual(app.period(), before);
+  assert.deepEqual(app.period(), { StartDate: "2026-09-11", StartTime: "04:00", EndDate: "2026-09-14", EndTime: "03:59" });
+  assert.equal(app.element("questTemplate").value, "weekend");
+  assert.match(app.element("questImageDateNote").textContent, /2026-09-11 04:00.*2026-09-14 03:59までを入力しました/);
+  assert.equal(period.endTime, "04:00", "presentation must not rewrite the raw OCR period");
+});
