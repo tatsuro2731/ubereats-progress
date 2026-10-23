@@ -32,6 +32,26 @@ const LOW_CONTRAST_PROGRESS = `クエ スト の 進捗
 ロ g 10 回 の 乗車 +\\1.910
 詳細`;
 
+// Actual OCR (jpn 4.0.0_best_int, same preprocessing and settings) of a
+// 2026-10-23 progress screenshot. Uber now writes "後 108 回の配達", the pale
+// yen of the locked bonus becomes 学, and the 〜 between the dates is dropped.
+const OCT23_NOW = Date.parse('2026-10-23T11:45:00+09:00');
+const OCT23_PROGRESS = String.raw`11:45 才 : 過 56 区
+【<】 オン ライ ン で す
+ぐ を
+クエ スト の 進捗 ビ
+10 月 23 日 ( 金 ) 4.00 10 月 26 日 (月 ) 4:00
+後 108 回 の 配達 を 完了 する と 、\22,960 を 獲得 で き 、
+別 の 特典 が 利用 可能 に な り ま す
+12/120 回 の 乗車 \22.960
+|
+9 10 回 の 乗車 + 学 3.020
+詳細
+$ 神戸 エリ ア 内 で 開始 し た 乗車 また は 配達 が 対象 で す 。
+。* 未完 了 の 配達 は クエ スト の 達成 状況 に 反映 され ませ ん 。
+ホー ム 発見 売り 上 げ 受信 トレ イ メニ ュー`;
+const OCT23_EXPECTED = [{label:'進行中のクエスト', completed:12, tiers:[{target:120,reward:22960},{target:130,reward:3020}]}];
+
 test("light selection OCR preserves all three choices including the selected badge", () => {
   const text = String.raw`次 の クエ スト を 選択 する
 金曜 日 午前 4 時 00 分 へ 月 曜日 午前 4 時 00 分
@@ -83,6 +103,53 @@ test("summary recovery requires an intact amount, matching count, and complete b
 test("conflicting summary and displayed rewards are rejected instead of choosing one", () => {
   assert.equal(image.parseText(LOW_CONTRAST_PROGRESS.replace('画 間 問', '\\9.810'), NOW).candidates.length, 0);
   assert.equal(image.parseText(PROGRESS.replace('9/100回の乗車 ¥9,590', '9/100回の乗車 ¥9,580'), NOW).candidates.length, 0);
+});
+
+test("2026-10-23 progress screenshot imports its goal, locked bonus and calendar period", () => {
+  const unarranged = OCT23_PROGRESS.replace(' \\22.960', '\n\n\\22.960').replace(' + 学 3.020', '\n\n+ 学 3.020');
+  for (const text of [OCT23_PROGRESS, unarranged]) {
+    const result = image.parseText(text, OCT23_NOW);
+    assert.deepEqual(result.candidates, OCT23_EXPECTED, text);
+    assert.equal(result.skipped, 0);
+    assert.deepEqual({...result.period}, {startDate:'2026-10-23', endDate:'2026-10-26', startTime:'04:00', endTime:'04:00', inferred:true, dateSource:'calendar', next:false, template:'weekend'});
+  }
+});
+
+test("後 remaining-count wording is cross-checked and can restore a lost base reward", () => {
+  const lostBase = OCT23_PROGRESS.replace('12/120 回 の 乗車 \\22.960', '12/120 回 の 乗車');
+  assert.deepEqual(image.parseText(lostBase, OCT23_NOW).candidates, OCT23_EXPECTED);
+  for (const text of [
+    OCT23_PROGRESS.replace('後 108', '後 98'),
+    lostBase.replace('後 108', '後 98'),
+    OCT23_PROGRESS.replace('\\22,960 を', '\\22,860 を'),
+    lostBase.replace('\\22,960 を 獲得', '\\22,96 を 獲得')
+  ]) assert.equal(image.parseText(text, OCT23_NOW).candidates.length, 0, text);
+  // 午後 in a period clock is not a remaining count.
+  assert.deepEqual(image.parseText(PROGRESS.replace('9月14日(月)4:00', '9月14日(月)午後4時00分'), NOW).candidates, image.parseText(PROGRESS, NOW).candidates);
+});
+
+test("学 is treated as a yen sign only before an intact amount", () => {
+  assert.deepEqual(image.parseText(PROGRESS.replace('+¥1,380', '+ 学 1.380'), NOW).candidates, image.parseText(PROGRESS, NOW).candidates);
+  for (const amount of ['+ 学 1.38', '+ 学 13800', '+ 学', '学 1,380']) {
+    assert.equal(image.parseText(PROGRESS.replace('+¥1,380', amount), NOW).candidates.length, 0, amount);
+  }
+});
+
+test("a dropped range mark between two full calendar stamps keeps both stamps intact", () => {
+  for (const text of ['10月23日(金)4.0010月26日(月)4:00', '10月23日(金)4:00 10月26日(月)4:00', '2026年10月23日(金)4:002026年10月26日(月)3:59']) {
+    const period = image.readPeriod(text, OCT23_NOW);
+    assert.equal(period?.startDate, '2026-10-23', text); assert.equal(period.endDate, '2026-10-26');
+    assert.equal(period.startTime, '04:00'); assert.match(period.endTime, /^0(?:4:00|3:59)$/);
+  }
+  for (const text of [
+    '10月23日(金)4時10月26日(月)4時',
+    '10月23日(金)4時00分10月26日(月)4時00分',
+    '10月23日(金)4:00010月26日(月)4:00',
+    '10月23日(金)4:0010月27日(月)4:00',
+    '10月23日(金)4:0010月26日(月)',
+    '10月23日(金)4:0026日(月)4:00',
+    '10月23日(金)4:0010月26日(月)4:000'
+  ]) assert.equal(image.readPeriod(text, OCT23_NOW), null, text);
 });
 
 test("progress fractions identify the screen even when the title is not recognized", () => {
@@ -343,7 +410,7 @@ test("a read with excluded candidates is retried and only a read with more compl
   assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
   assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
   assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
-  assert.match(result.diagnosticText, /読み取り v80[\s\S]*結果1[\s\S]*結果2/);
+  assert.match(result.diagnosticText, /読み取り v81[\s\S]*結果1[\s\S]*結果2/);
 
   const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
   const kept = await worse.recognize();

@@ -14,7 +14,8 @@
     return String(text || "").normalize("NFKC").replace(/\r/g, "").replace(/クエス卜/g, "クエスト")
       .replace(/クエスト\s*[Il|](?=\s|$)/g, "クエスト1")
       .replace(/([+＋]?)\s*ギ\s*(?=[¥￥\\半])/g, "$1")
-      .replace(/([+＋]?)\s*[Y羊]\s*(?=\d{1,3}[,.]\d{3})/g, "$1¥");
+      // 羊/学 are observed OCR shapes of a pale yen sign; only before an intact amount.
+      .replace(/([+＋]?)\s*[Y羊学]\s*(?=\d{1,3}[,.]\d{3})/g, "$1¥");
   }
 
   // Sparse OCR reads the two columns separately. Restore visual row order before parsing.
@@ -50,12 +51,19 @@
     // Keep every digit mandatory as printed; only punctuation and weekday
     // spelling may vary, so an unreadable time never becomes a guessed 04:00.
     const weekdayPattern = prefix => `(?<${prefix}Weekday>\\([日月火水木金土](?:曜日|曜)?\\)|[日月火水木金土](?:曜日|曜))`;
-    const timePattern = prefix => `(?<${prefix}Meridiem>午前|午後)?(?<${prefix}Hour>\\d{1,2})(?:[:.,](?<${prefix}Minute>\\d{2})|時(?:(?<${prefix}JapaneseMinute>\\d{1,2})分)?)(?![\\d:.,時分])`;
-    const datePattern = prefix => `(?<!\\d)(?:(?<${prefix}Year>\\d{4})年)?(?<${prefix}Month>\\d{1,2})月(?<${prefix}Day>\\d{1,2})日(?:${weekdayPattern(prefix)})?${timePattern(prefix)}`;
+    const timeEnd = "(?![\\d:.,時分])";
+    const timePattern = (prefix, end = timeEnd) => `(?<${prefix}Meridiem>午前|午後)?(?<${prefix}Hour>\\d{1,2})(?:[:.,](?<${prefix}Minute>\\d{2})|時(?:(?<${prefix}JapaneseMinute>\\d{1,2})分)?)${end}`;
+    const dateBody = (prefix, end) => `(?:(?<${prefix}Year>\\d{4})年)?(?<${prefix}Month>\\d{1,2})月(?<${prefix}Day>\\d{1,2})日(?:${weekdayPattern(prefix)})?${timePattern(prefix, end)}`;
     const rangePattern = "(?:から|[〜~～へー−\\-–—→⇒]+)";
+    // OCR can drop the pale 〜 between two full calendar stamps ("4.0010月26日").
+    // Allow that only after a two-digit punctuated minute and directly before
+    // a complete month/day, so no clock digit is borrowed or guessed.
+    const fullDate = "(?:\\d{4}年)?\\d{1,2}月\\d{1,2}日";
+    const startEnd = `(?:${timeEnd}|(?<=[:.,]\\d{2})(?=${fullDate}))`;
+    const calendarRange = `(?:${rangePattern}|(?<=[:.,]\\d{2})(?=${fullDate}))`;
     const timeFrom = (parts, prefix) => clock(parts[`${prefix}Meridiem`], parts[`${prefix}Hour`], parts[`${prefix}Minute`] ?? parts[`${prefix}JapaneseMinute`]);
     const weekdayFrom = value => value?.match(/[日月火水木金土]/)?.[0];
-    const dated = compact.match(new RegExp(`${datePattern("start")}${rangePattern}${datePattern("end")}`));
+    const dated = compact.match(new RegExp(`(?<!\\d)${dateBody("start", startEnd)}${calendarRange}${dateBody("end", timeEnd)}`));
     if (dated) {
       const parts = dated.groups;
       const startTime = timeFrom(parts, "start"); const endTime = timeFrom(parts, "end");
@@ -186,13 +194,14 @@
     }
     if (completed === null) return reject();
     const description = header.join("").replace(/\s/g, "");
-    const remaining = description.match(/あと(\d{1,4})(?:回|件)/);
+    // Uber writes the remaining count as either あと or 後 ("後 108 回の配達…").
+    const remaining = description.match(/(?:あと|(?<!午)後)(\d{1,4})(?:回|件)/);
     if (remaining && Number(remaining[1]) + completed !== target) return reject();
 
     // Dark green reward text can disappear in OCR. The sentence above the
     // progress row repeats that reward, but use it only with an exact count
     // match and a complete currency/amount/獲得 phrase, never a guessed amount.
-    const summaries = [...description.matchAll(/あと(\d{1,4})(?:回|件)の(?:乗車サービス|乗車|配達)を完了すると[、,]?[¥￥\\半]+([\d,.]+)を獲得/g)];
+    const summaries = [...description.matchAll(/(?:あと|(?<!午)後)(\d{1,4})(?:回|件)の(?:乗車サービス|乗車|配達)を完了すると[、,]?[¥￥\\半]+([\d,.]+)を獲得/g)];
     if (summaries.length > 1) return reject();
     if (summaries.length === 1) {
       const summary = summaries[0];
@@ -323,7 +332,7 @@
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v80（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        return { ...parsed, diagnosticText: `読み取り v81（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
       })();
       return await Promise.race([job, interruption]);
     } finally {
@@ -332,5 +341,5 @@
     }
   }
 
-  return { version: "80", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "81", parseText, readPeriod, textFromBlocks, recognize };
 });
