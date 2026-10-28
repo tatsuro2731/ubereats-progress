@@ -43,7 +43,7 @@
         reject(new Error("画像読み取り機能を準備できませんでした。通信を確認して、もう一度お試しください。"));
       };
       const timeout = window.setTimeout(fail, 20000);
-      script.src = "src/quest-image.js?v=81";
+      script.src = "src/quest-image.js?v=83";
       script.onload = () => {
         if (settled) return;
         if (!window.UberQuestImage) { fail(); return; }
@@ -114,7 +114,7 @@
       button.setAttribute("aria-pressed", String(i === index));
       button.querySelector("small").textContent = i === index ? "入力済み" : "この候補を入力";
     });
-    text("questImageStatus", `${candidate.label}を入力しました。日時・件数・報酬を確認して保存してください。`);
+    text("questImageStatus", `${candidate.label}を入力しました。画像と照らし、日時・件数とすべての報酬が入っているか確認して保存してください。`);
     byId("questConfigError").hidden = true;
     byId("questStartDate").focus();
   }
@@ -132,6 +132,7 @@
       byId("questImageDebugText").value = result.diagnosticText || "";
       byId("questImageDebug").hidden = !result.diagnosticText;
       if (!result.candidates.length) throw new Error("読み取った文字から件数と報酬を確定できませんでした。下の「読み取り結果を確認」を開いた画面を送ってください。手入力もできます。");
+      if (result.warning) errorMessage(result.warning, "questImageError");
       imageResult = result;
       imagePreviewUrl = URL.createObjectURL(file); byId("questImageOriginal").src = imagePreviewUrl; byId("questImagePreview").hidden = false;
       byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
@@ -158,6 +159,10 @@
     } catch (error) {
       if (imageController !== controller) return;
       text("questImageStatus", error.name === "AbortError" ? "読み取りを中止しました。" : "");
+      if (error.name !== "AbortError" && error.diagnosticText) {
+        byId("questImageDebugText").value = error.diagnosticText;
+        byId("questImageDebug").hidden = false;
+      }
       if (error.name !== "AbortError") errorMessage(error.message || "画像を読み取れませんでした。通信を確認して再度お試しください。", "questImageError");
     } finally { if (imageController === controller) { imageController = null; imageBusy(false); } }
   }

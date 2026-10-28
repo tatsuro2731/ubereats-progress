@@ -14,6 +14,10 @@
     return String(text || "").normalize("NFKC").replace(/\r/g, "").replace(/クエス卜/g, "クエスト")
       .replace(/クエスト\s*[Il|](?=\s|$)/g, "クエスト1")
       .replace(/([+＋]?)\s*ギ\s*(?=[¥￥\\半])/g, "$1")
+      // A missing yen glyph is recoverable only on a complete count/reward
+      // row with an explicit + and a grouped amount ending the line. Preserve
+      // every digit; arbitrary symbols or ungrouped numbers remain untrusted.
+      .replace(/((?:回|件)[ \t]*(?:の[ \t]*(?:乗車|配達))?)[ \t]*\+[ \t]*(\d{1,3}[,.]\d{3})(?=[ \t]*(?:\n|$))/g, "$1 +¥$2")
       // 羊/学 are observed OCR shapes of a pale yen sign; only before an intact amount.
       .replace(/([+＋]?)\s*[Y羊学]\s*(?=\d{1,3}[,.]\d{3})/g, "$1¥");
   }
@@ -171,11 +175,34 @@
     const converted = ["クエスト1"];
     const header = [];
     let bonusStart = null;
-    let completed = null; let target = null;
+    let completed = null; let target = null; let inferredProgress = false;
     for (const row of rows) {
       const compact = row.replace(/\s/g, "");
       if (/^詳細/.test(compact)) break;
-      const progress = row.match(/(?:^|[^\d.,\-−A-Za-z])(\d{1,4})\s*\/\s*(\d{1,4})\s*(?:回|件)/);
+      let progress = row.match(/(?:^|[^\d.,\-−A-Za-z])(\d{1,4})\s*\/\s*(\d{1,4})\s*(?:回|件)/);
+      if (!progress && completed === null) {
+        // OCR can turn the slash in a progress fraction into 7 (5/110 ->
+        // 57110). Recover it only when the independently printed remaining
+        // count identifies exactly one possible split. Never alter digits.
+        const description = header.join("").replace(/\s/g, "");
+        const remaining = description.match(/(?:あと|(?<!午)後)(\d{1,4})(?:回|件)の(?:乗車サービス|乗車|配達)を完了すると[、,]?[¥￥\\半]+([\d,.]+)を獲得/);
+        const joined = row.match(/(?:^|[^\d.,+\-−A-Za-z])(\d{3,9})\s*(?:回|件)/);
+        if (remaining && joined) {
+          const summaryReward = parseText(`クエスト1\n1回¥${remaining[2]}`, now).candidates[0]?.tiers[0]?.reward;
+          const rowReward = parseText(`クエスト1\n1回${row.slice(joined.index + joined[0].length)}`, now).candidates[0]?.tiers[0]?.reward;
+          const digits = joined[1]; const possibilities = [];
+          for (let i = 1; i < digits.length - 1; i++) {
+            const left = digits.slice(0, i); const right = digits.slice(i + 1);
+            if (digits[i] !== "7" || !/^(?:0|[1-9]\d{0,3})$/.test(left) || !/^[1-9]\d{0,3}$/.test(right)) continue;
+            if (Number(left) + Number(remaining[1]) === Number(right)) possibilities.push([left, right]);
+          }
+          if (possibilities.length === 1 && summaryReward !== undefined && summaryReward === rowReward) {
+            progress = [joined[0], ...possibilities[0]];
+            progress.index = joined.index;
+            inferredProgress = true;
+          }
+        }
+      }
       if (progress) {
         // A later-stage progress fraction does not establish the full period total.
         if (completed !== null) return reject();
@@ -215,7 +242,7 @@
       if (summaryTier && !/[+¥￥\\半]/.test(baseRows)) converted[1] += ` ¥${summaryTier.reward}`;
     }
     const result = parseText(converted.join("\n"), now);
-    return { ...result, period, candidates: result.candidates.map(candidate => ({ ...candidate, label: "進行中のクエスト", completed })) };
+    return { ...result, period, inferredProgress, candidates: result.candidates.map(candidate => ({ ...candidate, label: "進行中のクエスト", completed })) };
   }
 
   function loadLibrary() {
@@ -280,6 +307,17 @@
     let stopped = false;
     let timer;
     let abort;
+    let lastParsed;
+    let retryStarted = false;
+    let inputSize = "";
+    const attempts = [];
+    const diagnostic = () => attempts.length ? `読み取り v83（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` : "";
+    // The worker may finish starting after cancellation. Taking ownership before
+    // awaiting termination prevents both paths from terminating it twice.
+    async function terminateWorker() {
+      const current = worker; worker = null;
+      if (current) { try { await current.terminate(); } catch (_) { /* cleanup must not hide the read result */ } }
+    }
     const interruption = new Promise((_, reject) => {
       abort = () => { stopped = true; reject(new DOMException("読み取りを中止しました。", "AbortError")); };
       if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
@@ -298,12 +336,11 @@
           logger: item => { if (!stopped && item.status === "recognizing text") onProgress(`画像を読み取り中…${Math.round(item.progress * 100)}%`); },
           errorHandler: () => {}
         });
-        if (stopped) { await worker.terminate(); return; }
+        if (stopped) { await terminateWorker(); return; }
         // Japanese quest screens use numerals, not Latin letters. Excluding
         // letters lets OCR resolve a 7-shaped glyph instead of emitting Z.
         await worker.setParameters({ tessedit_pageseg_mode: "11", tessedit_char_blacklist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" });
-        const attempts = [];
-        const inputSize = `${canvas.width}×${canvas.height}`;
+        inputSize = `${canvas.width}×${canvas.height}`;
         async function read(input) {
           const { data } = await worker.recognize(input, {}, { text: true, blocks: true });
           const arranged = textFromBlocks(data);
@@ -321,25 +358,58 @@
           return parsed;
         }
         let parsed = await read(canvas);
+        let warning = "";
+        lastParsed = parsed;
         canvas.width = canvas.height = 1;
-        // Excluded candidates are also retried; each read is validated independently and never merged.
-        if ((!parsed.candidates.length || !parsed.period || parsed.skipped) && !stopped) {
+        // A progress screenshot may lose an entire pale bonus row without
+        // producing a parse error. Read it twice to look for a fuller result.
+        const progressRead = parsed.candidates.some(candidate => Number.isInteger(candidate.completed));
+        if ((!parsed.candidates.length || !parsed.period || parsed.skipped || progressRead) && !stopped) {
+          retryStarted = true;
           onProgress("別の画像処理で、もう一度読み取り中…");
           const original = await imageCanvas(file, false);
           if (stopped) return;
           const alternative = await read(original);
-          if (alternative.candidates.length > parsed.candidates.length) parsed = { ...alternative, period: alternative.period || parsed.period };
+          const first = parsed.candidates[0]; const second = alternative.candidates[0];
+          const extendsProgress = parsed.candidates.length === 1 && alternative.candidates.length === 1 &&
+            first?.completed === second?.completed && Number.isInteger(first?.completed) &&
+            second.tiers.length > first.tiers.length && first.tiers.every((tier, index) =>
+              tier.target === second.tiers[index].target && tier.reward === second.tiers[index].reward);
+          if (alternative.candidates.length > parsed.candidates.length || extendsProgress) parsed = { ...alternative, period: alternative.period || parsed.period };
           else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
+          if (progressRead && !extendsProgress && (!second || JSON.stringify(first) !== JSON.stringify(second))) {
+            warning = "2回の読み取り結果が一致しませんでした。画像と件数・すべての報酬を確認してください。";
+          }
           original.width = original.height = 1;
         }
-        return { ...parsed, diagnosticText: `読み取り v81（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` };
+        if (parsed.inferredProgress) warning = `${warning}${warning ? " " : ""}進捗の区切りを周囲の数字から補いました。元画像と照らして確認してください。`;
+        return { ...parsed, diagnosticText: diagnostic(), warning };
       })();
       return await Promise.race([job, interruption]);
+    } catch (error) {
+      // A failed or timed-out retry must not discard a fully validated first
+      // result. Explicit cancellation never applies a result.
+      if (signal?.aborted && error?.name !== "AbortError") throw new DOMException("読み取りを中止しました。", "AbortError");
+      if (error?.name === "AbortError") throw error;
+      if (retryStarted && lastParsed?.candidates.length) {
+        const inferred = lastParsed.inferredProgress ? "進捗の区切りを周囲の数字から補いました。" : "";
+        return { ...lastParsed, diagnosticText: diagnostic(), warning: `再読み取りが完了しなかったため、最初に読み取れた候補を表示しています。${inferred}元画像と照らして確認してください。` };
+      }
+      // Workers can reject with a string, null, or a DOMException whose message
+      // is read-only. Wrap the failure before attaching diagnostic information.
+      const message = typeof error?.message === "string" && error.message
+        ? error.message : typeof error === "string" && error ? error : "画像を読み取れませんでした。";
+      const failure = new Error(message);
+      if (diagnostic()) {
+        failure.diagnosticText = diagnostic();
+        failure.message += " 下の「読み取り結果を確認」から、途中までの結果を確認できます。";
+      }
+      throw failure;
     } finally {
       stopped = true; clearTimeout(timer); signal?.removeEventListener("abort", abort);
-      if (worker) await worker.terminate();
+      await terminateWorker();
     }
   }
 
-  return { version: "81", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "83", parseText, readPeriod, textFromBlocks, recognize };
 });

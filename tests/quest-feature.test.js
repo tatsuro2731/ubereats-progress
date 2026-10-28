@@ -335,7 +335,7 @@ test("a manual downward correction never makes counts negative or redistributes 
 
 // Run the shipped registration/import event handlers. The DOM checks data flow,
 // and does not replace browser or iPhone screen verification.
-function imageImportHarness({ period = null } = {}) {
+function imageImportHarness({ period = null, recognize } = {}) {
   class Events {
     constructor() { this.listeners = new Map(); }
     addEventListener(type, callback) {
@@ -405,7 +405,7 @@ function imageImportHarness({ period = null } = {}) {
   Object.assign(window, { window, document, Date: FakeDate, Event, CustomEvent: Event, AbortController,
     localStorage: storage, location: { hash: "#quest", pathname: "/", search: "" }, history: { replaceState() {} },
     URL: { createObjectURL: () => "blob:quest-test", revokeObjectURL() {} }, setTimeout() {}, clearTimeout() {}, setInterval() {},
-    UberQuestImage: { recognize: async () => ({ candidates: [{ label: "進行中のクエスト", tiers: [{ target: 110, reward: 11550 }, { target: 120, reward: 1500 }] }], period, skipped: 0, diagnosticText: "テスト用の読み取り結果" }) }
+    UberQuestImage: { recognize: recognize || (async () => ({ candidates: [{ label: "進行中のクエスト", tiers: [{ target: 110, reward: 11550 }, { target: 120, reward: 1500 }] }], period, skipped: 0, diagnosticText: "テスト用の読み取り結果" })) }
   });
   const context = vm.createContext(window);
   for (const name of ["app-core.js", "quest-store.js", "quest-ui.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, "src", name), "utf8"), context, { filename: `src/${name}` });
@@ -415,6 +415,42 @@ function imageImportHarness({ period = null } = {}) {
     importImage: () => element("questImageFile").dispatchEvent(new Event("change", { target: { files: [{ name: "quest.png", type: "image/png", size: 100 }] } }))
   };
 }
+
+test("image import exposes diagnostics when OCR fails after producing text", async () => {
+  const failure = Object.assign(new Error("再試行に失敗しました。"), { diagnosticText: "--- 結果1 ---\n5/110回" });
+  const app = imageImportHarness({ recognize: async () => { throw failure; } });
+  await app.emit("questNew", "click");
+  await app.importImage();
+  assert.equal(app.element("questImageDebug").hidden, false);
+  assert.match(app.element("questImageDebugText").value, /5\/110回/);
+  assert.equal(app.element("questImageError").hidden, false);
+  assert.match(app.element("questImageError").textContent, /再試行に失敗/);
+});
+
+test("image import shows a warning alongside a retained OCR candidate", async () => {
+  const app = imageImportHarness({ recognize: async () => ({
+    candidates: [{ label: "進行中のクエスト", completed: 5, tiers: [{ target: 110, reward: 13780 }] }],
+    period: null, skipped: 0, diagnosticText: "結果1", warning: "再試行できませんでした。内容を確認してください。"
+  }) });
+  await app.emit("questNew", "click");
+  const stored = app.storage.getItem(QUEST_KEY);
+  await app.importImage();
+  assert.equal(app.element("questImageError").hidden, false);
+  assert.match(app.element("questImageError").textContent, /再試行できません/);
+  assert.equal(app.element("questInitialTotal").value, "5");
+  assert.equal(app.element("questTierInputs").querySelectorAll("[data-tier-count]")[0].value, "110");
+  assert.equal(app.storage.getItem(QUEST_KEY), stored);
+});
+
+test("cancelled image import does not expose partial diagnostics", async () => {
+  const failure = Object.assign(new Error("中止"), { name: "AbortError", diagnosticText: "partial" });
+  const app = imageImportHarness({ recognize: async () => { throw failure; } });
+  await app.emit("questNew", "click");
+  await app.importImage();
+  assert.equal(app.element("questImageDebug").hidden, true);
+  assert.equal(app.element("questImageError").hidden, true);
+  assert.match(app.element("questImageStatus").textContent, /中止/);
+});
 
 test("image import keeps template dates and times when OCR has no period", async () => {
   const app = imageImportHarness();

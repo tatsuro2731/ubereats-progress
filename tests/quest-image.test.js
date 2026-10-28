@@ -115,6 +115,43 @@ test("2026-10-23 progress screenshot imports its goal, locked bonus and calendar
   }
 });
 
+test("2026-10-26 progress screen text retains completed, tiers and dates", () => {
+  // Manual transcription of the supplied screenshot, not an OCR result.
+  const text = `クエストの進捗
+10月26日(月)4:00〜10月30日(金)4:00
+後105回の配達を完了すると、¥13,780を獲得でき、別の特典が利用可能になります
+5/110回の乗車 ¥13,780
+10回の乗車 +¥1,820
+詳細`;
+  const result = image.parseText(text, Date.parse('2026-10-28T17:24:00+09:00'));
+  assert.deepEqual(result.candidates, [{label:'進行中のクエスト',completed:5,tiers:[{target:110,reward:13780},{target:120,reward:1820}]}]);
+  assert.equal(result.period.startDate,'2026-10-26'); assert.equal(result.period.endDate,'2026-10-30');
+});
+
+test("real OCR of 2026-10-26 screenshot recovers a slash read as 7 only with independent cross-checks", () => {
+  const observed = `クエ スト の 進捗 ビ ば
+10 月 26 日 (月 ) 4:00 10 月 30 日 ( 金 ) 4.00
+後 105 回 の 配達 を 完了 する と 、\\13,780 を 獲得 で き 、
+別 の 特典 が 利用 可能 に な り ま す
+57110 回 の 乗車 \\13,780
+ロ 10 回 の 乗車 + 半 1.820
+詳細`;
+  const result = image.parseText(observed, Date.parse('2026-10-28T17:24:00+09:00'));
+  assert.deepEqual(result.candidates, [{label:'進行中のクエスト', completed:5, tiers:[{target:110,reward:13780},{target:120,reward:1820}]}]);
+  assert.equal(result.inferredProgress, true);
+  assert.equal(result.period.startDate, '2026-10-26'); assert.equal(result.period.endDate, '2026-10-30');
+  for (const bad of [
+    observed.replace('105 回', '104 回'),
+    observed.replace('57110 回', '57120 回'),
+    observed.replace('後 105 回', '残り不明'),
+    observed.replace('57110 回 の 乗車 \\13,780', '57110 回 の 乗車 \\13,790'),
+    observed.replace('57110 回 の 乗車 \\13,780', '57110 回 の 乗車'),
+    observed.replace('57110 回', '-57110 回'),
+    observed.replace('57110 回', '1.57110 回'),
+    observed.replace('57110 回 の 乗車 \\13,780', '5/110 回 の 乗車 \\13,780\n6/110 回 の 乗車 \\13,780')
+  ]) assert.equal(image.parseText(bad).candidates.length, 0, bad);
+});
+
 test("後 remaining-count wording is cross-checked and can restore a lost base reward", () => {
   const lostBase = OCT23_PROGRESS.replace('12/120 回 の 乗車 \\22.960', '12/120 回 の 乗車');
   assert.deepEqual(image.parseText(lostBase, OCT23_NOW).candidates, OCT23_EXPECTED);
@@ -350,13 +387,14 @@ test("imported tiers retain existing reward and count semantics without double-c
   }
 });
 
-function loadRecognizer({ texts, results, pixels = [255, 255, 255, 255] }) {
+function loadRecognizer({ texts, results, pixels = [255, 255, 255, 255], read, createWorker, timers = { setTimeout, clearTimeout } }) {
   const vm = require('node:vm'); const fs = require('node:fs');
   const calls = { reads: 0, terminated: 0, drawn: [] };
   const ctx = {fillRect(){},drawImage(){},getImageData(){return {data:new Uint8ClampedArray(pixels)};},putImageData(data){calls.drawn.push(Array.from(data.data));}};
-  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:results ? results[calls.reads++] : {text:texts[calls.reads++]}}),terminate:async()=>{calls.terminated++;}})}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=1320;naturalHeight=2868;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,setTimeout,clearTimeout,console};
+  const worker = {setParameters:async()=>{},recognize:async()=>{const index = calls.reads++; return read ? read(index) : {data:results ? results[index] : {text:texts[index]}};},terminate:async()=>{calls.terminated++;}};
+  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:createWorker ? () => createWorker(worker) : async()=>worker}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=1320;naturalHeight=2868;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,...timers,console};
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/quest-image.js'),'utf8'),scope);
-  return { calls, recognize: () => scope.module.exports.recognize({name:'test.png',type:'image/png',size:100}) };
+  return { calls, recognize: options => scope.module.exports.recognize({name:'test.png',type:'image/png',size:100}, options) };
 }
 
 test("a period lost by spatial grouping is recovered without replacing its valid reward candidates", async () => {
@@ -410,7 +448,7 @@ test("a read with excluded candidates is retried and only a read with more compl
   assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
   assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
   assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
-  assert.match(result.diagnosticText, /読み取り v81[\s\S]*結果1[\s\S]*結果2/);
+  assert.match(result.diagnosticText, /読み取り v83[\s\S]*結果1[\s\S]*結果2/);
 
   const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
   const kept = await worse.recognize();
@@ -421,4 +459,81 @@ test("a read with excluded candidates is retried and only a read with more compl
   const clean = loadRecognizer({ texts: [complete] });
   await clean.recognize();
   assert.equal(clean.calls.reads, 1);
+});
+
+test("retry failure keeps validated first candidates and their diagnostics", async () => {
+  const first = 'クエスト1\n110回 ¥11,550'; // no period, so retry
+  const r = loadRecognizer({read: async index => { if (index) throw new Error('worker failed'); return {data:{text:first}}; }});
+  const result = await r.recognize();
+  assert.equal(result.candidates[0].tiers[0].target, 110);
+  assert.match(result.warning, /再読み取り/);
+  assert.match(result.diagnosticText, /110回 ¥11,550/);
+  assert.equal(r.calls.terminated, 1);
+});
+
+test("progress retries can recover an omitted bonus without merging conflicting reads", async () => {
+  const first = 'クエストの進捗\n月曜4:00〜金曜4:00\n5/110回 ¥13,780';
+  const fuller = first + '\n10回 +¥1,820';
+  const r = loadRecognizer({texts: [first, fuller]});
+  const result = await r.recognize();
+  assert.equal(r.calls.reads, 2);
+  assert.deepEqual(Array.from(result.candidates[0].tiers, tier => [tier.target, tier.reward]), [[110, 13780], [120, 1820]]);
+  const conflict = loadRecognizer({texts: [first, fuller.replace('13,780', '13,790')]});
+  const kept = await conflict.recognize();
+  assert.deepEqual(Array.from(kept.candidates[0].tiers, tier => [tier.target, tier.reward]), [[110, 13780]]);
+  assert.match(kept.warning, /一致しません/);
+});
+
+test("retry failure without candidates preserves diagnostics on the error", async () => {
+  const r = loadRecognizer({read: async index => { if (index) throw new Error('worker failed'); return {data:{text:'判読できない文字'}}; }});
+  await assert.rejects(r.recognize(), error => { assert.match(error.diagnosticText, /判読できない文字/); return true; });
+  assert.equal(r.calls.terminated, 1);
+});
+
+test("non-Error and read-only worker failures retain diagnostics", async () => {
+  for (const cause of ['worker failed', null, new DOMException('worker unavailable', 'InvalidStateError')]) {
+    const r = loadRecognizer({ read: async index => {
+      if (index) throw cause;
+      return { data: { text: '判読できない文字' } };
+    }});
+    await assert.rejects(r.recognize(), error => {
+      assert.match(error.diagnosticText, /判読できない文字/);
+      assert.match(error.message, /読み取り結果を確認/);
+      if (typeof cause === 'string') assert.match(error.message, /worker failed/);
+      if (cause?.message) assert.match(error.message, /worker unavailable/);
+      return true;
+    });
+    assert.equal(r.calls.terminated, 1);
+  }
+});
+
+test("timeout during retry keeps the first candidate; explicit abort never does", async () => {
+  for (const action of ['timeout', 'abort']) {
+    let deadline; let started;
+    const inRetry = new Promise(resolve => { started = resolve; });
+    const r = loadRecognizer({timers:{setTimeout: fn => { deadline = fn; return 1; },clearTimeout:()=>{}},read: async index => {
+      if (!index) return {data:{text:'クエスト1\n110回 ¥11,550'}};
+      started(); return new Promise(()=>{});
+    }});
+    const controller = new AbortController();
+    const pending = r.recognize({signal:controller.signal});
+    await inRetry;
+    if (action === 'timeout') {
+      deadline(); const result = await pending;
+      assert.equal(result.candidates[0].tiers[0].target,110); assert.match(result.warning,/再読み取り/);
+    } else {
+      controller.abort(); await assert.rejects(pending, error => error.name === 'AbortError');
+    }
+    assert.equal(r.calls.terminated,1);
+  }
+});
+
+test("a worker created after abort is terminated once and never reads", async () => {
+  let finish; let starting;
+  const begun = new Promise(resolve => { starting = resolve; });
+  const r = loadRecognizer({createWorker: worker => { starting(); return new Promise(resolve => { finish = () => resolve(worker); }); }});
+  const controller = new AbortController(); const pending = r.recognize({signal:controller.signal});
+  await begun; controller.abort(); await assert.rejects(pending, error => error.name === 'AbortError');
+  finish(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(r.calls.terminated,1); assert.equal(r.calls.reads,0);
 });
