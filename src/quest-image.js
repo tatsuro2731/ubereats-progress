@@ -19,6 +19,9 @@
       // every digit; arbitrary symbols or ungrouped numbers remain untrusted.
       .replace(/((?:回|件)[ \t]*(?:の[ \t]*(?:乗車|配達))?)[ \t]*\+[ \t]*(\d{1,3}[,.]\d{3})(?=[ \t]*(?:\n|$))/g, "$1 +¥$2")
       // 羊/学 are observed OCR shapes of a pale yen sign; only before an intact amount.
+      // OCR can insert ギ after a yen glyph in a locked bonus: +\\ ギ 2,260.
+      // Require an explicit plus and an intact grouped amount; never repair digits.
+      .replace(/([+＋])[ \t]*[¥￥\\半]+[ \t]*ギ[ \t]*(?=\d{1,3}[,.]\d{3}(?![\d,.]))/g, "$1¥")
       .replace(/([+＋]?)\s*[Y羊学]\s*(?=\d{1,3}[,.]\d{3})/g, "$1¥");
   }
 
@@ -311,7 +314,7 @@
     let retryStarted = false;
     let inputSize = "";
     const attempts = [];
-    const diagnostic = () => attempts.length ? `読み取り v83（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` : "";
+    const diagnostic = () => attempts.length ? `読み取り v84（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` : "";
     // The worker may finish starting after cancellation. Taking ownership before
     // awaiting termination prevents both paths from terminating it twice.
     async function terminateWorker() {
@@ -411,5 +414,5 @@
     }
   }
 
-  return { version: "83", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: "84", parseText, readPeriod, textFromBlocks, recognize };
 });

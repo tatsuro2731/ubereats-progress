@@ -448,7 +448,7 @@ test("a read with excluded candidates is retried and only a read with more compl
   assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
   assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
   assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
-  assert.match(result.diagnosticText, /読み取り v83[\s\S]*結果1[\s\S]*結果2/);
+  assert.match(result.diagnosticText, /読み取り v84[\s\S]*結果1[\s\S]*結果2/);
 
   const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
   const kept = await worse.recognize();
@@ -536,4 +536,34 @@ test("a worker created after abort is terminated once and never reads", async ()
   await begun; controller.abort(); await assert.rejects(pending, error => error.name === 'AbortError');
   finish(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(r.calls.terminated,1); assert.equal(r.calls.reads,0);
+});
+
+const NOV06_OCR_1 = "クエ スト の 進捗 ビ ば\n11 月 6 日 ( 金 ) 4.00 へ 11 月 9 日 (月 ) 4:00\n後 120 回 の 配達 を 完了 する と 、\\17230 を 獲得 で き 、\n別 の 特典 が 利用 可能 に な り ま す\n07120 回 の 乗車 \\17230\nロ 10 回 の 乗車 +\\ ギ 2,260\n詳細";
+const NOV06_OCR_2 = "クエ スト の 進捗\n11 月 6 日 ( 金 ) 4.00 へ 11 月 9 日 (月 ) 4:00\n後 120 回 の 配達 を 完了 する と 、\\17230 を 獲得 で き 、\n07120 回 の 乗車\n\\17230\nロ 10 回 の 乗車\n+\\ ギ 2,260\n詳細";
+const NOV06_OCR_3 = "クエ スト の 進捗\n11 月 6 日 ( 金 )4.00 へ 11 月 9 日 (月 ) 4:00\n後 120 回 の 配達 を 完了 する と 、\\17230 を 獲得 で き 、\n0/120 回 の 乗車 \\1/230\nロウ 10 回 の 乗車\n詳細";
+const NOV06_OCR_4 = "クエ スト の 進捗\n11 月 6 日 ( 金 )4.00 へ 11 月 9 日 (月 ) 4:00\n後 120 回 の 配達 を 完了 する と 、\\17230 を 獲得 で き 、\n0/120 回 の 乗車\n\\1/230\nロウ 10 回 の 乗車\n詳細";
+const NOV06_NOW = Date.parse("2026-11-06T07:49:00+09:00");
+test("2026-11-06 OCR retains 0/120, base ¥17,230, bonus +¥2,260 and the exact period", () => {
+  const actual=image.parseText(NOV06_OCR_1,NOV06_NOW);
+  assert.deepEqual(actual.candidates,[{label:"進行中のクエスト",completed:0,tiers:[{target:120,reward:17230},{target:130,reward:2260}]}]);
+  assert.deepEqual(actual.period,{startDate:"2026-11-06",endDate:"2026-11-09",startTime:"04:00",endTime:"04:00",inferred:true,dateSource:"calendar",next:false,template:"weekend"});
+  assert.equal(actual.skipped,0); assert.equal(actual.inferredProgress,true);
+});
+test("incomplete and contradictory alternative OCR reads never fabricate extra rewards", () => {
+  const rejected=[NOV06_OCR_2,NOV06_OCR_3,NOV06_OCR_4,
+    NOV06_OCR_1.replace("+\\ ギ 2,260","\\ ギ 2,260"),
+    NOV06_OCR_1.replace("2,260","2260"),
+    NOV06_OCR_1.replace("ギ 2,260","不 2,260"),
+    NOV06_OCR_1.replace("乗車 \\17230","乗車 \\17231")];
+  for(const str of rejected) assert.equal(image.parseText(str,NOV06_NOW).candidates.length,0,str);
+});
+test("OCR retry does not discard a complete first reading of the November 6 quest",async()=>{
+  const reader=loadRecognizer({texts:[NOV06_OCR_1,NOV06_OCR_3]});
+  const actual=await reader.recognize();
+  assert.equal(reader.calls.reads,2);
+  assert.equal(actual.candidates[0].completed,0);
+  assert.deepEqual(Array.from(actual.candidates[0].tiers,tier=>({...tier})),[{target:120,reward:17230},{target:130,reward:2260}]);
+  assert.equal(actual.skipped,0);
+  assert.match(actual.warning,/一致しません/);
+  assert.match(actual.diagnosticText,/読み取り v84/);
 });
