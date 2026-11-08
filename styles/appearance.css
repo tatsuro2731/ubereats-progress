@@ -287,7 +287,7 @@ body.progressApp .workSessionHead .movementDetail { display: none; }
 body.progressApp .workSessionStart { background: transparent; color: var(--muted); border: 0; padding: 0; }
 body.progressApp .workSessionStart > span { color: var(--muted); font-size: 12px; }
 body.progressApp .workSessionStart strong { color: var(--text); font-size: 13px; }
-body.progressApp .editStartTime, body.progressApp .editBreakTime { min-height: 36px; color: var(--good); background: var(--card2); border: 1px solid var(--line); border-radius: 9px; font-size: 12px; box-shadow: none; }
+body.progressApp .editStartTime, body.progressApp .editBreakTime, body.progressApp .editOtherCompanyTime { min-height: 36px; color: var(--good); background: var(--card2); border: 1px solid var(--line); border-radius: 9px; font-size: 12px; box-shadow: none; }
 body.progressApp .sessionDetails { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
 body.progressApp .sessionDetails > summary { min-height: 36px; color: var(--muted); font-size: 14px; cursor: pointer; }
 body.progressApp .workSessionGrid { margin-top: 10px; }
@@ -297,6 +297,8 @@ body.progressApp .workSessionStat strong, body.progressApp .workSessionStat.prim
 body.progressApp .workHistoryMain strong, body.progressApp .todaySummaryStat strong { color: var(--text); }
 body.progressApp .workSessionStat span, body.progressApp .movementDetail, body.progressApp .workHistoryMain small,
 body.progressApp .workHistoryMeta, body.progressApp .workHistoryEmpty, body.progressApp .todaySummaryLead { color: var(--muted); font-size: 12px; }
+/* Labels with and without a 修正 button share one height so the values line up per row. */
+body.progressApp .workSessionStat > span { display: flex; min-height: 36px; align-items: center; }
 body.progressApp .workSessionActions { display: flex; justify-content: flex-end; margin-top: 0; }
 body.progressApp .workSessionActions .finishWork { min-height: 40px; padding: 7px 10px; background: transparent; color: var(--bad); border: 0; box-shadow: none; font-size: 13px; }
 body.progressApp .workSessionNotice { color: var(--good); background: var(--card2); border-color: var(--line); font-size: 13px; }
@@ -306,15 +308,18 @@ body.progressApp .workHistoryEdit { color: var(--good); background: var(--card2)
 body.progressApp .workHistoryDelete { color: var(--bad); background: var(--card); border-color: var(--line); font-size: 12px; }
 body.progressApp .todaySummaryIcon, body.progressApp .todaySummaryBadge { background: var(--card2); color: var(--good); border-color: var(--line); box-shadow: none; }
 body.progressApp .settingsSheet, body.progressApp .workConfirmDialog,
-body.progressApp .historyEndEditorDialog, body.progressApp .startTimeEditor, body.progressApp .breakTimeEditor {
+body.progressApp .historyEndEditorDialog, body.progressApp .startTimeEditor, body.progressApp .breakTimeEditor,
+body.progressApp .otherCompanyTimeEditor {
   background: var(--card); color: var(--text); border-color: var(--line); box-shadow: 0 16px 55px rgb(0 0 0 / 24%);
 }
 body.progressApp .settingsSheetHeader, body.progressApp .settingsFooter { background: var(--card); border-color: var(--line); box-shadow: none; }
 body.progressApp .settingsHandle { background: var(--line); box-shadow: none; }
 body.progressApp .settingsSheetTitle, body.progressApp .settingsSectionTitle,
-body.progressApp .workConfirmDialog h3, body.progressApp .startTimeEditor h3, body.progressApp .breakTimeEditor h3 { color: var(--text); }
+body.progressApp .workConfirmDialog h3, body.progressApp .startTimeEditor h3, body.progressApp .breakTimeEditor h3,
+body.progressApp .otherCompanyTimeEditor h3 { color: var(--text); }
 body.progressApp .settingsSheetSubtitle, body.progressApp .settingsSectionNote, body.progressApp .settingHint,
-body.progressApp .workConfirmDialog p, body.progressApp .startTimeEditor p, body.progressApp .breakTimeEditor p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+body.progressApp .workConfirmDialog p, body.progressApp .startTimeEditor p, body.progressApp .breakTimeEditor p,
+body.progressApp .otherCompanyTimeEditor p { color: var(--muted); font-size: 13px; line-height: 1.5; }
 body.progressApp .settingsSection, body.progressApp .settingsSheet .selBox,
 body.progressApp .cardOrderToolbar, body.progressApp .settingsSheet .cardOrderToggle,
 body.progressApp .workConfirmSummary > div { background: var(--input); border-color: var(--line); box-shadow: none; }
@@ -323,10 +328,10 @@ body.progressApp .cardOrderCopy strong, body.progressApp .cardOrderMessage stron
 body.progressApp .workConfirmSummary strong { color: var(--text); }
 body.progressApp .cardOrderCopy small, body.progressApp .cardOrderMessage small, body.progressApp .cardOrderChevron,
 body.progressApp .settingsResetCopy small, body.progressApp .cardChoiceHelp, body.progressApp .workConfirmSummary span { color: var(--muted); font-size: 12px; }
-body.progressApp label, body.progressApp .settingsSheet label, body.progressApp .breakTimeFields label { color: var(--muted); font-size: 14px; }
+body.progressApp label, body.progressApp .settingsSheet label, body.progressApp .breakTimeFields label, body.progressApp .otherCompanyTimeFields label { color: var(--muted); font-size: 14px; }
 body.progressApp input, body.progressApp select, body.progressApp .settingsSheet input[type="time"],
 body.progressApp .settingsSheet select, body.progressApp .startTimeEditor input,
-body.progressApp .historyEndEditorDialog input, body.progressApp .breakTimeFields select {
+body.progressApp .historyEndEditorDialog input, body.progressApp .breakTimeFields select, body.progressApp .otherCompanyTimeFields select {
   background: var(--card); color: var(--text); border-color: var(--line); color-scheme: inherit; box-shadow: none;
   font-size: 16px; min-height: 48px; border-radius: 12px;
 }
@@ -336,22 +341,23 @@ body.progressApp .cardCountSegment, body.progressApp .themeModes { background: v
 body.progressApp .cardCountOption { color: var(--muted); }
 body.progressApp .cardCountOption.active, body.progressApp .themeModes button.active,
 body.progressApp .settingsDone, body.progressApp .cardOrderDone,
-body.progressApp .applyStartTime, body.progressApp .applyBreakTime, body.progressApp .applyHistoryEnd {
+body.progressApp .applyStartTime, body.progressApp .applyBreakTime, body.progressApp .applyOtherCompanyTime, body.progressApp .applyHistoryEnd {
   background: var(--good); color: var(--primary-text); border-color: var(--good); box-shadow: none;
 }
 body.progressApp .cardCountOption strong { font-size: 14px; }
 body.progressApp .cardCountOption small { font-size: 12px; }
 body.progressApp .endState { color: var(--good); background: var(--card2); border-color: var(--line); font-size: 12px; }
 body.progressApp .clearEnd, body.progressApp .settingsSheet .clearEnd,
-body.progressApp .startTimeEditorActions button, body.progressApp .breakTimeEditorActions button,
+body.progressApp .startTimeEditorActions button, body.progressApp .breakTimeEditorActions button, body.progressApp .otherCompanyTimeEditorActions button,
 body.progressApp .workConfirmActions button, body.progressApp .resetBtn, body.progressApp .linkBtn {
   background: var(--card2); color: var(--text); border-color: var(--line); box-shadow: none; font-size: 14px;
 }
 body.progressApp .startTimeEditorActions .applyStartTime, body.progressApp .breakTimeEditorActions .applyBreakTime,
+body.progressApp .otherCompanyTimeEditorActions .applyOtherCompanyTime,
 body.progressApp .historyEndEditorActions .applyHistoryEnd { background: var(--good); color: var(--primary-text); border-color: var(--good); }
 body.progressApp .settingsSheet .reset { color: var(--bad); background: var(--card); border-color: var(--line); font-size: 13px; }
 body.progressApp .workConfirmActions .workConfirmSubmit, body.progressApp .workConfirmActions .workConfirmSubmit.delete { background: var(--bad); color: var(--card); border-color: var(--bad); }
-body.progressApp .startTimeError, body.progressApp .breakTimeError, body.progressApp .historyEndError { color: var(--bad); font-size: 13px; }
+body.progressApp .startTimeError, body.progressApp .breakTimeError, body.progressApp .otherCompanyTimeError, body.progressApp .historyEndError { color: var(--bad); font-size: 13px; }
 .themeModes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .themeModes button { min-height: 44px; padding: 8px 4px; border-radius: 10px; background: transparent; color: var(--muted); font-size: 14px; }
 .themeSchedule { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }

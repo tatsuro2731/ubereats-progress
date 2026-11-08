@@ -19,6 +19,7 @@
   const WORK_LIMIT_MS = CONFIG.workLimitMs;
   const $id = id => document.getElementById(id);
   let breakEditorInitialMinutes = null;
+  let otherCompanyEditorInitialMinutes = null;
 
   function totalClockUsedMs(remainingMs) {
     return usedMsFromRemaining(remainingMs, WORK_LIMIT_MS);
@@ -261,6 +262,94 @@
     closeBreakEditor();
   }
 
+  function currentOtherCompanyMs(at = Date.now()) {
+    if (!clockState || !clockState.sessionStartAt) return 0;
+    const endAt = clockState.sessionEndedAt || at;
+    const remainingMs = Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000));
+    return Math.min(clockUsedMs(remainingMs), otherCompanyOverlapMs(clockState.sessionStartAt, endAt));
+  }
+
+  function closeOtherCompanyEditor(restoreFocus = true) {
+    const layer = $id("otherCompanyTimeEditorLayer");
+    if (!layer) return;
+    layer.hidden = true;
+    $id("appRoot").inert = false;
+    document.body.classList.remove("otherCompanyTimeEditorOpen");
+    otherCompanyEditorInitialMinutes = null;
+    const editButton = $id("editOtherCompanyTime");
+    if (editButton) {
+      editButton.setAttribute("aria-expanded", "false");
+      if (restoreFocus) editButton.focus({ preventScroll: true });
+    }
+  }
+
+  function openOtherCompanyEditor() {
+    const layer = $id("otherCompanyTimeEditorLayer");
+    const hours = $id("otherCompanyTimeHours");
+    const minutes = $id("otherCompanyTimeMinutes");
+    const error = $id("otherCompanyTimeError");
+    if (!layer || !hours || !minutes || !clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) return;
+    if (typeof remain === "function") remain();
+    otherCompanyEditorInitialMinutes = Math.floor(currentOtherCompanyMs() / 60000);
+    hours.value = String(Math.floor(otherCompanyEditorInitialMinutes / 60));
+    minutes.value = String(otherCompanyEditorInitialMinutes % 60);
+    error.textContent = "";
+    layer.hidden = false;
+    $id("appRoot").inert = true;
+    document.body.classList.add("otherCompanyTimeEditorOpen");
+    $id("editOtherCompanyTime").setAttribute("aria-expanded", "true");
+    setTimeout(() => hours.focus({ preventScroll: true }), 0);
+  }
+
+  // Replaces the other-company total while keeping the overall used time.
+  // Uber time is the remainder, so only the split between the two changes.
+  function setOtherCompanyDuration(milliseconds, at = Date.now()) {
+    if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
+      return { ok: false, reason: "inactive", maxMs: 0 };
+    }
+    const desiredMs = Math.max(0, finite(milliseconds, 0));
+    const remainingMs = Math.max(0, finite(clockState.remainingMs, finite(clockState.baseRemain) * 60000));
+    const maxMs = clockUsedMs(remainingMs);
+    if (desiredMs > maxMs) return { ok: false, reason: "too-long", maxMs };
+
+    const continues = Boolean(clockState.otherCompanyOn);
+    clockState.legacyOtherCompanyMs = desiredMs;
+    clockState.otherCompanyMs = desiredMs;
+    clockState.otherCompanySegments = continues ? [{ startAt: at, endAt: null }] : [];
+    clockState.otherCompanyStartedAt = continues ? at : null;
+    saveEnhancedState();
+    return { ok: true, maxMs };
+  }
+
+  function applyOtherCompanyTime() {
+    const hours = $id("otherCompanyTimeHours");
+    const minutes = $id("otherCompanyTimeMinutes");
+    const error = $id("otherCompanyTimeError");
+    if (!clockState || !clockState.sessionStartAt || clockState.sessionEndedAt) {
+      closeOtherCompanyEditor();
+      return;
+    }
+    const hourValue = Math.max(0, finite(hours.value, 0));
+    const minuteValue = Math.max(0, Math.min(59, finite(minutes.value, 0)));
+    const totalMinutes = hourValue * 60 + minuteValue;
+    if (totalMinutes === otherCompanyEditorInitialMinutes) {
+      closeOtherCompanyEditor();
+      return;
+    }
+    if (typeof remain === "function") remain();
+    const result = setOtherCompanyDuration(totalMinutes * 60000, Date.now());
+    if (!result.ok) {
+      if (result.reason === "too-long") {
+        const maximumMinutes = Math.floor(result.maxMs / 60000);
+        error.textContent = `稼働時間の合計を超えています。現在は最大${Math.floor(maximumMinutes / 60)}時間${String(maximumMinutes % 60).padStart(2, "0")}分まで設定できます。`;
+      } else {
+        error.textContent = "稼働中の他社稼働時間だけ修正できます。";
+      }
+      return;
+    }
+    closeOtherCompanyEditor();
+  }
+
   function injectStyles() {
     const style = document.createElement("style");
     style.textContent = `
@@ -283,20 +372,20 @@
       .startTimeEditorActions button{min-height:46px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}
       .startTimeEditorActions .applyStartTime{border-color:#2f8bff;background:linear-gradient(180deg,#1769c4,#0a4b9e)}
       .startTimeEditorOpen{overflow:hidden}
-      .breakTimeEditorLayer{position:fixed;z-index:100;inset:0;display:grid;place-items:center;padding:clamp(8px,4vw,18px)}
-      .breakTimeEditorLayer[hidden]{display:none}
-      .breakTimeEditorBackdrop{position:absolute;inset:0;background:rgba(0,5,12,.78);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
-      .breakTimeEditor{position:relative;width:100%;max-width:430px;min-width:0;padding:clamp(14px,4.5vw,18px);overflow:hidden;border:1px solid #28506c;border-radius:24px;background:linear-gradient(160deg,#0a2436,#04131f);box-shadow:0 24px 70px rgba(0,0,0,.58);outline:none}
-      .breakTimeEditor h3{margin:0;color:#f5f9fc;font-size:19px}
-      .breakTimeEditor p{margin:5px 0 14px;color:#8fa6ba;font-size:11px;line-height:1.5}
-      .breakTimeFields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-      .breakTimeFields label{min-width:0;margin:0;color:#aebdcc;font-size:10px;font-weight:750}
-      .breakTimeFields select{display:block;width:100%;max-width:100%;min-width:0;min-height:54px;margin-top:5px;padding:10px;border:1px solid #2a4c66;border-radius:15px;background:#061522;color:#f4f8fb;font-size:17px;color-scheme:dark}
-      .breakTimeError{min-height:20px;margin:7px 1px 0;color:#ff8a94;font-size:10px;line-height:1.4}
-      .breakTimeEditorActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
-      .breakTimeEditorActions button{min-height:46px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}
-      .breakTimeEditorActions .applyBreakTime{border-color:#2f8bff;background:linear-gradient(180deg,#1769c4,#0a4b9e)}
-      .breakTimeEditorOpen{overflow:hidden}
+      .breakTimeEditorLayer,.otherCompanyTimeEditorLayer{position:fixed;z-index:100;inset:0;display:grid;place-items:center;padding:clamp(8px,4vw,18px)}
+      .breakTimeEditorLayer[hidden],.otherCompanyTimeEditorLayer[hidden]{display:none}
+      .breakTimeEditorBackdrop,.otherCompanyTimeEditorBackdrop{position:absolute;inset:0;background:rgba(0,5,12,.78);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+      .breakTimeEditor,.otherCompanyTimeEditor{position:relative;width:100%;max-width:430px;min-width:0;padding:clamp(14px,4.5vw,18px);overflow:hidden;border:1px solid #28506c;border-radius:24px;background:linear-gradient(160deg,#0a2436,#04131f);box-shadow:0 24px 70px rgba(0,0,0,.58);outline:none}
+      .breakTimeEditor h3,.otherCompanyTimeEditor h3{margin:0;color:#f5f9fc;font-size:19px}
+      .breakTimeEditor p,.otherCompanyTimeEditor p{margin:5px 0 14px;color:#8fa6ba;font-size:11px;line-height:1.5}
+      .breakTimeFields,.otherCompanyTimeFields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+      .breakTimeFields label,.otherCompanyTimeFields label{min-width:0;margin:0;color:#aebdcc;font-size:10px;font-weight:750}
+      .breakTimeFields select,.otherCompanyTimeFields select{display:block;width:100%;max-width:100%;min-width:0;min-height:54px;margin-top:5px;padding:10px;border:1px solid #2a4c66;border-radius:15px;background:#061522;color:#f4f8fb;font-size:17px;color-scheme:dark}
+      .breakTimeError,.otherCompanyTimeError{min-height:20px;margin:7px 1px 0;color:#ff8a94;font-size:10px;line-height:1.4}
+      .breakTimeEditorActions,.otherCompanyTimeEditorActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+      .breakTimeEditorActions button,.otherCompanyTimeEditorActions button{min-height:46px;padding:10px;border:1px solid #365b75;border-radius:15px;background:linear-gradient(180deg,#143047,#0a2134);font-size:13px}
+      .breakTimeEditorActions .applyBreakTime,.otherCompanyTimeEditorActions .applyOtherCompanyTime{border-color:#2f8bff;background:linear-gradient(180deg,#1769c4,#0a4b9e)}
+      .breakTimeEditorOpen,.otherCompanyTimeEditorOpen{overflow:hidden}
       .workSessionStat{min-width:0}
       .workSessionStat strong{max-width:100%;font-size:clamp(12px,3.8vw,17px);font-variant-numeric:tabular-nums;letter-spacing:-.04em;white-space:nowrap;overflow-wrap:normal}
       @media(max-width:440px){
@@ -450,10 +539,81 @@
     });
   }
 
+  function injectOtherCompanyEditor() {
+    const button = $id("editOtherCompanyTime");
+    if (!button || $id("otherCompanyTimeEditorLayer")) return;
+    button.setAttribute("aria-controls", "otherCompanyTimeEditorDialog");
+    button.setAttribute("aria-expanded", "false");
+
+    const layer = document.createElement("div");
+    layer.id = "otherCompanyTimeEditorLayer";
+    layer.className = "otherCompanyTimeEditorLayer";
+    layer.hidden = true;
+    layer.innerHTML = `
+      <div id="otherCompanyTimeEditorBackdrop" class="otherCompanyTimeEditorBackdrop"></div>
+      <section id="otherCompanyTimeEditorDialog" class="otherCompanyTimeEditor" role="dialog" aria-modal="true" aria-labelledby="otherCompanyTimeEditorTitle" tabindex="-1">
+        <h3 id="otherCompanyTimeEditorTitle">他社稼働時間を修正</h3>
+        <p>今回の他社稼働の累計時間を合わせます。稼働時間の合計は変わらず、差分がUber稼働に反映されます。他社稼働ON中に直した場合は、変更後もそのまま加算を続けます。</p>
+        <div class="otherCompanyTimeFields">
+          <label>時間<select id="otherCompanyTimeHours" aria-label="他社稼働時間の時間"></select></label>
+          <label>分<select id="otherCompanyTimeMinutes" aria-label="他社稼働時間の分"></select></label>
+        </div>
+        <div id="otherCompanyTimeError" class="otherCompanyTimeError" aria-live="polite"></div>
+        <div class="otherCompanyTimeEditorActions"><button id="cancelOtherCompanyTime" type="button">キャンセル</button><button id="applyOtherCompanyTime" class="applyOtherCompanyTime" type="button">変更する</button></div>
+      </section>`;
+    document.body.appendChild(layer);
+
+    const hours = $id("otherCompanyTimeHours");
+    const minutes = $id("otherCompanyTimeMinutes");
+    const maxHours = Math.floor(WORK_LIMIT_MS / 3600000);
+    for (let value = 0; value <= maxHours; value += 1) {
+      const option = document.createElement("option");
+      option.value = String(value);
+      option.textContent = `${value}時間`;
+      hours.appendChild(option);
+    }
+    for (let value = 0; value <= 59; value += 1) {
+      const option = document.createElement("option");
+      option.value = String(value);
+      option.textContent = `${value}分`;
+      minutes.appendChild(option);
+    }
+
+    button.onclick = openOtherCompanyEditor;
+    $id("cancelOtherCompanyTime").onclick = closeOtherCompanyEditor;
+    $id("otherCompanyTimeEditorBackdrop").onclick = closeOtherCompanyEditor;
+    $id("applyOtherCompanyTime").onclick = applyOtherCompanyTime;
+    layer.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeOtherCompanyEditor();
+        return;
+      }
+      if (event.key === "Enter" && (event.target === hours || event.target === minutes)) {
+        event.preventDefault();
+        applyOtherCompanyTime();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...$id("otherCompanyTimeEditorDialog").querySelectorAll("button:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex='-1'])")].filter(element => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
   function initialize() {
     injectStyles();
     injectEditor();
     injectBreakEditor();
+    injectOtherCompanyEditor();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });

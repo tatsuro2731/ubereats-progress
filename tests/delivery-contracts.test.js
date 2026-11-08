@@ -156,12 +156,16 @@ test("work-session summary removes the duplicate total and allows break correcti
   const enhancements = read("src/session-engine.js");
   const sessionUi = read("src/session-editors.js");
   assert.match(enhancements, /class="workSessionStat mainStat primary"><span>Uber稼働<\/span>/);
-  assert.match(enhancements, /class="workSessionStat mainStat otherStat"><span>他社稼働<\/span>/);
+  assert.match(enhancements, /class="workSessionStat mainStat otherStat"><span class="workSessionStatLabel">他社稼働<button id="editOtherCompanyTime"/);
   assert.doesNotMatch(enhancements, /class="workSessionStat[^"]*"[^>]*><span>時計が減った時間<\/span>/);
   assert.match(enhancements, /id="editBreakTime"[^>]*aria-label="休憩時間を修正"/);
   assert.match(sessionUi, /function\s+setBreakDuration\s*\(/);
   assert.match(sessionUi, /id="breakTimeEditorTitle">休憩時間を修正<\/h3>/);
   assert.match(sessionUi, /breakSegments\s*=\s*continues\s*\?\s*\[\{\s*startAt:\s*at,\s*endAt:\s*null\s*\}\]\s*:\s*\[\]/);
+  assert.match(enhancements, /id="editOtherCompanyTime"[^>]*aria-label="他社稼働時間を修正"/);
+  assert.match(sessionUi, /function\s+setOtherCompanyDuration\s*\(/);
+  assert.match(sessionUi, /id="otherCompanyTimeEditorTitle">他社稼働時間を修正<\/h3>/);
+  assert.match(read("styles/appearance.css"), /body\.progressApp \.otherCompanyTimeEditor \{/);
 });
 
 test("saved history exposes an end-time editor with dependent metric recalculation", () => {

@@ -202,7 +202,7 @@ function timerHarness(options = {}) {
   const editorSource = fs.readFileSync(path.join(ROOT, "src/session-editors.js"), "utf8");
   const editorCloseAt = editorSource.lastIndexOf("})();");
   vm.runInContext(
-    editorSource.slice(0, editorCloseAt) + '\n globalThis.__editorTestApi = { applyStartTime, setBreakDuration };\n' + editorSource.slice(editorCloseAt),
+    editorSource.slice(0, editorCloseAt) + '\n globalThis.__editorTestApi = { applyStartTime, setBreakDuration, setOtherCompanyDuration };\n' + editorSource.slice(editorCloseAt),
     context,
     { filename: "src/session-editors.js" }
   );
@@ -1566,6 +1566,62 @@ test("time changes end breaks automatically and close other-company work before 
   assert.equal(app.api.getState().breakStartedAt, now + 120000);
   assert.equal(app.element("otherCompanyToggle").textContent, "他社稼働 OFF");
   assert.equal(app.element("otherCompanyToggle").disabled, true);
+});
+
+test("other-company correction shifts time from Uber, keeps counting while ON, and survives reload", () => {
+  const minute = 60000;
+  const start = new Date(2026, 10, 8, 7, 43).getTime();
+  const app = timerHarness({ now: start });
+  app.api.enhancedToggleClock();
+  app.setNow(start + 60 * minute);
+  app.api.tickClock();
+  app.api.toggleOtherCompany();
+  app.setNow(start + 90 * minute);
+  app.api.tickClock();
+  assert.equal(app.api.otherCompanyUsedMs(), 30 * minute);
+  assert.equal(app.api.uberUsedMs(), 60 * minute);
+
+  const editAt = app.now();
+  assert.equal(app.editor.setOtherCompanyDuration(45 * minute, editAt).ok, true);
+  app.api.renderEnhancedClock();
+  assert.equal(app.api.clockUsedMs(), 90 * minute);
+  assert.equal(app.element("workOtherCompanyTime").textContent, "0時間45分");
+  assert.equal(app.element("workUberTime").textContent, "0時間45分");
+  assert.equal(app.api.getState().otherCompanyOn, true);
+  assert.equal(app.api.getState().otherCompanyStartedAt, editAt);
+
+  const saved = JSON.parse(app.storage.getItem(ENHANCED_KEY));
+  assert.equal(saved.legacyOtherCompanyMs, 45 * minute);
+  assert.equal(saved.otherCompanyMs, 45 * minute);
+  assert.deepEqual(saved.otherCompanySegments, [{ startAt: editAt, endAt: null }]);
+  assert.equal(saved.remainingMs, WORK_LIMIT_MS - 90 * minute);
+
+  app.setNow(start + 100 * minute);
+  app.api.tickClock();
+  app.api.renderEnhancedClock();
+  assert.equal(app.element("workOtherCompanyTime").textContent, "0時間55分");
+  assert.equal(app.element("workUberTime").textContent, "0時間45分");
+
+  const restored = timerHarness({ now: start + 100 * minute, enhanced: saved });
+  assert.equal(restored.api.clockUsedMs(), 100 * minute);
+  assert.equal(restored.api.otherCompanyUsedMs(), 55 * minute);
+  assert.equal(restored.api.uberUsedMs(), 45 * minute);
+
+  app.api.toggleOtherCompany();
+  app.setNow(start + 110 * minute);
+  app.api.tickClock();
+  assert.equal(app.api.otherCompanyUsedMs(), 55 * minute);
+  assert.equal(app.api.uberUsedMs(), 55 * minute);
+  const rejected = app.editor.setOtherCompanyDuration(111 * minute, app.now());
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.reason, "too-long");
+  assert.equal(app.api.otherCompanyUsedMs(), 55 * minute);
+  assert.equal(app.editor.setOtherCompanyDuration(0, app.now()).ok, true);
+  assert.equal(app.api.otherCompanyUsedMs(), 0);
+  assert.equal(app.api.uberUsedMs(), 110 * minute);
+  const snapshot = app.api.sessionSnapshot(app.now());
+  assert.equal(snapshot.otherCompanyMs, 0);
+  assert.deepEqual([...snapshot.workTypes], ["uber"]);
 });
 
 test("history snapshot separates Uber and other-company time without double counting", () => {

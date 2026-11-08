@@ -25,7 +25,7 @@ function instrumentedSessionUi() {
   const closeAt = source.lastIndexOf("})();");
   assert.ok(closeAt > 0);
   return source.slice(0, closeAt) + `
-  globalThis.__sessionUiTestApi = { saveEnhancedState, breakOverlapMs, otherCompanyOverlapMs, applyStartTime, setBreakDuration, clockUsedMs };
+  globalThis.__sessionUiTestApi = { saveEnhancedState, breakOverlapMs, otherCompanyOverlapMs, applyStartTime, setBreakDuration, setOtherCompanyDuration, clockUsedMs };
 ` + source.slice(closeAt);
 }
 
@@ -345,4 +345,98 @@ test("manual break correction rejects a total that cannot fit after recorded wor
   assert.equal(result.maxMs, 30 * minute);
   assert.equal(state.legacyBreakMs, 0);
   assert.equal(app.values.has(ENHANCED_KEY), false);
+});
+
+test("manual other-company correction replaces the total without touching breaks or remaining time", () => {
+  const minute = 60000;
+  const base = 1_700_000_040_000;
+  const now = base + 180 * minute;
+  const state = {
+    on: true,
+    remainingMs: WORK_LIMIT_MS - 120 * minute,
+    activeMs: 120 * minute,
+    sessionStartAt: base,
+    lastTickAt: now,
+    breakOn: false,
+    breakStartedAt: null,
+    breakMs: 20 * minute,
+    breakSegments: [{ startAt: base + 100 * minute, endAt: base + 120 * minute }],
+    legacyBreakMs: 0,
+    otherCompanyOn: false,
+    otherCompanyStartedAt: null,
+    otherCompanyMs: 10 * minute,
+    otherCompanySegments: [{ startAt: base + 20 * minute, endAt: base + 30 * minute }],
+    legacyOtherCompanyMs: 5 * minute
+  };
+  const app = harness(state, now);
+
+  const result = app.api.setOtherCompanyDuration(83 * minute, now);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.maxMs, 120 * minute);
+  assert.equal(state.legacyOtherCompanyMs, 83 * minute);
+  assert.equal(JSON.stringify(state.otherCompanySegments), "[]");
+  assert.equal(state.otherCompanyStartedAt, null);
+  const saved = JSON.parse(app.values.get(ENHANCED_KEY));
+  assert.equal(saved.otherCompanyMs, 83 * minute);
+  assert.equal(saved.legacyOtherCompanyMs, 83 * minute);
+  assert.deepEqual(saved.otherCompanySegments, []);
+  assert.equal(saved.otherCompanyOn, false);
+  assert.equal(saved.remainingMs, WORK_LIMIT_MS - 120 * minute);
+  assert.equal(saved.sessionStartAt, base);
+  assert.deepEqual(saved.breakSegments, [{ startAt: base + 100 * minute, endAt: base + 120 * minute }]);
+  assert.equal(app.saveCalls(), 1);
+});
+
+test("manual other-company correction keeps an active other-company segment running from the edit moment", () => {
+  const minute = 60000;
+  const base = 1_700_000_040_000;
+  const now = base + 200 * minute;
+  const state = {
+    on: true,
+    remainingMs: WORK_LIMIT_MS - 190 * minute,
+    activeMs: 190 * minute,
+    sessionStartAt: base,
+    lastTickAt: now,
+    breakOn: false,
+    breakStartedAt: null,
+    breakSegments: [],
+    legacyBreakMs: 0,
+    otherCompanyOn: true,
+    otherCompanyStartedAt: base + 150 * minute,
+    otherCompanySegments: [{ startAt: base + 150 * minute, endAt: null }],
+    legacyOtherCompanyMs: 0
+  };
+  const app = harness(state, now);
+
+  const result = app.api.setOtherCompanyDuration(203 * minute, now);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "too-long");
+  assert.equal(result.maxMs, 190 * minute);
+  assert.equal(app.values.has(ENHANCED_KEY), false);
+
+  assert.equal(app.api.setOtherCompanyDuration(120 * minute, now).ok, true);
+  assert.equal(state.otherCompanyOn, true);
+  assert.equal(state.otherCompanyStartedAt, now);
+  const saved = JSON.parse(app.values.get(ENHANCED_KEY));
+  assert.equal(saved.otherCompanyOn, true);
+  assert.equal(saved.otherCompanyStartedAt, now);
+  assert.equal(saved.otherCompanyMs, 120 * minute);
+  assert.deepEqual(saved.otherCompanySegments, [{ startAt: now, endAt: null }]);
+});
+
+test("manual other-company correction is unavailable before the session starts and after it ends", () => {
+  const minute = 60000;
+  const idle = harness({ on: false, remainingMs: WORK_LIMIT_MS, sessionStartAt: null }, 10 * minute);
+  assert.equal(idle.api.setOtherCompanyDuration(5 * minute).reason, "inactive");
+  const ended = harness({
+    on: false,
+    remainingMs: WORK_LIMIT_MS - 60 * minute,
+    sessionStartAt: minute,
+    sessionEndedAt: 90 * minute,
+    otherCompanySegments: [],
+    legacyOtherCompanyMs: 0
+  }, 100 * minute);
+  assert.equal(ended.api.setOtherCompanyDuration(5 * minute).reason, "inactive");
+  assert.equal(ended.values.has(ENHANCED_KEY), false);
 });
