@@ -1,143 +1,273 @@
 /*
- * リッチ：クラシックと同じ配色・状態色・配置のまま、質感（奥行き、光、素材感）だけを重ねる。
- * - この中で寸法（高さ、余白、文字サイズ）は変えない。カードが操作エリアに収まる計算を崩さないため。
- * - 接頭辞は :where() で詳細度0にし、クラシックの状態別ルール（押下中、並べ替え中など）を上書きしない。
- * - html[data-skin="rich"] のときだけ効く。クラシックではこのファイルは何もしない。
+ * リッチ：クラシックとは別の配色・素材・動きを持つスタイル。
+ * 共通に保つもの
+ *   - 要素の位置と大きさ（カードが操作エリアに収まる計算と、指が覚えた操作位置を崩さない）
+ *   - 意味の見分け：稼働中＝緑系／休憩中＝橙系／開始前＝中立、余裕＝緑／遅れ＝橙／大幅遅れ＝赤
+ * 作り
+ *   - 配色は共通トークン（--bg, --card, --good …）をリッチ用の値に差し替える。設定・編集・クエストも同じ色に揃う。
+ *   - 質感のルールは接頭辞を :where() にして詳細度を上げず、クラシックの状態別ルール（押下中、並べ替え中など）を生かす。
+ *   - 寸法を持つのは疑似要素（光、枠、背景）だけ。実要素の高さ・余白・文字サイズは変えない。
  */
+
+/* ───── 配色（ライト）：パールの地に、エメラルドからティール、スカイへ流れる差し色 ───── */
 :root[data-skin="rich"] {
-  --r-page: radial-gradient(130% 420px at 50% -120px, #ffffff 0%, rgb(255 255 255 / 0%) 70%), linear-gradient(180deg, #eef7f2 0%, #e3efe8 100%);
-  --r-surface: linear-gradient(180deg, #ffffff 0%, #f5faf7 100%);
-  --r-surface-low: linear-gradient(180deg, #ffffff 0%, #eef6f1 100%);
-  --r-edge: inset 0 1px 0 rgb(255 255 255 / 92%);
-  --r-shadow-sm: 0 1px 2px rgb(16 54 36 / 7%), 0 8px 18px -8px rgb(16 54 36 / 18%);
-  --r-shadow-lg: 0 2px 4px rgb(16 54 36 / 6%), 0 22px 40px -18px rgb(16 54 36 / 30%);
-  --r-groove: inset 0 1px 2px rgb(16 54 36 / 16%), inset 0 0 0 1px rgb(16 54 36 / 3%);
-  --r-accent: linear-gradient(180deg, #0f8a57 0%, #06653f 100%);
-  --r-accent-edge: inset 0 1px 0 rgb(255 255 255 / 30%), inset 0 -1px 0 rgb(0 0 0 / 14%);
-  --r-accent-glow: 0 10px 20px -10px rgb(8 112 71 / 70%);
-  --r-fill: linear-gradient(90deg, #2bb37a 0%, #087047 100%);
-  --r-glass: 82%;
-  --r-dock-shadow: 0 -14px 34px -16px rgb(16 54 36 / 30%);
-  --r-shine: rgb(255 255 255 / 70%);
-  --r-line: #cfe2d7;
+  --bg: #edf3f5;
+  --card: #ffffff;
+  --card2: #e4edf1;
+  --line: #d2dfe5;
+  --text: #0b1b22;
+  --muted: #4a606a;
+  --good: #06795a;
+  --warn: #06795a;
+  --late: #ad4f0a;
+  --bad: #c22d42;
+  --input: #f5f9fa;
+  --green: #06795a;
+  --blue: #06795a;
+  --accent: #06795a;
+  --primary-text: #ffffff;
+  --hero-surface: #ffffff;
+  --shadow: 0 2px 7px rgb(11 40 48 / 5%);
+  --dock-shadow: 0 -5px 22px rgb(11 40 48 / 8%);
+  --working-surface: #d6f5e9;
+  --working-fill: #07805f;
+  --working-text: #ffffff;
+  --working-detail: #12563f;
+  --working-dot: #b6ffe0;
+  --working-line: #a5e2ca;
+  --break-surface: #fff0d2;
+  --break-fill: #f5b74e;
+  --break-text: #3a2305;
+  --break-detail: #7a5210;
+  --break-dot: #7a5210;
+  --break-line: #f0d29a;
+
+  --r-surface: linear-gradient(155deg, rgb(255 255 255 / 94%) 0%, rgb(255 255 255 / 70%) 100%);
+  --r-surface-strong: linear-gradient(155deg, rgb(255 255 255 / 97%) 0%, rgb(255 255 255 / 80%) 100%);
+  --r-line: rgb(255 255 255 / 85%);
+  --r-ring: 0 0 0 1px rgb(11 40 48 / 6%);
+  --r-edge: inset 0 1px 0 rgb(255 255 255 / 95%);
+  --r-shadow-sm: 0 1px 2px rgb(11 40 48 / 6%), 0 10px 22px -10px rgb(11 40 48 / 22%);
+  --r-shadow-lg: 0 2px 4px rgb(11 40 48 / 6%), 0 28px 48px -22px rgb(11 60 70 / 38%);
+  --r-groove: inset 0 1px 2px rgb(11 40 48 / 16%), inset 0 0 0 1px rgb(11 40 48 / 3%);
+  --r-accent: linear-gradient(135deg, #088a61 0%, #06786a 52%, #0b6a94 100%);
+  --r-accent-edge: inset 0 1px 0 rgb(255 255 255 / 32%), inset 0 -1px 0 rgb(0 0 0 / 14%);
+  --r-accent-glow: 0 12px 24px -10px rgb(6 120 106 / 75%);
+  --r-fill: linear-gradient(90deg, #10b981 0%, #0ea5a4 55%, #0e8fd0 100%);
+  --r-border-glow: linear-gradient(135deg, rgb(16 185 129 / 70%), rgb(255 255 255 / 0%) 38%, rgb(255 255 255 / 0%) 62%, rgb(14 143 208 / 55%));
+  --r-number: linear-gradient(180deg, #0b1b22 20%, #0a5f4c 100%);
+  --r-aurora-a: rgb(52 211 153 / 38%);
+  --r-aurora-b: rgb(56 189 248 / 30%);
+  --r-aurora-c: rgb(167 139 250 / 20%);
+  --r-glass: 72%;
+  --r-shine: rgb(255 255 255 / 75%);
+  --r-dock-shadow: 0 -18px 40px -18px rgb(11 60 70 / 38%);
+  --r-glow-strength: 16%;
+  --r-text-glow: 0%;
 }
+
+/* ───── 配色（ダーク）：深いインクの地に、発光するミントとシアン ───── */
 :root[data-skin="rich"][data-theme="dark"] {
-  --r-page: radial-gradient(130% 420px at 50% -140px, rgb(120 222 175 / 13%) 0%, rgb(120 222 175 / 0%) 70%), linear-gradient(180deg, #121a16 0%, #0d1310 100%);
-  --r-surface: linear-gradient(180deg, #25322b 0%, #1b2520 100%);
-  --r-surface-low: linear-gradient(180deg, #2a3830 0%, #202b25 100%);
-  --r-edge: inset 0 1px 0 rgb(255 255 255 / 8%);
-  --r-shadow-sm: 0 1px 2px rgb(0 0 0 / 35%), 0 10px 20px -10px rgb(0 0 0 / 65%);
-  --r-shadow-lg: 0 2px 4px rgb(0 0 0 / 35%), 0 24px 44px -18px rgb(0 0 0 / 80%);
-  --r-groove: inset 0 1px 2px rgb(0 0 0 / 50%), inset 0 0 0 1px rgb(0 0 0 / 12%);
-  --r-accent: linear-gradient(180deg, #93edc5 0%, #62cf9c 100%);
-  --r-accent-edge: inset 0 1px 0 rgb(255 255 255 / 45%), inset 0 -1px 0 rgb(0 0 0 / 16%);
-  --r-accent-glow: 0 10px 22px -10px rgb(120 222 175 / 55%);
-  --r-fill: linear-gradient(90deg, #4fbf8d 0%, #9af0c9 100%);
-  --r-glass: 78%;
-  --r-dock-shadow: 0 -16px 36px -16px rgb(0 0 0 / 75%);
-  --r-shine: rgb(255 255 255 / 9%);
-  --r-line: #3a5043;
+  --bg: #050b0e;
+  --card: #111c21;
+  --card2: #19272e;
+  --line: #2a3f48;
+  --text: #f2f8f8;
+  --muted: #a8bcc3;
+  --good: #4df0b2;
+  --warn: #4df0b2;
+  --late: #ffb659;
+  --bad: #ff7d8c;
+  --input: #0d171b;
+  --green: #4df0b2;
+  --blue: #4df0b2;
+  --accent: #4df0b2;
+  --primary-text: #04231a;
+  --hero-surface: #111c21;
+  --shadow: 0 2px 7px rgb(0 0 0 / 20%);
+  --dock-shadow: 0 -5px 22px rgb(0 0 0 / 30%);
+  --working-surface: #0d362d;
+  --working-fill: #3fe0a5;
+  --working-text: #04231a;
+  --working-detail: #b9f3dd;
+  --working-dot: #04614a;
+  --working-line: #1f6b55;
+  --break-surface: #382910;
+  --break-fill: #ffc566;
+  --break-text: #3a2305;
+  --break-detail: #ffdca3;
+  --break-dot: #7a5210;
+  --break-line: #6e5220;
+
+  --r-surface: linear-gradient(155deg, rgb(255 255 255 / 10%) 0%, rgb(255 255 255 / 3.5%) 100%);
+  --r-surface-strong: linear-gradient(155deg, rgb(255 255 255 / 13%) 0%, rgb(255 255 255 / 5%) 100%);
+  --r-line: rgb(255 255 255 / 12%);
+  --r-ring: 0 0 0 1px rgb(0 0 0 / 30%);
+  --r-edge: inset 0 1px 0 rgb(255 255 255 / 12%);
+  --r-shadow-sm: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 24px -12px rgb(0 0 0 / 75%);
+  --r-shadow-lg: 0 2px 4px rgb(0 0 0 / 40%), 0 30px 54px -22px rgb(0 0 0 / 90%);
+  --r-groove: inset 0 1px 2px rgb(0 0 0 / 55%), inset 0 0 0 1px rgb(0 0 0 / 18%);
+  --r-accent: linear-gradient(135deg, #6bf7c4 0%, #3fe0c8 52%, #5ab8ff 100%);
+  --r-accent-edge: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -1px 0 rgb(0 0 0 / 18%);
+  --r-accent-glow: 0 0 0 1px rgb(107 247 196 / 25%), 0 12px 30px -8px rgb(63 224 200 / 60%);
+  --r-fill: linear-gradient(90deg, #34d399 0%, #2dd4d0 55%, #5ab8ff 100%);
+  --r-border-glow: linear-gradient(135deg, rgb(107 247 196 / 75%), rgb(255 255 255 / 4%) 36%, rgb(255 255 255 / 4%) 64%, rgb(90 184 255 / 60%));
+  --r-number: linear-gradient(180deg, #ffffff 25%, #a6f3d6 100%);
+  --r-aurora-a: rgb(16 185 129 / 34%);
+  --r-aurora-b: rgb(34 150 230 / 26%);
+  --r-aurora-c: rgb(124 92 255 / 20%);
+  --r-glass: 62%;
+  --r-shine: rgb(255 255 255 / 10%);
+  --r-dock-shadow: 0 -20px 44px -18px rgb(0 0 0 / 85%);
+  --r-glow-strength: 22%;
+  --r-text-glow: 45%;
 }
 
-/* 背景：上から光が差す、ごく淡いグラデーション。 */
-html[data-skin="rich"][data-theme] { background: var(--bg); background-image: var(--r-page); background-repeat: no-repeat; }
+/* ───── 背景：ゆっくり流れるオーロラ ───── */
+html[data-skin="rich"][data-theme] { background: var(--bg); }
 :where([data-skin="rich"]) body.progressApp { background: transparent; }
+html[data-skin="rich"] body.progressApp::before,
+html[data-skin="rich"] body.progressApp::after {
+  content: ""; position: fixed; z-index: -1; pointer-events: none;
+  inset: -35vmax; border-radius: 50%;
+}
+html[data-skin="rich"] body.progressApp::before {
+  background:
+    radial-gradient(38% 34% at 28% 30%, var(--r-aurora-a) 0%, transparent 70%),
+    radial-gradient(34% 30% at 76% 24%, var(--r-aurora-b) 0%, transparent 70%);
+}
+html[data-skin="rich"] body.progressApp::after {
+  background:
+    radial-gradient(36% 32% at 70% 72%, var(--r-aurora-c) 0%, transparent 70%),
+    radial-gradient(30% 28% at 22% 78%, var(--r-aurora-b) 0%, transparent 72%);
+}
 
-/* ヘッダー */
+/* ───── ヘッダー ───── */
 :where([data-skin="rich"]) body.progressApp .settingsOpen,
 :where([data-skin="rich"]) body.progressApp .settingsClose {
-  background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge);
+  background: var(--r-surface-strong); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge);
 }
 :where([data-skin="rich"]) body.progressApp .sessionStatus {
-  /* 枠は影で描き、クラシックと同じ外寸を保つ。 */
   box-shadow: var(--r-shadow-sm), inset 0 0 0 1px var(--state-line), var(--r-edge);
   background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%)) var(--state-surface);
 }
 :where([data-skin="rich"]) body.progressApp .sessionStatusBadge {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--state-fill) 88%, #fff) 0%, var(--state-fill) 60%, color-mix(in srgb, var(--state-fill) 92%, #000) 100%);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 14%), inset 0 1px 0 rgb(255 255 255 / 28%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--state-fill) 86%, #fff) 0%, var(--state-fill) 55%, color-mix(in srgb, var(--state-fill) 90%, #000) 100%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 16%), inset 0 1px 0 rgb(255 255 255 / 32%);
 }
-:where([data-skin="rich"]) body.progressApp .sessionStatus[data-state="working"] .dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--state-dot) 28%, transparent); }
+:where([data-skin="rich"]) body.progressApp .sessionStatus[data-state="working"] .sessionStatusBadge {
+  background: var(--r-accent); box-shadow: var(--r-accent-glow), var(--r-accent-edge);
+}
 
-/* タブ：溝のあるトラックに、浮いたつまみ。 */
-:where([data-skin="rich"]) body.progressApp .appTabs { box-shadow: var(--r-groove); }
-:where([data-skin="rich"]) body.progressApp .appTabs button[aria-selected="true"] { background: var(--r-surface); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+/* ───── タブ ───── */
+:where([data-skin="rich"]) body.progressApp .appTabs { background: color-mix(in srgb, var(--card2) 70%, transparent); box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .appTabs button[aria-selected="true"] { background: var(--r-surface-strong); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge); }
 
-/* メインカード：遅れ具合の色で、右上にごく淡い光を置く。 */
+/* ───── メインカード：ガラスの面、差し色の縁、状態色の光 ───── */
 :where([data-skin="rich"]) body.progressApp .hero { --r-glow: var(--good); }
 :where([data-skin="rich"]) body.progressApp .hero.late { --r-glow: var(--late); }
 :where([data-skin="rich"]) body.progressApp .hero.bad { --r-glow: var(--bad); }
 :where([data-skin="rich"]) body.progressApp .hero,
 :where([data-skin="rich"]) body.progressApp .hero.good, :where([data-skin="rich"]) body.progressApp .hero.warn,
 :where([data-skin="rich"]) body.progressApp .hero.late, :where([data-skin="rich"]) body.progressApp .hero.bad {
-  border-color: var(--r-line); border-radius: 22px;
+  border-color: transparent; border-radius: 24px;
   background:
-    radial-gradient(85% 130% at 100% 0%, color-mix(in srgb, var(--r-glow) 15%, transparent) 0%, transparent 62%),
-    var(--r-surface-low);
-  box-shadow: var(--r-shadow-lg), var(--r-edge);
+    radial-gradient(80% 120% at 100% 0%, color-mix(in srgb, var(--r-glow) var(--r-glow-strength), transparent) 0%, transparent 60%),
+    radial-gradient(60% 90% at 0% 100%, color-mix(in srgb, var(--r-glow) calc(var(--r-glow-strength) / 2), transparent) 0%, transparent 65%),
+    var(--r-surface-strong);
+  box-shadow: var(--r-shadow-lg), var(--r-ring), var(--r-edge);
 }
+/* 縁だけを差し色のグラデーションで描く。 */
+html[data-skin="rich"] body.progressApp .hero::after {
+  content: ""; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
+  background: var(--r-border-glow);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  :where([data-skin="rich"]) body.progressApp .heroCount strong {
+    background: var(--r-number); -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+}
+:where([data-skin="rich"]) body.progressApp .main,
+:where([data-skin="rich"]) body.progressApp .mainValue { text-shadow: 0 0 26px color-mix(in srgb, currentColor var(--r-text-glow), transparent); }
 :where([data-skin="rich"]) body.progressApp .heroCounter button {
-  background: var(--r-surface); border-color: var(--r-line); border-radius: 14px;
-  box-shadow: var(--r-shadow-sm), var(--r-edge);
+  background: var(--r-surface-strong); border-color: var(--r-line); border-radius: 15px;
+  box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge);
 }
 :where([data-skin="rich"]) body.progressApp .heroCounter .plus {
   background: var(--r-accent); border-color: transparent;
   box-shadow: var(--r-accent-glow), var(--r-accent-edge);
 }
-:where([data-skin="rich"]) body.progressApp .progressTrack { background: var(--card2); box-shadow: var(--r-groove); }
-:where([data-skin="rich"]) body.progressApp .progressFill { background: var(--r-fill); box-shadow: inset 0 1px 0 rgb(255 255 255 / 35%); }
+:where([data-skin="rich"]) body.progressApp .progressTrack { background: color-mix(in srgb, var(--card2) 80%, transparent); box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .progressFill {
+  background: var(--r-fill); box-shadow: 0 0 12px -1px color-mix(in srgb, var(--good) 70%, transparent), inset 0 1px 0 rgb(255 255 255 / 40%);
+}
 :where([data-skin="rich"]) body.progressApp .lim,
-:where([data-skin="rich"]) body.progressApp .lim.recovery { box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .lim.recovery { background: color-mix(in srgb, var(--card2) 62%, transparent); box-shadow: var(--r-groove); }
 
-/* 小カード */
+/* ───── 小カード ───── */
 :where([data-skin="rich"]) body.progressApp .metric,
 :where([data-skin="rich"]) body.progressApp .chip {
-  border-color: var(--r-line); border-radius: 16px; background: var(--r-surface);
-  box-shadow: var(--r-shadow-sm), var(--r-edge);
+  border-color: var(--r-line); border-radius: 18px; background: var(--r-surface);
+  box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge);
 }
-:where([data-skin="rich"]) body.progressApp .metricIcon { color: var(--good); }
-:where([data-skin="rich"]) body.progressApp .metric[data-pending] .metricIcon { color: var(--muted); }
+:where([data-skin="rich"]) body.progressApp .metricIcon { color: var(--good); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--good) var(--r-text-glow), transparent)); }
+:where([data-skin="rich"]) body.progressApp .metric[data-pending] .metricIcon { color: var(--muted); filter: none; }
 :where([data-skin="rich"]) body.progressApp .metric.dropTarget { border-color: var(--good); box-shadow: 0 0 0 2px var(--good); }
-:where([data-skin="rich"]) body.progressApp .questBrief { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+:where([data-skin="rich"]) body.progressApp .questBrief { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge); }
 
-/* 固定操作エリア：すりガラス。状態色（緑・橙・中立）は透かしても読み取れる濃さを保つ。 */
+/* ───── 固定操作エリア：状態色を透かしたすりガラスと、上端を走る光 ───── */
 :where([data-skin="rich"]) body.progressApp .operationDock {
-  border-radius: 22px 22px 0 0;
-  background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%) 46px) var(--state-surface);
+  border-radius: 26px 26px 0 0; border-top-color: transparent;
+  background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%) 54px) var(--state-surface);
   box-shadow: var(--r-dock-shadow), var(--r-edge);
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :where([data-skin="rich"]) body.progressApp .operationDock {
-    background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%) 46px) color-mix(in srgb, var(--state-surface) var(--r-glass), transparent);
-    -webkit-backdrop-filter: saturate(1.5) blur(18px); backdrop-filter: saturate(1.5) blur(18px);
+    background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%) 54px) color-mix(in srgb, var(--state-surface) var(--r-glass), transparent);
+    -webkit-backdrop-filter: saturate(1.7) blur(22px); backdrop-filter: saturate(1.7) blur(22px);
   }
 }
+html[data-skin="rich"] body.progressApp .operationDock::before {
+  content: ""; position: absolute; top: 0; left: 26px; right: 26px; height: 1.5px; border-radius: 2px; pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--state-fill) 80%, var(--good)) 30%, #fff 50%, color-mix(in srgb, var(--state-fill) 80%, var(--good)) 70%, transparent 100%);
+  background-size: 220% 100%; background-position: 50% 0; opacity: .85;
+}
+:where([data-skin="rich"]) body.progressApp .remainSync .remainBig { text-shadow: 0 0 22px color-mix(in srgb, currentColor calc(var(--r-text-glow) / 2), transparent); }
 :where([data-skin="rich"]) body.progressApp .remainStep,
 :where([data-skin="rich"]) body.progressApp .countPause {
-  background: var(--r-surface); border-color: var(--state-line); box-shadow: 0 1px 2px rgb(0 0 0 / 10%), var(--r-edge);
+  background: var(--r-surface-strong); border-color: var(--r-line); box-shadow: 0 1px 2px rgb(0 0 0 / 12%), var(--r-ring), var(--r-edge);
 }
 :where([data-skin="rich"]) body.progressApp .countPause[aria-pressed="true"] { background: var(--r-accent); border-color: transparent; box-shadow: var(--r-accent-glow), var(--r-accent-edge); }
-:where([data-skin="rich"]) body.progressApp .help { box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .help { background: color-mix(in srgb, var(--card2) 70%, transparent); box-shadow: var(--r-groove); }
 :where([data-skin="rich"]) body.progressApp .operationDock .countDockToggle {
-  border-radius: 14px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--state-fill) 88%, #fff) 0%, var(--state-fill) 58%, color-mix(in srgb, var(--state-fill) 91%, #000) 100%);
-  box-shadow: 0 10px 20px -12px color-mix(in srgb, var(--state-fill) 70%, #000), inset 0 1px 0 rgb(255 255 255 / 30%), inset 0 -1px 0 rgb(0 0 0 / 12%);
+  border-radius: 16px; border-color: transparent;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--state-fill) 84%, #fff) 0%, var(--state-fill) 55%, color-mix(in srgb, var(--state-fill) 88%, #000) 100%);
+  box-shadow: 0 12px 24px -12px color-mix(in srgb, var(--state-fill) 75%, #000), inset 0 1px 0 rgb(255 255 255 / 34%), inset 0 -1px 0 rgb(0 0 0 / 14%);
 }
-:where([data-skin="rich"]) body.progressApp .otherCompanyDock button { border-radius: 14px; box-shadow: inset 0 1px 0 var(--r-shine); }
+:where([data-skin="rich"]) body.progressApp .operationDock[data-state="working"] .countDockToggle {
+  background: var(--r-accent); box-shadow: var(--r-accent-glow), var(--r-accent-edge);
+}
+:where([data-skin="rich"]) body.progressApp .operationDock:not([data-state="working"]):not([data-state="break"]) .countDockToggle {
+  background: var(--r-surface-strong); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge);
+}
+:where([data-skin="rich"]) body.progressApp .otherCompanyDock button { border-radius: 16px; border-color: color-mix(in srgb, var(--good) 55%, transparent); box-shadow: inset 0 1px 0 var(--r-shine); }
 :where([data-skin="rich"]) body.progressApp .otherCompanyDock button.active { box-shadow: var(--r-groove); }
-:where([data-skin="rich"]) body.progressApp .helpText { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-lg), var(--r-edge); }
+:where([data-skin="rich"]) body.progressApp .helpText { box-shadow: var(--r-shadow-lg), var(--r-ring); }
 
-/* 稼働記録・今日のまとめ・設定 */
+/* ───── 稼働記録・今日のまとめ・設定 ───── */
 :where([data-skin="rich"]) body.progressApp .card,
 :where([data-skin="rich"]) body.progressApp .workSessionPanel,
 :where([data-skin="rich"]) body.progressApp .todaySummary,
 :where([data-skin="rich"]) body.progressApp .compactAppearance {
-  background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge);
+  background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge);
 }
 :where([data-skin="rich"]) body.progressApp .operationDock .countCard,
 :where([data-skin="rich"]) body.progressApp .operationDock .actionsCard { background: transparent; box-shadow: none; }
 :where([data-skin="rich"]) body.progressApp .settingsSheet { box-shadow: var(--r-shadow-lg); }
-:where([data-skin="rich"]) body.progressApp .settingsSection { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+:where([data-skin="rich"]) body.progressApp .settingsSection { box-shadow: var(--r-shadow-sm), var(--r-edge); }
 :where([data-skin="rich"]) body.progressApp .cardCountSegment,
 :where([data-skin="rich"]) body.progressApp .themeModes { box-shadow: var(--r-groove); }
 :where([data-skin="rich"]) body.progressApp .cardCountOption.active,
@@ -151,31 +281,74 @@ html[data-skin="rich"][data-theme] { background: var(--bg); background-image: va
   background: var(--r-accent); border-color: transparent; box-shadow: var(--r-accent-glow), var(--r-accent-edge);
 }
 
-/* クエスト */
-:where([data-skin="rich"]) .questCard { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
-:where([data-skin="rich"]) .questCard .questCard, :where([data-skin="rich"]) details.questCard { box-shadow: var(--r-edge); }
+/* ───── クエスト ───── */
+:where([data-skin="rich"]) .questCard { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge); }
+:where([data-skin="rich"]) .questCard .questCard, :where([data-skin="rich"]) details.questCard { box-shadow: var(--r-ring), var(--r-edge); }
 :where([data-skin="rich"]) .questView .questPrimary { background: var(--r-accent); box-shadow: var(--r-accent-glow), var(--r-accent-edge); }
-:where([data-skin="rich"]) .questView .questSecondary { background: var(--r-surface); border-color: var(--r-line); box-shadow: 0 1px 2px rgb(0 0 0 / 8%), var(--r-edge); }
+:where([data-skin="rich"]) .questView .questSecondary { background: var(--r-surface-strong); border-color: var(--r-line); box-shadow: 0 1px 2px rgb(0 0 0 / 10%), var(--r-ring), var(--r-edge); }
 :where([data-skin="rich"]) .questTrack { box-shadow: var(--r-groove); }
 :where([data-skin="rich"]) .questTrack span { background: var(--r-fill); }
 
-/* コンパクト版の主ボタン */
+/* ───── コンパクト版の主ボタン ───── */
 :where([data-skin="rich"]) body.compactView .plusBtn { background: var(--r-accent); border-color: transparent; box-shadow: var(--r-accent-glow), var(--r-accent-edge); }
-:where([data-skin="rich"]) body.compactView .minusBtn { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+:where([data-skin="rich"]) body.compactView .minusBtn { background: var(--r-surface-strong); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge); }
 
 /* 押せない状態に光や影を残さない。 */
 html[data-skin="rich"] body.progressApp button:disabled { box-shadow: none; }
 
-/* 押した手応え。動きを減らす設定の端末では出さない。 */
+/* ───── 動き。端末の「視差効果を減らす」がオンなら一切動かさない ───── */
 @media (prefers-reduced-motion: no-preference) {
-  :where([data-skin="rich"]) body.progressApp :is(.heroCounter button, .countDockToggle, .remainStep, .countPause, .otherCompanyDock button, .settingsOpen, .questPrimary, .questSecondary, .plusBtn, .minusBtn) {
-    transition: transform .09s ease-out, filter .09s ease-out;
+  html[data-skin="rich"] body.progressApp::before { animation: r-drift-a 34s ease-in-out infinite alternate; will-change: transform; }
+  html[data-skin="rich"] body.progressApp::after { animation: r-drift-b 41s ease-in-out infinite alternate; will-change: transform; }
+
+  /* 起動時：カードが下から順に立ち上がる。 */
+  html[data-skin="rich"].r-intro body.progressApp :is(.sessionStatus, .appTabs, .hero, .metric, .chip) { animation: r-rise .52s cubic-bezier(.2, .8, .2, 1) both; }
+  html[data-skin="rich"].r-intro body.progressApp .appTabs { animation-delay: .04s; }
+  html[data-skin="rich"].r-intro body.progressApp .hero { animation-delay: .08s; }
+  html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(1) { animation-delay: .14s; }
+  html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(2) { animation-delay: .18s; }
+  html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(3) { animation-delay: .22s; }
+  html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(4) { animation-delay: .26s; }
+  html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(5) { animation-delay: .30s; }
+  html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(n+6) { animation-delay: .34s; }
+  html[data-skin="rich"].r-intro body.progressApp .operationDock { animation: r-dock .6s cubic-bezier(.2, .8, .2, 1) both; }
+
+  /* 稼働中：状態ランプが脈打ち、操作エリア上端を光が走り、稼働ボタンが呼吸する。 */
+  html[data-skin="rich"] body.progressApp .sessionStatus[data-state="working"] .dot { animation: r-pulse 2.2s ease-out infinite; }
+  html[data-skin="rich"] body.progressApp .operationDock[data-state="working"]::before { animation: r-sheen 4.5s linear infinite; }
+  html[data-skin="rich"] body.progressApp .operationDock[data-state="working"] .countDockToggle { animation: r-breathe 3.2s ease-in-out infinite; }
+
+  /* 進捗バーは伸びるときに滑らかに動き、表面を光が流れる。 */
+  html[data-skin="rich"] body.progressApp .progressFill { transition: width .55s cubic-bezier(.2, .8, .2, 1); background-size: 200% 100%; animation: r-flow 5s linear infinite; }
+
+  /* 件数が変わった瞬間：数字が弾み、カードの縁が一度光る。 */
+  html[data-skin="rich"] body.progressApp .hero.r-tick .heroCount strong { animation: r-pop .42s cubic-bezier(.2, 1.5, .4, 1); }
+  html[data-skin="rich"] body.progressApp .hero.r-tick::after { animation: r-flash .7s ease-out; }
+
+  /* 画面の切り替え。固定操作エリアを含むので、位置の基準を変える transform は使わず不透明度だけ動かす。 */
+  html[data-skin="rich"] body.progressApp :is(#progressView, #questView):not([hidden]) { animation: r-fade .28s ease-out; }
+
+  /* 押した手応え */
+  :where([data-skin="rich"]) body.progressApp :is(.heroCounter button, .countDockToggle, .remainStep, .countPause, .otherCompanyDock button, .settingsOpen, .questPrimary, .questSecondary, .plusBtn, .minusBtn, .appTabs button) {
+    transition: transform .12s cubic-bezier(.2, .8, .2, 1), filter .12s ease-out;
   }
   :where([data-skin="rich"]) body.progressApp :is(.heroCounter button, .countDockToggle, .remainStep, .countPause, .otherCompanyDock button, .settingsOpen, .questPrimary, .questSecondary, .plusBtn, .minusBtn):active:not(:disabled) {
-    transform: translateY(1px) scale(.985); filter: brightness(.96);
+    transform: scale(.955); filter: brightness(1.08) saturate(1.1);
   }
 }
-/* 透明効果を減らす設定の端末では、すりガラスをやめて不透明にする。 */
+@keyframes r-drift-a { from { transform: translate3d(-4%, -3%, 0) rotate(0deg) scale(1); } to { transform: translate3d(5%, 4%, 0) rotate(24deg) scale(1.12); } }
+@keyframes r-drift-b { from { transform: translate3d(4%, 3%, 0) rotate(0deg) scale(1.08); } to { transform: translate3d(-5%, -4%, 0) rotate(-20deg) scale(1); } }
+@keyframes r-rise { from { opacity: 0; transform: translate3d(0, 14px, 0) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes r-dock { from { opacity: 0; transform: translate3d(0, 28px, 0); } to { opacity: 1; transform: none; } }
+@keyframes r-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--state-dot) 65%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--state-dot) 0%, transparent); } }
+@keyframes r-sheen { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@keyframes r-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.09) saturate(1.12); } }
+@keyframes r-flow { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes r-pop { 0% { transform: scale(1); } 40% { transform: scale(1.14); } 100% { transform: scale(1); } }
+@keyframes r-flash { 0% { opacity: 1; filter: brightness(2.2) saturate(1.6); } 100% { opacity: 1; filter: none; } }
+@keyframes r-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* 端末の「透明度を下げる」がオンなら、すりガラスをやめて不透明にする。 */
 @media (prefers-reduced-transparency: reduce) {
   :where([data-skin="rich"]) body.progressApp .operationDock { background: var(--state-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

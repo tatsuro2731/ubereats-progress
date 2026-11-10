@@ -9,6 +9,10 @@
   const SKIN_KEY = "ubereatsProgressSkinV1";
   const SKINS = Object.freeze(["rich", "classic"]);
   const normalizeSkin = value => SKINS.includes(value) ? value : SKINS[0];
+  const THEME_COLORS = Object.freeze({
+    classic: Object.freeze({ light: "#f0f7f3", dark: "#111815" }),
+    rich: Object.freeze({ light: "#edf3f5", dark: "#050b0e" })
+  });
 
   function timeMinutes(value) {
     if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
@@ -55,7 +59,7 @@
     return Math.max(25, Math.min(60000, ...boundaries) + 10);
   }
 
-  const api = { STORAGE_KEY, DEFAULTS, SKIN_KEY, SKINS, timeMinutes, normalize, normalizeSkin, themeAt, nextCheckDelay };
+  const api = { STORAGE_KEY, DEFAULTS, SKIN_KEY, SKINS, THEME_COLORS, timeMinutes, normalize, normalizeSkin, themeAt, nextCheckDelay };
   if (typeof module === "object" && module.exports) module.exports = api;
   if (!root || !root.document) return;
 
@@ -64,6 +68,7 @@
   let refreshTimer = null;
   let storageFailed = false;
   let skin = SKINS[0];
+  let relayout = () => {};
 
   function read() {
     try {
@@ -110,7 +115,7 @@
     doc.documentElement.setAttribute("data-theme-mode", settings.mode);
     doc.documentElement.setAttribute("data-skin", skin);
     const meta = doc.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", theme === "dark" ? "#111815" : "#f0f7f3");
+    if (meta) meta.setAttribute("content", THEME_COLORS[skin][theme]);
     updateControls();
     if (refreshTimer !== null) root.clearTimeout(refreshTimer);
     refreshTimer = null;
@@ -130,6 +135,40 @@
     skin = normalizeSkin(next);
     try { root.localStorage.setItem(SKIN_KEY, skin); } catch (_) { /* applied to this screen only */ }
     apply();
+  }
+
+  // Rich-skin motion hooks. They only toggle classes; rich.css owns the animation
+  // and ignores them in the classic skin or when the device reduces motion.
+  function setupRichMotion() {
+    const html = doc.documentElement;
+    if (!html.classList || typeof html.classList.add !== "function" || typeof html.addEventListener !== "function") return;
+    // The entrance plays once per launch. Count the running entrance animations
+    // and drop the class when the last one ends, so cards that are re-rendered
+    // later do not replay it. No timer: nothing runs when motion is reduced.
+    let running = 0;
+    const entrance = event => event.animationName === "r-rise" || event.animationName === "r-dock";
+    // Cards are measured for the dock fit; measure again once they stop moving.
+    const finish = event => { if (entrance(event) && --running <= 0) { html.classList.remove("r-intro"); relayout(); } };
+    html.addEventListener("animationstart", event => { if (entrance(event)) running += 1; });
+    html.addEventListener("animationend", finish);
+    html.addEventListener("animationcancel", finish);
+    html.classList.add("r-intro");
+    const hero = doc.getElementById("hero");
+    const done = doc.getElementById("heroDone");
+    if (!hero || !done || !hero.classList || !root.MutationObserver) return;
+    let shown = done.textContent;
+    let timer = null;
+    new root.MutationObserver(() => {
+      if (done.textContent === shown) return;
+      const first = shown === "" || shown === "-";
+      shown = done.textContent;
+      if (first || skin !== "rich") return;
+      hero.classList.remove("r-tick");
+      void hero.offsetWidth; // restart the animation for rapid taps
+      hero.classList.add("r-tick");
+      if (timer !== null) root.clearTimeout(timer);
+      timer = root.setTimeout(() => { hero.classList.remove("r-tick"); timer = null; }, 800);
+    }).observe(done, { childList: true, characterData: true, subtree: true });
   }
 
   function setupDashboardLayout() {
@@ -174,6 +213,7 @@
       const observer = new root.ResizeObserver(schedule);
       [dock, overview, metrics, doc.getElementById("hero"), doc.getElementById("questBrief")].filter(Boolean).forEach(element => observer.observe(element));
     }
+    relayout = schedule;
     root.addEventListener("resize", schedule);
     root.addEventListener("pageshow", schedule);
     if (root.visualViewport) root.visualViewport.addEventListener("resize", schedule);
@@ -208,6 +248,7 @@
     }
     apply();
     setupDashboardLayout();
+    setupRichMotion();
   }
 
   read();

@@ -143,16 +143,28 @@ test("the skin defaults to rich, persists in its own key and leaves the theme re
   assert.equal(blocked.element("root").attrs["data-skin"], "classic", "a blocked save still applies to the current screen");
 });
 
-test("the rich skin only adds finish: it never restates sizes, spacing or state colours", () => {
-  const css = read("styles/rich.css");
-  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.doesNotMatch(rules, /(^|[;{\s])(height|min-height|max-height|width|min-width|max-width|padding|margin|font-size|line-height|gap|display|position|inset|top|bottom|left|right|grid[a-z-]*|flex[a-z-]*)\s*:/m, "layout stays owned by the classic sheets so both skins occupy the same space");
-  assert.doesNotMatch(rules, /--(working|break|state|good|late|bad|accent|bg|card|text|muted)[a-z-]*\s*:/, "palette and state tokens are shared with classic");
+test("the rich skin restyles without moving anything: real elements keep their size, spacing and type scale", () => {
+  const css = read("styles/rich.css").replace(/\/\*[\s\S]*?\*\//g, "");
   for (const page of [read("index.html"), read("compact.html")]) assert.match(page, /styles\/rich\.css\?v=\d+/);
-  for (const selector of rules.match(/^[^@{}\n][^{}]*\{/gm) || []) {
-    if (/^\s*(:root|html)\[data-skin="rich"\]/.test(selector) || /^\s*(from|to|\d+%)/.test(selector)) continue;
-    for (const part of selector.replace(/\{$/, "").split(/,\s*\n|,\s*(?=:where)/)) assert.match(part.trim(), /^:where\(\[data-skin="rich"\]\) /, `rich rule must be scoped to the rich skin: ${part.trim()}`);
+  const LAYOUT = /(^|[;{\s])(height|min-height|max-height|width|min-width|max-width|padding(-[a-z]+)?|margin(-[a-z]+)?|font-size|font-family|font-weight|line-height|letter-spacing|gap|display|position|inset|top|bottom|left|right|grid[a-z-]*|flex[a-z-]*)\s*:/;
+  const rules = [...css.matchAll(/([^{}@;]+)\{([^{}]*)\}/g)].map(match => ({ selector: match[1].trim(), body: match[2] }));
+  assert.ok(rules.length > 60);
+  for (const { selector, body } of rules) {
+    if (/^(from|to|[\d.,%\s]+)$/.test(selector)) continue; // keyframe steps
+    const scoped = selector.split(/,\s*(?=:where\(|html\[|:root\[)/).every(part => /^(:root|html)\[data-skin="rich"\]|^:where\(\[data-skin="rich"\]\) /.test(part.trim()));
+    assert.ok(scoped, `rich rule must only apply to the rich skin: ${selector}`);
+    // Decorative pseudo-elements may be placed and sized; real elements may not.
+    if (/::(before|after)/.test(selector)) continue;
+    assert.doesNotMatch(body, LAYOUT, `layout stays shared with classic: ${selector}`);
   }
+  assert.match(css, /@media \(prefers-reduced-motion: no-preference\)/);
+  const outsideMotionQuery = css.replace(/@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?\n\}\n/, "").replace(/@keyframes[^{]+\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
+  assert.doesNotMatch(outsideMotionQuery, /animation\s*:/, "every animation respects the reduce-motion setting");
+  for (const token of ["--working-fill", "--break-fill", "--good", "--late", "--bad"]) {
+    assert.equal((css.match(new RegExp(`${token}:`, "g")) || []).length, 2, `${token} is defined for light and dark`);
+  }
+  assert.equal(appearance.THEME_COLORS.classic.light, "#f0f7f3");
+  assert.equal(appearance.THEME_COLORS.classic.dark, "#111815");
 });
 
 test("returning from background or BFCache updates time without duplicate timers", () => {
