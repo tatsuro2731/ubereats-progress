@@ -248,6 +248,8 @@
     return { ...result, period, inferredProgress, candidates: result.candidates.map(candidate => ({ ...candidate, label: "進行中のクエスト", completed })) };
   }
 
+  function fileProblem(message) { const error = new Error(message); error.fileProblem = true; return error; }
+
   function loadLibrary() {
     if (typeof window.Tesseract?.createWorker === "function") return Promise.resolve(window.Tesseract);
     if (libraryPromise) return libraryPromise;
@@ -273,7 +275,7 @@
       img.onload = () => {
         URL.revokeObjectURL(url);
         try {
-          if (!img.naturalWidth || !img.naturalHeight || img.naturalWidth * img.naturalHeight > 40000000) throw new Error("画像が大きすぎます。スクリーンショットを選んでください。");
+          if (!img.naturalWidth || !img.naturalHeight || img.naturalWidth * img.naturalHeight > 40000000) throw fileProblem("画像が大きすぎます。スクリーンショットを選んでください。");
           const scale = Math.min(1, 1600 / img.naturalWidth, 5000 / img.naturalHeight, Math.sqrt(6000000 / (img.naturalWidth * img.naturalHeight)));
           const canvas = document.createElement("canvas");
           canvas.width = Math.round(img.naturalWidth * scale); canvas.height = Math.round(img.naturalHeight * scale);
@@ -298,14 +300,14 @@
           resolve(canvas);
         } catch (error) { reject(error); }
       };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を開けませんでした。PNGまたはJPEGのスクリーンショットを選んでください。")); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(fileProblem("画像を開けませんでした。PNG・JPEG・WebP形式のスクリーンショットを選んでください。")); };
       img.src = url;
     });
   }
 
   async function recognize(file, { signal, onProgress = () => {} } = {}) {
-    if (!file || file.size > 20 * 1024 * 1024) throw new Error("20MB以下のスクリーンショットを選んでください。");
-    if (!/image\/(png|jpeg|webp)/.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) throw new Error("PNG・JPEG・WebP形式の画像を選んでください。");
+    if (!file || file.size > 20 * 1024 * 1024) throw fileProblem("20MB以下のスクリーンショットを選んでください。");
+    if (!/image\/(png|jpeg|webp)/.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) throw fileProblem("PNG・JPEG・WebP形式の画像を選んでください。");
     let worker;
     let stopped = false;
     let timer;
@@ -403,6 +405,7 @@
       const message = typeof error?.message === "string" && error.message
         ? error.message : typeof error === "string" && error ? error : "画像を読み取れませんでした。";
       const failure = new Error(message);
+      if (error?.fileProblem) failure.fileProblem = true;
       if (diagnostic()) {
         failure.diagnosticText = diagnostic();
         failure.message += " 下の「読み取り結果を確認」から、途中までの結果を確認できます。";

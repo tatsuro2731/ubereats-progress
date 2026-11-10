@@ -53,3 +53,8 @@ body.progressApp .questBrief { display:flex; justify-content:space-between; flex
 .questImageChoice:focus-visible,.questImport button:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
 .compactQuestLink { display:block; background:var(--card); color:var(--text); border:1px solid var(--line); padding:12px; border-radius:12px; margin-top:12px; font-size:14px; text-decoration:none; }
 @media(max-width:359px) { .questCard { padding:13px; }.questBigCount strong { font-size:40px; }.questView .questFormPair { gap:0 8px; }.questToolbar { gap:6px; } }
+/* 画像読み取り：失敗は赤い枠、読み取れた結果への注意は通常の案内として分ける。 */
+.questImport .questError { margin:10px 0 0; padding:10px 12px; border-left:3px solid var(--bad); border-radius:5px; background:color-mix(in srgb, var(--bad) 9%, transparent); line-height:1.6; }
+.questImport .questError[data-kind="warning"] { border-left-color:var(--accent); background:var(--card2); color:var(--text); font-weight:500; }
+.questImport #questImageRetry { margin-top:10px; }
+.questImport #questImageRetry[hidden] { display:none; }

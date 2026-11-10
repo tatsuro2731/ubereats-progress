@@ -29,6 +29,7 @@
   let imagePreviewUrl = null;
   let imageCountApplied = false;
   let imageModulePromise = null;
+  let lastImageFile = null;
   let lastProgressDone = null;
 
   function loadImageModule() {
@@ -43,7 +44,7 @@
         reject(new Error("画像読み取り機能を準備できませんでした。通信を確認して、もう一度お試しください。"));
       };
       const timeout = window.setTimeout(fail, 20000);
-      script.src = "src/quest-image.js?v=86";
+      script.src = "src/quest-image.js?v=87";
       script.onload = () => {
         if (settled) return;
         if (!window.UberQuestImage) { fail(); return; }
@@ -61,13 +62,14 @@
     byId("questConfigForm").querySelector('button[type="submit"]').disabled = busy;
   }
   function resetImage(resetCount = false) {
-    imageController?.abort(); imageController = null; imageResult = null;
+    imageController?.abort(); imageController = null; imageResult = null; lastImageFile = null;
     if (resetCount) imageCountApplied = false;
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     imagePreviewUrl = null;
     byId("questImageOriginal").removeAttribute("src");
     byId("questImageFile").value = "";
     for (const id of ["questImageResults", "questImageError", "questImagePreview", "questImageDateNote"]) byId(id).hidden = true;
+    if (byId("questImageRetry")) byId("questImageRetry").hidden = true;
     byId("questImagePreview").open = false;
     byId("questImageDebug").hidden = true; byId("questImageDebug").open = false; byId("questImageDebugText").value = "";
     byId("questImageChoices").replaceChildren(); text("questImageStatus", ""); imageBusy(false);
@@ -118,11 +120,22 @@
     byId("questConfigError").hidden = true;
     byId("questStartDate").focus();
   }
+  // 読み取れた結果への注意と、読み取り自体の失敗は見た目を分ける。
+  function imageMessage(message, kind) {
+    errorMessage(message, "questImageError");
+    const element = byId("questImageError");
+    if (element && element.dataset) element.dataset.kind = kind;
+  }
   async function readQuestImage(file) {
     resetImage();
     if (!file) return;
+    lastImageFile = file;
     const controller = new AbortController(); imageController = controller;
     imageBusy(true);
+    // 準備（通信）で止まっているときだけ、待つ以外の選択肢を案内する。
+    const slowHint = window.setTimeout(() => {
+      if (imageController === controller && /準備/.test(byId("questImageStatus").textContent)) text("questImageStatus", "準備に時間がかかっています。通信が不安定なときは、中止して手入力もできます。");
+    }, 12000);
     try {
       text("questImageStatus", "画像読み取り機能を準備しています…");
       const imageModule = await loadImageModule();
@@ -132,7 +145,7 @@
       byId("questImageDebugText").value = result.diagnosticText || "";
       byId("questImageDebug").hidden = !result.diagnosticText;
       if (!result.candidates.length) throw new Error("読み取った文字から件数と報酬を確定できませんでした。下の「読み取り結果を確認」を開いた画面を送ってください。手入力もできます。");
-      if (result.warning) errorMessage(result.warning, "questImageError");
+      if (result.warning) imageMessage(result.warning, "warning");
       imageResult = result;
       imagePreviewUrl = URL.createObjectURL(file); byId("questImageOriginal").src = imagePreviewUrl; byId("questImagePreview").hidden = false;
       byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
@@ -163,8 +176,12 @@
         byId("questImageDebugText").value = error.diagnosticText;
         byId("questImageDebug").hidden = false;
       }
-      if (error.name !== "AbortError") errorMessage(error.message || "画像を読み取れませんでした。通信を確認して再度お試しください。", "questImageError");
-    } finally { if (imageController === controller) { imageController = null; imageBusy(false); } }
+      if (error.name !== "AbortError") {
+        imageMessage(error.message || "画像を読み取れませんでした。通信を確認して再度お試しください。", "error");
+        // 画像自体の問題でなければ、選び直さずに同じ画像で再試行できるようにする。
+        if (byId("questImageRetry")) byId("questImageRetry").hidden = Boolean(error.fileProblem);
+      }
+    } finally { window.clearTimeout(slowHint); if (imageController === controller) { imageController = null; imageBusy(false); } }
   }
 
   function selected(state) {
@@ -378,6 +395,7 @@
 
   byId("questImagePick").addEventListener("click", () => byId("questImageFile").click());
   byId("questImageFile").addEventListener("change", event => readQuestImage(event.target.files[0]));
+  byId("questImageRetry")?.addEventListener("click", () => lastImageFile ? readQuestImage(lastImageFile) : undefined);
   byId("questImageStop").addEventListener("click", () => {
     imageController?.abort(); imageController = null;
     text("questImageStatus", "読み取りを中止しました。"); imageBusy(false);

@@ -427,6 +427,32 @@ test("image import exposes diagnostics when OCR fails after producing text", asy
   assert.match(app.element("questImageError").textContent, /再試行に失敗/);
 });
 
+test("a failed read can be retried with the same image, except when the image itself is the problem", async () => {
+  let calls = 0;
+  const files = [];
+  const app = imageImportHarness({ recognize: async file => {
+    files.push(file);
+    calls += 1;
+    if (calls === 1) throw new Error("読み取り機能を準備できませんでした。");
+    if (calls === 3) throw Object.assign(new Error("PNG・JPEG・WebP形式の画像を選んでください。"), { fileProblem: true });
+    return { candidates: [{ label: "進行中のクエスト", tiers: [{ target: 110, reward: 11550 }] }], period: null, skipped: 0, diagnosticText: "結果1" };
+  } });
+  await app.emit("questNew", "click");
+  assert.equal(app.element("questImageRetry").hidden, true);
+  await app.importImage();
+  assert.equal(app.element("questImageError").hidden, false);
+  assert.equal(app.element("questImageRetry").hidden, false, "a transient failure offers a retry");
+  await app.emit("questImageRetry", "click");
+  assert.equal(calls, 2);
+  assert.equal(files[1], files[0], "the retry reuses the chosen image");
+  assert.equal(app.element("questImageError").hidden, true);
+  assert.equal(app.element("questImageRetry").hidden, true);
+  assert.match(app.element("questImageStatus").textContent, /入力しました/);
+  await app.importImage();
+  assert.equal(app.element("questImageError").hidden, false);
+  assert.equal(app.element("questImageRetry").hidden, true, "an unusable image needs another image, not a retry");
+});
+
 test("image import shows a warning alongside a retained OCR candidate", async () => {
   const app = imageImportHarness({ recognize: async () => ({
     candidates: [{ label: "進行中のクエスト", completed: 5, tiers: [{ target: 110, reward: 13780 }] }],
