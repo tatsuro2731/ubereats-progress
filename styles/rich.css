@@ -1,0 +1,181 @@
+/*
+ * リッチ：クラシックと同じ配色・状態色・配置のまま、質感（奥行き、光、素材感）だけを重ねる。
+ * - この中で寸法（高さ、余白、文字サイズ）は変えない。カードが操作エリアに収まる計算を崩さないため。
+ * - 接頭辞は :where() で詳細度0にし、クラシックの状態別ルール（押下中、並べ替え中など）を上書きしない。
+ * - html[data-skin="rich"] のときだけ効く。クラシックではこのファイルは何もしない。
+ */
+:root[data-skin="rich"] {
+  --r-page: radial-gradient(130% 420px at 50% -120px, #ffffff 0%, rgb(255 255 255 / 0%) 70%), linear-gradient(180deg, #eef7f2 0%, #e3efe8 100%);
+  --r-surface: linear-gradient(180deg, #ffffff 0%, #f5faf7 100%);
+  --r-surface-low: linear-gradient(180deg, #ffffff 0%, #eef6f1 100%);
+  --r-edge: inset 0 1px 0 rgb(255 255 255 / 92%);
+  --r-shadow-sm: 0 1px 2px rgb(16 54 36 / 7%), 0 8px 18px -8px rgb(16 54 36 / 18%);
+  --r-shadow-lg: 0 2px 4px rgb(16 54 36 / 6%), 0 22px 40px -18px rgb(16 54 36 / 30%);
+  --r-groove: inset 0 1px 2px rgb(16 54 36 / 16%), inset 0 0 0 1px rgb(16 54 36 / 3%);
+  --r-accent: linear-gradient(180deg, #0f8a57 0%, #06653f 100%);
+  --r-accent-edge: inset 0 1px 0 rgb(255 255 255 / 30%), inset 0 -1px 0 rgb(0 0 0 / 14%);
+  --r-accent-glow: 0 10px 20px -10px rgb(8 112 71 / 70%);
+  --r-fill: linear-gradient(90deg, #2bb37a 0%, #087047 100%);
+  --r-glass: 82%;
+  --r-dock-shadow: 0 -14px 34px -16px rgb(16 54 36 / 30%);
+  --r-shine: rgb(255 255 255 / 70%);
+  --r-line: #cfe2d7;
+}
+:root[data-skin="rich"][data-theme="dark"] {
+  --r-page: radial-gradient(130% 420px at 50% -140px, rgb(120 222 175 / 13%) 0%, rgb(120 222 175 / 0%) 70%), linear-gradient(180deg, #121a16 0%, #0d1310 100%);
+  --r-surface: linear-gradient(180deg, #25322b 0%, #1b2520 100%);
+  --r-surface-low: linear-gradient(180deg, #2a3830 0%, #202b25 100%);
+  --r-edge: inset 0 1px 0 rgb(255 255 255 / 8%);
+  --r-shadow-sm: 0 1px 2px rgb(0 0 0 / 35%), 0 10px 20px -10px rgb(0 0 0 / 65%);
+  --r-shadow-lg: 0 2px 4px rgb(0 0 0 / 35%), 0 24px 44px -18px rgb(0 0 0 / 80%);
+  --r-groove: inset 0 1px 2px rgb(0 0 0 / 50%), inset 0 0 0 1px rgb(0 0 0 / 12%);
+  --r-accent: linear-gradient(180deg, #93edc5 0%, #62cf9c 100%);
+  --r-accent-edge: inset 0 1px 0 rgb(255 255 255 / 45%), inset 0 -1px 0 rgb(0 0 0 / 16%);
+  --r-accent-glow: 0 10px 22px -10px rgb(120 222 175 / 55%);
+  --r-fill: linear-gradient(90deg, #4fbf8d 0%, #9af0c9 100%);
+  --r-glass: 78%;
+  --r-dock-shadow: 0 -16px 36px -16px rgb(0 0 0 / 75%);
+  --r-shine: rgb(255 255 255 / 9%);
+  --r-line: #3a5043;
+}
+
+/* 背景：上から光が差す、ごく淡いグラデーション。 */
+html[data-skin="rich"][data-theme] { background: var(--bg); background-image: var(--r-page); background-repeat: no-repeat; }
+:where([data-skin="rich"]) body.progressApp { background: transparent; }
+
+/* ヘッダー */
+:where([data-skin="rich"]) body.progressApp .settingsOpen,
+:where([data-skin="rich"]) body.progressApp .settingsClose {
+  background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge);
+}
+:where([data-skin="rich"]) body.progressApp .sessionStatus {
+  /* 枠は影で描き、クラシックと同じ外寸を保つ。 */
+  box-shadow: var(--r-shadow-sm), inset 0 0 0 1px var(--state-line), var(--r-edge);
+  background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%)) var(--state-surface);
+}
+:where([data-skin="rich"]) body.progressApp .sessionStatusBadge {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--state-fill) 88%, #fff) 0%, var(--state-fill) 60%, color-mix(in srgb, var(--state-fill) 92%, #000) 100%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 14%), inset 0 1px 0 rgb(255 255 255 / 28%);
+}
+:where([data-skin="rich"]) body.progressApp .sessionStatus[data-state="working"] .dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--state-dot) 28%, transparent); }
+
+/* タブ：溝のあるトラックに、浮いたつまみ。 */
+:where([data-skin="rich"]) body.progressApp .appTabs { box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .appTabs button[aria-selected="true"] { background: var(--r-surface); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+
+/* メインカード：遅れ具合の色で、右上にごく淡い光を置く。 */
+:where([data-skin="rich"]) body.progressApp .hero { --r-glow: var(--good); }
+:where([data-skin="rich"]) body.progressApp .hero.late { --r-glow: var(--late); }
+:where([data-skin="rich"]) body.progressApp .hero.bad { --r-glow: var(--bad); }
+:where([data-skin="rich"]) body.progressApp .hero,
+:where([data-skin="rich"]) body.progressApp .hero.good, :where([data-skin="rich"]) body.progressApp .hero.warn,
+:where([data-skin="rich"]) body.progressApp .hero.late, :where([data-skin="rich"]) body.progressApp .hero.bad {
+  border-color: var(--r-line); border-radius: 22px;
+  background:
+    radial-gradient(85% 130% at 100% 0%, color-mix(in srgb, var(--r-glow) 15%, transparent) 0%, transparent 62%),
+    var(--r-surface-low);
+  box-shadow: var(--r-shadow-lg), var(--r-edge);
+}
+:where([data-skin="rich"]) body.progressApp .heroCounter button {
+  background: var(--r-surface); border-color: var(--r-line); border-radius: 14px;
+  box-shadow: var(--r-shadow-sm), var(--r-edge);
+}
+:where([data-skin="rich"]) body.progressApp .heroCounter .plus {
+  background: var(--r-accent); border-color: transparent;
+  box-shadow: var(--r-accent-glow), var(--r-accent-edge);
+}
+:where([data-skin="rich"]) body.progressApp .progressTrack { background: var(--card2); box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .progressFill { background: var(--r-fill); box-shadow: inset 0 1px 0 rgb(255 255 255 / 35%); }
+:where([data-skin="rich"]) body.progressApp .lim,
+:where([data-skin="rich"]) body.progressApp .lim.recovery { box-shadow: var(--r-groove); }
+
+/* 小カード */
+:where([data-skin="rich"]) body.progressApp .metric,
+:where([data-skin="rich"]) body.progressApp .chip {
+  border-color: var(--r-line); border-radius: 16px; background: var(--r-surface);
+  box-shadow: var(--r-shadow-sm), var(--r-edge);
+}
+:where([data-skin="rich"]) body.progressApp .metricIcon { color: var(--good); }
+:where([data-skin="rich"]) body.progressApp .metric[data-pending] .metricIcon { color: var(--muted); }
+:where([data-skin="rich"]) body.progressApp .metric.dropTarget { border-color: var(--good); box-shadow: 0 0 0 2px var(--good); }
+:where([data-skin="rich"]) body.progressApp .questBrief { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+
+/* 固定操作エリア：すりガラス。状態色（緑・橙・中立）は透かしても読み取れる濃さを保つ。 */
+:where([data-skin="rich"]) body.progressApp .operationDock {
+  border-radius: 22px 22px 0 0;
+  background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%) 46px) var(--state-surface);
+  box-shadow: var(--r-dock-shadow), var(--r-edge);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :where([data-skin="rich"]) body.progressApp .operationDock {
+    background: linear-gradient(180deg, var(--r-shine), rgb(255 255 255 / 0%) 46px) color-mix(in srgb, var(--state-surface) var(--r-glass), transparent);
+    -webkit-backdrop-filter: saturate(1.5) blur(18px); backdrop-filter: saturate(1.5) blur(18px);
+  }
+}
+:where([data-skin="rich"]) body.progressApp .remainStep,
+:where([data-skin="rich"]) body.progressApp .countPause {
+  background: var(--r-surface); border-color: var(--state-line); box-shadow: 0 1px 2px rgb(0 0 0 / 10%), var(--r-edge);
+}
+:where([data-skin="rich"]) body.progressApp .countPause[aria-pressed="true"] { background: var(--r-accent); border-color: transparent; box-shadow: var(--r-accent-glow), var(--r-accent-edge); }
+:where([data-skin="rich"]) body.progressApp .help { box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .operationDock .countDockToggle {
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--state-fill) 88%, #fff) 0%, var(--state-fill) 58%, color-mix(in srgb, var(--state-fill) 91%, #000) 100%);
+  box-shadow: 0 10px 20px -12px color-mix(in srgb, var(--state-fill) 70%, #000), inset 0 1px 0 rgb(255 255 255 / 30%), inset 0 -1px 0 rgb(0 0 0 / 12%);
+}
+:where([data-skin="rich"]) body.progressApp .otherCompanyDock button { border-radius: 14px; box-shadow: inset 0 1px 0 var(--r-shine); }
+:where([data-skin="rich"]) body.progressApp .otherCompanyDock button.active { box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .helpText { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-lg), var(--r-edge); }
+
+/* 稼働記録・今日のまとめ・設定 */
+:where([data-skin="rich"]) body.progressApp .card,
+:where([data-skin="rich"]) body.progressApp .workSessionPanel,
+:where([data-skin="rich"]) body.progressApp .todaySummary,
+:where([data-skin="rich"]) body.progressApp .compactAppearance {
+  background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge);
+}
+:where([data-skin="rich"]) body.progressApp .operationDock .countCard,
+:where([data-skin="rich"]) body.progressApp .operationDock .actionsCard { background: transparent; box-shadow: none; }
+:where([data-skin="rich"]) body.progressApp .settingsSheet { box-shadow: var(--r-shadow-lg); }
+:where([data-skin="rich"]) body.progressApp .settingsSection { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+:where([data-skin="rich"]) body.progressApp .cardCountSegment,
+:where([data-skin="rich"]) body.progressApp .themeModes { box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) body.progressApp .cardCountOption.active,
+:where([data-skin="rich"]) body.progressApp .themeModes button.active,
+:where([data-skin="rich"]) body.progressApp .settingsDone,
+:where([data-skin="rich"]) body.progressApp .cardOrderDone,
+:where([data-skin="rich"]) body.progressApp .applyStartTime,
+:where([data-skin="rich"]) body.progressApp .applyBreakTime,
+:where([data-skin="rich"]) body.progressApp .applyOtherCompanyTime,
+:where([data-skin="rich"]) body.progressApp .applyHistoryEnd {
+  background: var(--r-accent); border-color: transparent; box-shadow: var(--r-accent-glow), var(--r-accent-edge);
+}
+
+/* クエスト */
+:where([data-skin="rich"]) .questCard { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+:where([data-skin="rich"]) .questCard .questCard, :where([data-skin="rich"]) details.questCard { box-shadow: var(--r-edge); }
+:where([data-skin="rich"]) .questView .questPrimary { background: var(--r-accent); box-shadow: var(--r-accent-glow), var(--r-accent-edge); }
+:where([data-skin="rich"]) .questView .questSecondary { background: var(--r-surface); border-color: var(--r-line); box-shadow: 0 1px 2px rgb(0 0 0 / 8%), var(--r-edge); }
+:where([data-skin="rich"]) .questTrack { box-shadow: var(--r-groove); }
+:where([data-skin="rich"]) .questTrack span { background: var(--r-fill); }
+
+/* コンパクト版の主ボタン */
+:where([data-skin="rich"]) body.compactView .plusBtn { background: var(--r-accent); border-color: transparent; box-shadow: var(--r-accent-glow), var(--r-accent-edge); }
+:where([data-skin="rich"]) body.compactView .minusBtn { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-edge); }
+
+/* 押せない状態に光や影を残さない。 */
+html[data-skin="rich"] body.progressApp button:disabled { box-shadow: none; }
+
+/* 押した手応え。動きを減らす設定の端末では出さない。 */
+@media (prefers-reduced-motion: no-preference) {
+  :where([data-skin="rich"]) body.progressApp :is(.heroCounter button, .countDockToggle, .remainStep, .countPause, .otherCompanyDock button, .settingsOpen, .questPrimary, .questSecondary, .plusBtn, .minusBtn) {
+    transition: transform .09s ease-out, filter .09s ease-out;
+  }
+  :where([data-skin="rich"]) body.progressApp :is(.heroCounter button, .countDockToggle, .remainStep, .countPause, .otherCompanyDock button, .settingsOpen, .questPrimary, .questSecondary, .plusBtn, .minusBtn):active:not(:disabled) {
+    transform: translateY(1px) scale(.985); filter: brightness(.96);
+  }
+}
+/* 透明効果を減らす設定の端末では、すりガラスをやめて不透明にする。 */
+@media (prefers-reduced-transparency: reduce) {
+  :where([data-skin="rich"]) body.progressApp .operationDock { background: var(--state-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

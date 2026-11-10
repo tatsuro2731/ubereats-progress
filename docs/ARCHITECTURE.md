@@ -13,6 +13,7 @@
 | `styles/main.css` | 通常版の基本表示・設定画面・レスポンシブ表示 |
 | `styles/compact.css` | コンパクト版の表示 |
 | `styles/appearance.css` | 共通ライト／ダーク配色、カードと固定操作エリア |
+| `styles/rich.css` | 「リッチ」スタイルの質感だけを追加。寸法・配色トークン・状態色は持たない |
 | `src/appearance.js` | 独立したテーマ設定、端末時刻による切替と画面復帰 |
 | `assets/ui-icons.svg` | 意味別アイコンと同サイズのバイク用SVGスプライト |
 | `src/app-core.js` | 定数、保存キー、進捗計算、終了上限、区間集計、日時・時間整形 |

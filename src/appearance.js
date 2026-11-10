@@ -4,6 +4,11 @@
   // Appearance is a device preference, never part of the delivery/timer record.
   const STORAGE_KEY = "ubereatsProgressAppearanceV1";
   const DEFAULTS = Object.freeze({ mode: "auto", lightStart: "06:00", darkStart: "18:00" });
+  // The skin (surface finish) has its own key so the theme record keeps its
+  // format. Both skins share the same palette, state colours and layout.
+  const SKIN_KEY = "ubereatsProgressSkinV1";
+  const SKINS = Object.freeze(["rich", "classic"]);
+  const normalizeSkin = value => SKINS.includes(value) ? value : SKINS[0];
 
   function timeMinutes(value) {
     if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
@@ -50,7 +55,7 @@
     return Math.max(25, Math.min(60000, ...boundaries) + 10);
   }
 
-  const api = { STORAGE_KEY, DEFAULTS, timeMinutes, normalize, themeAt, nextCheckDelay };
+  const api = { STORAGE_KEY, DEFAULTS, SKIN_KEY, SKINS, timeMinutes, normalize, normalizeSkin, themeAt, nextCheckDelay };
   if (typeof module === "object" && module.exports) module.exports = api;
   if (!root || !root.document) return;
 
@@ -58,6 +63,7 @@
   let settings = { ...DEFAULTS };
   let refreshTimer = null;
   let storageFailed = false;
+  let skin = SKINS[0];
 
   function read() {
     try {
@@ -66,10 +72,11 @@
     } catch (_) {
       // Blocked storage must not prevent the UI or its clock from starting.
     }
+    try { skin = normalizeSkin(root.localStorage.getItem(SKIN_KEY)); } catch (_) { /* keep the current skin */ }
   }
 
   function updateControls() {
-    doc.querySelectorAll("[data-theme-mode]").forEach(button => {
+    doc.querySelectorAll("button[data-theme-mode]").forEach(button => {
       const selected = button.dataset.themeMode === settings.mode;
       button.classList.toggle("active", selected);
       button.setAttribute("aria-pressed", String(selected));
@@ -82,6 +89,13 @@
     }
     const select = doc.getElementById("compactThemeMode");
     if (select) select.value = settings.mode;
+    doc.querySelectorAll("button[data-skin-mode]").forEach(button => {
+      const selected = button.dataset.skinMode === skin;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    const skinSelect = doc.getElementById("compactSkinMode");
+    if (skinSelect) skinSelect.value = skin;
     const note = doc.getElementById("themeScheduleNote");
     if (note) note.textContent = storageFailed
       ? "この端末に設定を保存できませんでした。現在の画面には適用しています。"
@@ -94,6 +108,7 @@
     const theme = themeAt(settings);
     doc.documentElement.setAttribute("data-theme", theme);
     doc.documentElement.setAttribute("data-theme-mode", settings.mode);
+    doc.documentElement.setAttribute("data-skin", skin);
     const meta = doc.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", theme === "dark" ? "#111815" : "#f0f7f3");
     updateControls();
@@ -108,6 +123,12 @@
       root.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
       storageFailed = false;
     } catch (_) { storageFailed = true; }
+    apply();
+  }
+
+  function saveSkin(next) {
+    skin = normalizeSkin(next);
+    try { root.localStorage.setItem(SKIN_KEY, skin); } catch (_) { /* applied to this screen only */ }
     apply();
   }
 
@@ -161,11 +182,16 @@
   }
 
   function setupControls() {
-    doc.querySelectorAll("[data-theme-mode]").forEach(button => {
+    doc.querySelectorAll("button[data-theme-mode]").forEach(button => {
       button.addEventListener("click", () => save({ ...settings, mode: button.dataset.themeMode }));
     });
     const select = doc.getElementById("compactThemeMode");
     if (select) select.addEventListener("change", () => save({ ...settings, mode: select.value }));
+    doc.querySelectorAll("button[data-skin-mode]").forEach(button => {
+      button.addEventListener("click", () => saveSkin(button.dataset.skinMode));
+    });
+    const skinSelect = doc.getElementById("compactSkinMode");
+    if (skinSelect) skinSelect.addEventListener("change", () => saveSkin(skinSelect.value));
     for (const [id, key] of [["themeLightStart", "lightStart"], ["themeDarkStart", "darkStart"]]) {
       const input = doc.getElementById(id);
       if (!input) continue;
@@ -192,7 +218,7 @@
   root.addEventListener("pageshow", () => { read(); apply(); });
   root.addEventListener("focus", () => { read(); apply(); });
   root.addEventListener("storage", event => {
-    if (event.key === STORAGE_KEY || event.key === null) { read(); apply(); }
+    if (event.key === STORAGE_KEY || event.key === SKIN_KEY || event.key === null) { read(); apply(); }
   });
   root.UberProgressAppearance = api;
 })(typeof window !== "undefined" ? window : null);

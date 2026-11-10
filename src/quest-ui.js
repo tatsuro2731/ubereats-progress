@@ -44,7 +44,7 @@
         reject(new Error("画像読み取り機能を準備できませんでした。通信を確認して、もう一度お試しください。"));
       };
       const timeout = window.setTimeout(fail, 20000);
-      script.src = "src/quest-image.js?v=87";
+      script.src = "src/quest-image.js?v=88";
       script.onload = () => {
         if (settled) return;
         if (!window.UberQuestImage) { fail(); return; }

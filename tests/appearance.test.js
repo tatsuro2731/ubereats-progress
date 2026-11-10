@@ -60,11 +60,14 @@ function browserHarness({ now = at(17, 59, 59).getTime(), blocked = false } = {}
   const buttons = ["auto", "light", "dark"].map(mode => {
     const e = element(mode); e.dataset.themeMode = mode; return e;
   });
+  const skinButtons = ["rich", "classic"].map(mode => {
+    const e = element(`skin-${mode}`); e.dataset.skinMode = mode; return e;
+  });
   const document = {
     hidden: false, readyState: "loading", activeElement: null,
     documentElement: element("root"),
     querySelector: () => element("meta"),
-    querySelectorAll: () => buttons,
+    querySelectorAll: selector => selector === "button[data-skin-mode]" ? skinButtons : buttons,
     getElementById: id => id === "operationDock" ? null : element(id),
     addEventListener: (name, fn) => listeners.set(`document:${name}`, fn)
   };
@@ -111,6 +114,45 @@ test("manual selection persists separately, synchronizes across tabs and stops a
   assert.equal(app.element("root").attrs["data-theme"], "dark");
   assert.equal(app.element("compactThemeMode").value, "dark");
   assert.equal(app.element("themeLightStart").disabled, true);
+});
+
+test("the skin defaults to rich, persists in its own key and leaves the theme record untouched", () => {
+  assert.equal(appearance.normalizeSkin(null), "rich");
+  assert.equal(appearance.normalizeSkin("classic"), "classic");
+  assert.equal(appearance.normalizeSkin("unknown"), "rich");
+  assert.notEqual(appearance.SKIN_KEY, appearance.STORAGE_KEY);
+  const app = browserHarness();
+  assert.equal(app.element("root").attrs["data-skin"], "rich", "the skin is selected before the first painted frame");
+  assert.equal(app.writes.length, 0);
+  app.emit("document:DOMContentLoaded");
+  app.element("skin-classic").events.click();
+  assert.equal(app.element("root").attrs["data-skin"], "classic");
+  assert.deepEqual(app.writes, [appearance.SKIN_KEY]);
+  assert.equal(app.values.get(appearance.SKIN_KEY), "classic");
+  assert.equal(app.values.has(appearance.STORAGE_KEY), false);
+  assert.equal(app.element("skin-classic").attrs["aria-pressed"], "true");
+  assert.equal(app.element("skin-rich").attrs["aria-pressed"], "false");
+  assert.equal(app.element("compactSkinMode").value, "classic");
+  assert.equal(app.element("root").attrs["data-theme"], "light", "changing the skin does not change the theme");
+  app.values.set(appearance.SKIN_KEY, "rich");
+  app.emit("window:storage", { key: appearance.SKIN_KEY });
+  assert.equal(app.element("root").attrs["data-skin"], "rich");
+  const blocked = browserHarness({ blocked: true });
+  blocked.emit("document:DOMContentLoaded");
+  blocked.element("skin-classic").events.click();
+  assert.equal(blocked.element("root").attrs["data-skin"], "classic", "a blocked save still applies to the current screen");
+});
+
+test("the rich skin only adds finish: it never restates sizes, spacing or state colours", () => {
+  const css = read("styles/rich.css");
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.doesNotMatch(rules, /(^|[;{\s])(height|min-height|max-height|width|min-width|max-width|padding|margin|font-size|line-height|gap|display|position|inset|top|bottom|left|right|grid[a-z-]*|flex[a-z-]*)\s*:/m, "layout stays owned by the classic sheets so both skins occupy the same space");
+  assert.doesNotMatch(rules, /--(working|break|state|good|late|bad|accent|bg|card|text|muted)[a-z-]*\s*:/, "palette and state tokens are shared with classic");
+  for (const page of [read("index.html"), read("compact.html")]) assert.match(page, /styles\/rich\.css\?v=\d+/);
+  for (const selector of rules.match(/^[^@{}\n][^{}]*\{/gm) || []) {
+    if (/^\s*(:root|html)\[data-skin="rich"\]/.test(selector) || /^\s*(from|to|\d+%)/.test(selector)) continue;
+    for (const part of selector.replace(/\{$/, "").split(/,\s*\n|,\s*(?=:where)/)) assert.match(part.trim(), /^:where\(\[data-skin="rich"\]\) /, `rich rule must be scoped to the rich skin: ${part.trim()}`);
+  }
 });
 
 test("returning from background or BFCache updates time without duplicate timers", () => {

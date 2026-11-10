@@ -473,3 +473,5 @@ body.progressApp :is(.metric .note, .mini, .desc, .hint, .settingHint, .settings
 html:not([data-theme-mode="auto"]) .themeSchedule { display: none; }
 /* 未登録時は登録ボタンをカード内の1つに絞る。 */
 .questToolbar:has(~ #questEmpty:not([hidden])) #questNew { display: none; }
+.themeModes.skinModes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.compactAppearance label + select + .settingHint + label { display: block; margin-top: 12px; }
