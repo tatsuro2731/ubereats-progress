@@ -85,7 +85,9 @@
     const note = doc.getElementById("themeScheduleNote");
     if (note) note.textContent = storageFailed
       ? "この端末に設定を保存できませんでした。現在の画面には適用しています。"
-      : `端末の時刻で ${settings.lightStart} にライト、${settings.darkStart} にダークへ切り替わります。`;
+      : settings.mode === "auto"
+        ? `端末の時刻で ${settings.lightStart} にライト、${settings.darkStart} にダークへ切り替わります。`
+        : `${settings.mode === "dark" ? "ダーク" : "ライト"}で固定しています。「自動」にすると時刻で切り替わります。`;
   }
 
   function apply() {

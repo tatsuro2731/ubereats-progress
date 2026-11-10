@@ -642,7 +642,7 @@ function setTone(margin, left) {
 }
 
 function bikeIcon(count) {
-  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=85#scooter"></use></svg>';
+  const icon = '<svg class="bike" viewBox="0 0 32 28" aria-hidden="true"><use href="assets/ui-icons.svg?v=86#scooter"></use></svg>';
   return `<span class="bikes" aria-hidden="true">${icon.repeat(count)}</span>`;
 }
 
@@ -686,7 +686,7 @@ function limits(targetPace, margin) {
 }
 
 function metricIcon(id) {
-  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=85#${id}"></use></svg></span>`;
+  return `<span class="metricIconSlot" aria-hidden="true"><svg class="metricIcon" viewBox="0 0 24 24"><use href="assets/ui-icons.svg?v=86#${id}"></use></svg></span>`;
 }
 
 function slackMarkup(minutes) {
@@ -778,20 +778,23 @@ function isPaceToggleCard(id) {
   return id === "need" || id === "targetPace" || id === "actualPace";
 }
 
+const PENDING_CARD_VALUES = ["計測待ち", "未開始"];
 let renderedCardLayout = "";
 function drawCards(values) {
   if (cardDrag) return;
   const ids = fillCards(cards).slice(0, cardCount);
-  const layout = JSON.stringify([ids, cardOrderMode]);
   const metrics = $("metrics");
+  // 計測前の文言は実測値と区別できるよう、カードへ印を付けて控えめに表示する。
+  const pending = ids.map(id => PENDING_CARD_VALUES.includes((values[id] || values.remaining).v));
+  const layout = JSON.stringify([ids, cardOrderMode, pending]);
   const rendered = ids.map((id, index) => {
     const item = values[id] || values.remaining;
     const toggle = isPaceToggleCard(id) && !cardOrderMode;
     const attrs = toggle ? ` role="button" tabindex="0" aria-label="${item.k}の表示を切り替え" title="タップで分/件と件/時を切替"` : "";
     const handle = cardOrderMode ? `<button class="dragHandle" type="button" aria-label="${item.k}を移動" title="長押しして移動">≡</button>` : "";
-    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=85#swap"></use></svg>' : "";
+    const switchIcon = toggle ? '<svg class="paceSwitchIcon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/ui-icons.svg?v=86#swap"></use></svg>' : "";
     const content = `${handle}<div class="k">${metricIcon(id)}<span>${item.k}</span>${switchIcon}</div><div class="v">${item.v}</div>${item.p || ""}${item.n ? `<div class="note">${item.n}</div>` : ""}`;
-    return { id, content, html: `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${attrs}>${content}</div>` };
+    return { id, content, html: `<div class="metric${toggle ? " paceToggle" : ""}" data-card-id="${id}" data-card-index="${index}"${pending[index] ? ' data-pending="true"' : ""}${attrs}>${content}</div>` };
   });
   const existing = rendered.map(item => metrics.querySelector(`.metric[data-card-id="${item.id}"]`));
   if (layout !== renderedCardLayout || existing.some(element => !element)) {
@@ -1018,7 +1021,7 @@ function calc() {
   const projection = progress.projectedCount;
   const etaCap = active.over ? currentRemain : effectiveRemain;
   const etaText = left === 0 ? "達成済み" : !Number.isFinite(finish) ? "計測待ち" : eta(Math.min(finish, etaCap));
-  const etaNote = left === 0 ? "目標達成済み" : active.over ? `${active.endLabel}を超過 / 稼働延長が必要` : !Number.isFinite(finish) ? "実績ペース計測待ち" : finish > etaCap ? "上限到達見込み" : "現ペース継続";
+  const etaNote = left === 0 ? "目標達成済み" : active.over ? `${active.endLabel}を超過 / 稼働延長が必要` : !Number.isFinite(finish) ? '<span class="phrase">実績ペース</span><span class="phrase">計測待ち</span>' : finish > etaCap ? "上限到達見込み" : "現ペース継続";
 
   setTone(margin, left);
   setText($("constraintTag"), constraintTag(active));
@@ -1168,5 +1171,5 @@ function setup() {
 
 setup();
 if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=85").catch(() => {}));
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=86").catch(() => {}));
 }

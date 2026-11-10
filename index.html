@@ -13,17 +13,17 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=85"></script>
-  <link rel="stylesheet" href="styles/main.css?v=85">
-  <link rel="stylesheet" href="styles/appearance.css?v=85">
-  <link rel="stylesheet" href="styles/quest.css?v=85">
-  <script defer src="src/app-core.js?v=85"></script>
-  <script defer src="src/quest-store.js?v=85"></script>
-  <script defer src="src/main-app.js?v=85"></script>
-  <script defer src="src/session-engine.js?v=85"></script>
-  <script defer src="src/session-editors.js?v=85"></script>
-  <script defer src="src/quest-ui.js?v=85"></script>
-  <script defer src="src/data-backup.js?v=85"></script>
+  <script src="src/appearance.js?v=86"></script>
+  <link rel="stylesheet" href="styles/main.css?v=86">
+  <link rel="stylesheet" href="styles/appearance.css?v=86">
+  <link rel="stylesheet" href="styles/quest.css?v=86">
+  <script defer src="src/app-core.js?v=86"></script>
+  <script defer src="src/quest-store.js?v=86"></script>
+  <script defer src="src/main-app.js?v=86"></script>
+  <script defer src="src/session-engine.js?v=86"></script>
+  <script defer src="src/session-editors.js?v=86"></script>
+  <script defer src="src/quest-ui.js?v=86"></script>
+  <script defer src="src/data-backup.js?v=86"></script>
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -127,13 +127,6 @@
       <div class="settingsSheetHeader"><div class="settingsTitleGroup"><h2 id="settingsTitle" class="settingsSheetTitle">設定</h2><p class="settingsSheetSubtitle">進捗と表示を調整</p></div><button id="settingsClose" class="settingsClose" type="button" aria-label="設定を閉じる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
     </div>
     <div class="settingsScroll">
-      <section class="settingsSection appearanceSection" aria-labelledby="appearanceTitle">
-        <div class="settingsSectionHead"><div><h3 id="appearanceTitle" class="settingsSectionTitle">画面の明るさ</h3><p class="settingsSectionNote">時間帯で自動切替、または手動で固定</p></div></div>
-        <div class="themeModes" role="group" aria-label="表示テーマ"><button type="button" data-theme-mode="auto" aria-pressed="true">自動</button><button type="button" data-theme-mode="light" aria-pressed="false">ライト</button><button type="button" data-theme-mode="dark" aria-pressed="false">ダーク</button></div>
-        <div class="themeSchedule"><div><label for="themeLightStart">ライト開始</label><input id="themeLightStart" type="time" value="06:00" required></div><div><label for="themeDarkStart">ダーク開始</label><input id="themeDarkStart" type="time" value="18:00" required></div></div>
-        <p id="themeScheduleNote" class="settingHint" role="status">端末の時刻で 06:00 にライト、18:00 にダークへ切り替わります。</p>
-      </section>
-      <div class="cardOrderSetting"><button id="cardOrderToggle" class="cardOrderToggle" type="button" aria-pressed="false"><span class="cardOrderIcon" aria-hidden="true">≡</span><span class="cardOrderCopy"><strong id="cardOrderLabel">カードを並び替える</strong><small>ドラッグで順番を変更・自動保存</small></span><span class="cardOrderChevron" aria-hidden="true">›</span></button></div>
       <section class="settingsSection progressSection" aria-labelledby="progressSettingsTitle">
         <div class="settingsSectionHead"><span class="settingsSectionIcon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"></path></svg></span><div><h3 id="progressSettingsTitle" class="settingsSectionTitle">進捗設定</h3><p class="settingsSectionNote">今日の目標と稼働条件</p></div></div>
         <div class="controls settingsControls">
@@ -149,6 +142,13 @@
         <div class="cardCountField"><label id="cardCountLabel" class="cardCountLabel">表示枚数</label><div id="cardCountSegment" class="cardCountSegment" role="group" aria-labelledby="cardCountLabel"><button class="cardCountOption" type="button" data-card-count="3" aria-pressed="false"><strong>3枚</strong><small>3×1</small></button><button class="cardCountOption" type="button" data-card-count="4" aria-pressed="false"><strong>4枚</strong><small>2×2</small></button><button class="cardCountOption" type="button" data-card-count="6" aria-pressed="false"><strong>6枚</strong><small>3×2</small></button></div><select id="cardCount" hidden aria-hidden="true" tabindex="-1"><option value="3">3枚</option><option value="4">4枚（2×2）</option><option value="6">6枚（3×2）</option></select></div>
         <div id="cardSelectors" class="settingsGrid"></div>
         <div class="cardChoiceHelp">同じカードを選ぶと、元のカードと自動で入れ替わります。</div>
+      </section>
+      <div class="cardOrderSetting"><button id="cardOrderToggle" class="cardOrderToggle" type="button" aria-pressed="false"><span class="cardOrderIcon" aria-hidden="true">≡</span><span class="cardOrderCopy"><strong id="cardOrderLabel">カードを並び替える</strong><small>ドラッグで順番を変更・自動保存</small></span><span class="cardOrderChevron" aria-hidden="true">›</span></button></div>
+      <section class="settingsSection appearanceSection" aria-labelledby="appearanceTitle">
+        <div class="settingsSectionHead"><div><h3 id="appearanceTitle" class="settingsSectionTitle">画面の明るさ</h3><p class="settingsSectionNote">時間帯で自動切替、または手動で固定</p></div></div>
+        <div class="themeModes" role="group" aria-label="表示テーマ"><button type="button" data-theme-mode="auto" aria-pressed="true">自動</button><button type="button" data-theme-mode="light" aria-pressed="false">ライト</button><button type="button" data-theme-mode="dark" aria-pressed="false">ダーク</button></div>
+        <div class="themeSchedule"><div><label for="themeLightStart">ライト開始</label><input id="themeLightStart" type="time" value="06:00" required></div><div><label for="themeDarkStart">ダーク開始</label><input id="themeDarkStart" type="time" value="18:00" required></div></div>
+        <p id="themeScheduleNote" class="settingHint" role="status">端末の時刻で 06:00 にライト、18:00 にダークへ切り替わります。</p>
       </section>
       <section class="settingsSection backupSection" aria-labelledby="backupTitle">
         <div class="settingsSectionHead"><span class="settingsSectionIcon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg></span><div><h3 id="backupTitle" class="settingsSectionTitle">データのバックアップ</h3><p class="settingsSectionNote">機種変更や記録の消失に備えて保存</p></div></div>

@@ -457,3 +457,19 @@ body.mainView[data-dashboard-density="tight"] .baselinePace { margin-top: 0; pad
 @media (prefers-reduced-motion: reduce) {
   body.progressApp *, body.progressApp *::before, body.progressApp *::after { transition: none; scroll-behavior: auto; }
 }
+
+/* v86 仕上げ：情報の強弱、数値の位置、文の折り返し、設定の出し分け */
+body.progressApp .header .tag { max-width: none; white-space: nowrap; }
+/* 計測前の文言は実測値より弱く見せ、数字が出た瞬間に目へ入るようにする。 */
+body.progressApp .metric[data-pending] .v { color: var(--muted); font-weight: 600; }
+/* 切替アイコンを見出し行から外し、ペースカードの数値を他カードと同じ高さへ揃える。 */
+body.progressApp .metric.paceToggle { position: relative; }
+body.progressApp .metric.paceToggle .paceSwitchIcon { position: absolute; right: 10px; bottom: 10px; margin: 0; }
+/* 説明文は文節で折り返し、1文字だけの行を残さない。未対応ブラウザーでは従来どおり。 */
+body.progressApp :is(.metric .note, .mini, .desc, .hint, .settingHint, .settingsSectionNote, .cardChoiceHelp, .questMuted, .questCard p) {
+  word-break: auto-phrase; text-wrap: pretty;
+}
+/* 時刻設定は「自動」のときだけ意味があるので、固定時は出さない。 */
+html:not([data-theme-mode="auto"]) .themeSchedule { display: none; }
+/* 未登録時は登録ボタンをカード内の1つに絞る。 */
+.questToolbar:has(~ #questEmpty:not([hidden])) #questNew { display: none; }
