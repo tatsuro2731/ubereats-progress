@@ -6,7 +6,7 @@
  * 作り
  *   - 配色は共通トークン（--bg, --card, --good …）をリッチ用の値に差し替える。設定・編集・クエストも同じ色に揃う。
  *   - 質感のルールは接頭辞を :where() にして詳細度を上げず、クラシックの状態別ルール（押下中、並べ替え中など）を生かす。
- *   - 実要素の寸法で変えるのは、メインカードの内側の余白だけ（下の「内側の余白」）。
+ *   - 実要素の寸法で変えるのは、下の「内側の余白」「間隔と太さの調整」に書いた余白・間隔・太さだけ。
  *     ボタンの大きさ、文字サイズ、カードの並びは変えない。
  */
 
@@ -126,7 +126,7 @@
 
 /* ───── 背景：ゆっくり流れるオーロラ ───── */
 html[data-skin="rich"][data-theme] { background: var(--bg); }
-:where([data-skin="rich"]) body.progressApp { background: transparent; }
+:where([data-skin="rich"]) body.progressApp { background: linear-gradient(180deg, var(--bg) 0%, transparent 84px) no-repeat; }
 html[data-skin="rich"] body.progressApp::before,
 html[data-skin="rich"] body.progressApp::after {
   content: ""; position: fixed; z-index: -1; pointer-events: none;
@@ -313,6 +313,17 @@ html[data-skin="rich"] body.mainView .hero { padding-inline: clamp(12px, calc(22
 html[data-skin="rich"] body.mainView[data-dashboard-density="compact"] .hero { padding-block: 12px; }
 html[data-skin="rich"] body.mainView[data-dashboard-density="dense"] .hero { padding-block: 9px; }
 html[data-skin="rich"] body.mainView[data-dashboard-density="tight"] .hero { padding-block: 12px; }
+
+/* ───── 間隔と太さの調整（リッチだけ） ─────
+ * いちばん詰めた表示では、影と丸みのあるカード同士が6px間隔だと重なって見え、
+ * メインカード内も目安の枠と下の補足行がくっついていた。そこだけ少し離す。 */
+html[data-skin="rich"] body.mainView[data-dashboard-density="tight"] .hero { margin-bottom: 10px; }
+html[data-skin="rich"] body.mainView[data-dashboard-density="tight"] .metrics { gap: 8px; }
+html[data-skin="rich"] body.mainView[data-dashboard-density="tight"] .lim { min-height: 46px; }
+html[data-skin="rich"] body.mainView[data-dashboard-density="tight"] .mini { margin-top: 6px; }
+/* 補助ボタンと題名は最も太い900だったため、数値（750〜800）より強く見えていた。数値を主役にする。 */
+html[data-skin="rich"] body.progressApp :is(.remainStep, .countPause, .otherCompanyDock button) { font-weight: 700; }
+html[data-skin="rich"] body.progressApp .header h1 { font-weight: 800; }
 
 /* 押せない状態に光や影を残さない。 */
 html[data-skin="rich"] body.progressApp button:disabled { box-shadow: none; }

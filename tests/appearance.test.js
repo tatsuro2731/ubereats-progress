@@ -143,7 +143,7 @@ test("the skin defaults to rich, persists in its own key and leaves the theme re
   assert.equal(blocked.element("root").attrs["data-skin"], "classic", "a blocked save still applies to the current screen");
 });
 
-test("the rich skin keeps classic sizing except the main card inner padding", () => {
+test("the rich skin keeps classic sizing except its documented padding, gaps and weights", () => {
   const css = read("styles/rich.css").replace(/\/\*[\s\S]*?\*\//g, "");
   for (const page of [read("index.html"), read("compact.html")]) assert.match(page, /styles\/rich\.css\?v=\d+/);
   const LAYOUT = /(^|[;{\s])(height|min-height|max-height|width|min-width|max-width|padding(-[a-z]+)?|margin(-[a-z]+)?|font-size|font-family|font-weight|line-height|letter-spacing|gap|display|position|inset|top|bottom|left|right|grid[a-z-]*|flex[a-z-]*)\s*:/;
@@ -155,9 +155,11 @@ test("the rich skin keeps classic sizing except the main card inner padding", ()
     assert.ok(scoped, `rich rule must only apply to the rich skin: ${selector}`);
     // Decorative pseudo-elements may be placed and sized; real elements may not.
     if (/::(before|after)/.test(selector)) continue;
-    // The one sizing difference: the main card's inner padding (large corner radius needs more room).
-    if (/^html\[data-skin="rich"\] body\.mainView(\[data-dashboard-density="[a-z]+"\])? \.hero$/.test(selector)) {
-      assert.match(body.trim(), /^padding-(inline|block): [^;]+;$/, `only the inner padding may differ: ${selector}`);
+    // The deliberate sizing differences: inner padding, a few gaps in the tightest layout, and weights.
+    if (/^html\[data-skin="rich"\] body\.(mainView|progressApp)/.test(selector) && !/button:disabled/.test(selector) && !/(animation|transition)\s*:/.test(body)) {
+      for (const decl of body.split(";").map(part => part.trim()).filter(Boolean)) {
+        assert.match(decl, /^(padding-inline|padding-block|margin-top|margin-bottom|gap|min-height|font-weight): /, `unexpected sizing in the rich skin: ${selector} { ${decl} }`);
+      }
       continue;
     }
     assert.doesNotMatch(body, LAYOUT, `layout stays shared with classic: ${selector}`);
