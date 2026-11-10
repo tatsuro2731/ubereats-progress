@@ -135,6 +135,7 @@
     skin = normalizeSkin(next);
     try { root.localStorage.setItem(SKIN_KEY, skin); } catch (_) { /* applied to this screen only */ }
     apply();
+    relayout(); // the skins differ in inner padding, so re-fit the cards to the dock
   }
 
   // Rich-skin motion hooks. They only toggle classes; rich.css owns the animation

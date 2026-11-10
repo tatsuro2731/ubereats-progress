@@ -6,7 +6,8 @@
  * 作り
  *   - 配色は共通トークン（--bg, --card, --good …）をリッチ用の値に差し替える。設定・編集・クエストも同じ色に揃う。
  *   - 質感のルールは接頭辞を :where() にして詳細度を上げず、クラシックの状態別ルール（押下中、並べ替え中など）を生かす。
- *   - 寸法を持つのは疑似要素（光、枠、背景）だけ。実要素の高さ・余白・文字サイズは変えない。
+ *   - 実要素の寸法で変えるのは、メインカードの内側の余白だけ（下の「内側の余白」）。
+ *     ボタンの大きさ、文字サイズ、カードの並びは変えない。
  */
 
 /* ───── 配色（ライト）：パールの地に、エメラルドからティール、スカイへ流れる差し色 ───── */
@@ -302,6 +303,16 @@ html[data-skin="rich"] body.progressApp .operationDock::after {
 /* ───── コンパクト版の主ボタン ───── */
 :where([data-skin="rich"]) body.compactView .plusBtn { background: var(--r-accent); border-color: transparent; box-shadow: var(--r-accent-glow), var(--r-accent-edge); }
 :where([data-skin="rich"]) body.compactView .minusBtn { background: var(--r-surface-strong); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge); }
+
+/* ───── 内側の余白（リッチだけが持つ寸法） ─────
+ * 角の丸みが大きいぶん、クラシックと同じ余白では中身が枠に寄って見える。
+ * メインカードの「枠から中身まで」だけを広げる。ボタンの大きさや文字サイズは変えない。
+ * 横は幅の狭い端末で中の文字が折り返さない範囲に抑える。縦は、詰め方の段階が一段きつくならない量にする。
+ * 増えた高さは、画面に収まるかの自動調整（appearance.js）がそのまま測って吸収する。 */
+html[data-skin="rich"] body.mainView .hero { padding-inline: clamp(12px, calc(22vw - 70.5px), 16px); }
+html[data-skin="rich"] body.mainView[data-dashboard-density="compact"] .hero { padding-block: 12px; }
+html[data-skin="rich"] body.mainView[data-dashboard-density="dense"] .hero { padding-block: 9px; }
+html[data-skin="rich"] body.mainView[data-dashboard-density="tight"] .hero { padding-block: 12px; }
 
 /* 押せない状態に光や影を残さない。 */
 html[data-skin="rich"] body.progressApp button:disabled { box-shadow: none; }
