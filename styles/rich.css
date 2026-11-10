@@ -167,6 +167,11 @@ html[data-skin="rich"] body.progressApp::after {
 :where([data-skin="rich"]) body.progressApp .hero { --r-glow: var(--good); }
 :where([data-skin="rich"]) body.progressApp .hero.late { --r-glow: var(--late); }
 :where([data-skin="rich"]) body.progressApp .hero.bad { --r-glow: var(--bad); }
+/* 遅れているときは縁の光も状態色にして、一目で分かるようにする。 */
+:where([data-skin="rich"]) body.progressApp .hero.late,
+:where([data-skin="rich"]) body.progressApp .hero.bad {
+  --r-hero-border: linear-gradient(135deg, color-mix(in srgb, var(--r-glow) 85%, transparent), color-mix(in srgb, var(--r-glow) 12%, transparent) 40%, color-mix(in srgb, var(--r-glow) 12%, transparent) 60%, color-mix(in srgb, var(--r-glow) 65%, transparent));
+}
 :where([data-skin="rich"]) body.progressApp .hero,
 :where([data-skin="rich"]) body.progressApp .hero.good, :where([data-skin="rich"]) body.progressApp .hero.warn,
 :where([data-skin="rich"]) body.progressApp .hero.late, :where([data-skin="rich"]) body.progressApp .hero.bad {
@@ -180,7 +185,7 @@ html[data-skin="rich"] body.progressApp::after {
 /* 縁だけを差し色のグラデーションで描く。 */
 html[data-skin="rich"] body.progressApp .hero::after {
   content: ""; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
-  background: var(--r-border-glow);
+  background: var(--r-hero-border, var(--r-border-glow));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
@@ -232,8 +237,13 @@ html[data-skin="rich"] body.progressApp .hero::after {
 }
 html[data-skin="rich"] body.progressApp .operationDock::before {
   content: ""; position: absolute; top: 0; left: 26px; right: 26px; height: 1.5px; border-radius: 2px; pointer-events: none;
-  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--state-fill) 80%, var(--good)) 30%, #fff 50%, color-mix(in srgb, var(--state-fill) 80%, var(--good)) 70%, transparent 100%);
-  background-size: 220% 100%; background-position: 50% 0; opacity: .85;
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--state-fill) 80%, var(--good)) 25%, color-mix(in srgb, var(--state-fill) 80%, var(--good)) 75%, transparent 100%);
+  opacity: .8;
+}
+/* 上端を走る光。線の上を移動するだけの小さな面にして、動かしても再描画が起きないようにする。 */
+html[data-skin="rich"] body.progressApp .operationDock::after {
+  content: ""; position: absolute; top: -1px; left: 26px; width: 22%; height: 3px; border-radius: 3px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, #fff, transparent); opacity: 0;
 }
 :where([data-skin="rich"]) body.progressApp .remainSync .remainBig { text-shadow: 0 0 22px color-mix(in srgb, currentColor calc(var(--r-text-glow) / 2), transparent); }
 :where([data-skin="rich"]) body.progressApp .remainStep,
@@ -311,15 +321,16 @@ html[data-skin="rich"] body.progressApp button:disabled { box-shadow: none; }
   html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(4) { animation-delay: .26s; }
   html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(5) { animation-delay: .30s; }
   html[data-skin="rich"].r-intro body.progressApp :is(.metric, .chip):nth-child(n+6) { animation-delay: .34s; }
-  html[data-skin="rich"].r-intro body.progressApp .operationDock { animation: r-dock .6s cubic-bezier(.2, .8, .2, 1) both; }
+  html[data-skin="rich"].r-intro body.progressApp .operationDock { animation: r-dock .6s cubic-bezier(.2, .8, .2, 1) .32s both; }
 
   /* 稼働中：状態ランプが脈打ち、操作エリア上端を光が走り、稼働ボタンが呼吸する。 */
-  html[data-skin="rich"] body.progressApp .sessionStatus[data-state="working"] .dot { animation: r-pulse 2.2s ease-out infinite; }
-  html[data-skin="rich"] body.progressApp .operationDock[data-state="working"]::before { animation: r-sheen 4.5s linear infinite; }
+  html[data-skin="rich"] body.progressApp .sessionStatus[data-state="working"] .dot { animation: r-pulse 2.2s ease-in-out infinite; }
+  html[data-skin="rich"] body.progressApp .operationDock[data-state="working"]::after { animation: r-sheen 4.5s ease-in-out infinite; }
   html[data-skin="rich"] body.progressApp .operationDock[data-state="working"] .countDockToggle { animation: r-breathe 3.2s ease-in-out infinite; }
 
-  /* 進捗バーは伸びるときに滑らかに動き、表面を光が流れる。 */
-  html[data-skin="rich"] body.progressApp .progressFill { transition: width .55s cubic-bezier(.2, .8, .2, 1); background-size: 200% 100%; animation: r-flow 5s linear infinite; }
+  /* 進捗バーは滑らかに伸び、件数が変わった瞬間だけ表面を光が流れる（常時は動かさない）。 */
+  html[data-skin="rich"] body.progressApp .progressFill { transition: width .55s cubic-bezier(.2, .8, .2, 1); background-size: 200% 100%; }
+  html[data-skin="rich"] body.progressApp .hero.r-tick .progressFill { animation: r-flow .8s ease-out; }
 
   /* 件数が変わった瞬間：数字が弾み、カードの縁が一度光る。 */
   html[data-skin="rich"] body.progressApp .hero.r-tick .heroCount strong { animation: r-pop .42s cubic-bezier(.2, 1.5, .4, 1); }
@@ -340,8 +351,8 @@ html[data-skin="rich"] body.progressApp button:disabled { box-shadow: none; }
 @keyframes r-drift-b { from { transform: translate3d(4%, 3%, 0) rotate(0deg) scale(1.08); } to { transform: translate3d(-5%, -4%, 0) rotate(-20deg) scale(1); } }
 @keyframes r-rise { from { opacity: 0; transform: translate3d(0, 14px, 0) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes r-dock { from { opacity: 0; transform: translate3d(0, 28px, 0); } to { opacity: 1; transform: none; } }
-@keyframes r-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--state-dot) 65%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--state-dot) 0%, transparent); } }
-@keyframes r-sheen { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@keyframes r-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.45); opacity: .72; } }
+@keyframes r-sheen { 0% { transform: translate3d(-40%, 0, 0); opacity: 0; } 12% { opacity: .9; } 55% { opacity: .9; } 70%, 100% { transform: translate3d(360%, 0, 0); opacity: 0; } }
 @keyframes r-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.09) saturate(1.12); } }
 @keyframes r-flow { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes r-pop { 0% { transform: scale(1); } 40% { transform: scale(1.14); } 100% { transform: scale(1); } }

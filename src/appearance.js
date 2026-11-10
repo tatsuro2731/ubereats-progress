@@ -148,7 +148,16 @@
     let running = 0;
     const entrance = event => event.animationName === "r-rise" || event.animationName === "r-dock";
     // Cards are measured for the dock fit; measure again once they stop moving.
-    const finish = event => { if (entrance(event) && --running <= 0) { html.classList.remove("r-intro"); relayout(); } };
+    // The dock is timed to finish last and is never re-rendered, so its end also
+    // releases the class when a card was replaced mid-entrance and its own end
+    // event can no longer arrive.
+    const finish = event => {
+      if (!entrance(event)) return;
+      running -= 1;
+      if (running > 0 && event.animationName !== "r-dock") return;
+      html.classList.remove("r-intro");
+      relayout();
+    };
     html.addEventListener("animationstart", event => { if (entrance(event)) running += 1; });
     html.addEventListener("animationend", finish);
     html.addEventListener("animationcancel", finish);

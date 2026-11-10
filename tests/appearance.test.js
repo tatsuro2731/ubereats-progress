@@ -163,6 +163,14 @@ test("the rich skin restyles without moving anything: real elements keep their s
   for (const token of ["--working-fill", "--break-fill", "--good", "--late", "--bad"]) {
     assert.equal((css.match(new RegExp(`${token}:`, "g")) || []).length, 2, `${token} is defined for light and dark`);
   }
+  const tokens = block => new Set([...block.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(match => match[1]));
+  const light = tokens(css.slice(css.indexOf(':root[data-skin="rich"] {')).split("}")[0]);
+  const dark = tokens(css.slice(css.indexOf(':root[data-skin="rich"][data-theme="dark"] {')).split("}")[0]);
+  assert.ok(light.size > 40);
+  assert.deepEqual([...light].sort(), [...dark].sort(), "a token set for light must also be set for dark, or light colours leak into the dark theme");
+  const looping = [...css.matchAll(/@keyframes (r-[a-z-]+) \{((?:[^{}]*\{[^{}]*\})*)/g)].filter(match => new RegExp(`animation:\\s*${match[1]}[^;]*infinite`).test(css));
+  assert.ok(looping.length >= 3);
+  for (const [, name, body] of looping) assert.doesNotMatch(body, /(box-shadow|background|width|height|top|left)[a-z-]*\s*:/, `${name} loops for hours, so it may only animate compositor properties`);
   assert.equal(appearance.THEME_COLORS.classic.light, "#f0f7f3");
   assert.equal(appearance.THEME_COLORS.classic.dark, "#111815");
 });
