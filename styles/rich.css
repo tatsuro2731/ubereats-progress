@@ -126,7 +126,7 @@
 
 /* ───── 背景：ゆっくり流れるオーロラ ───── */
 html[data-skin="rich"][data-theme] { background: var(--bg); }
-:where([data-skin="rich"]) body.progressApp { background: linear-gradient(180deg, var(--bg) 0%, transparent 84px) no-repeat; }
+:where([data-skin="rich"]) body.progressApp { background: linear-gradient(180deg, var(--bg) 0, var(--bg) env(safe-area-inset-top, 0px), transparent calc(env(safe-area-inset-top, 0px) + 84px)) no-repeat; }
 html[data-skin="rich"] body.progressApp::before,
 html[data-skin="rich"] body.progressApp::after {
   content: ""; position: fixed; z-index: -1; pointer-events: none;
