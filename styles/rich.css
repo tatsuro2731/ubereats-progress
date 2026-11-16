@@ -283,8 +283,9 @@ html[data-skin="rich"] body.progressApp .heroCounter .plus::before {
   box-shadow: 0 7px 12px -7px color-mix(in srgb, var(--good) 85%, transparent), inset 0 1px 0 rgb(255 255 255 / 36%), inset 0 -1px 0 rgb(0 0 0 / 14%);
 }
 :where([data-skin="rich"]) body.progressApp .metricIconSlot .metricIcon { color: var(--primary-text); transform: scale(.7); }
-:where([data-skin="rich"]) body.progressApp .metric[data-pending] .metricIconSlot { background: var(--card2); box-shadow: var(--r-groove); }
-:where([data-skin="rich"]) body.progressApp .metric[data-pending] .metricIconSlot .metricIcon { color: var(--muted); }
+/* タイルの色は値の有無で変えない。計測前かどうかは値の文字（薄い「計測待ち」）で伝える。
+ * 以前は計測前のカードだけタイルを灰色にしていたが、開始前は値のある1枚だけが色付きになり、
+ * そのカードを強調しているように見えた。 */
 :where([data-skin="rich"]) body.progressApp .metric.dropTarget { border-color: var(--good); box-shadow: 0 0 0 2px var(--good); }
 :where([data-skin="rich"]) body.progressApp .questBrief { background: var(--r-surface); border-color: var(--r-line); box-shadow: var(--r-shadow-sm), var(--r-ring), var(--r-edge); }
 

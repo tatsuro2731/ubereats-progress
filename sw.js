@@ -1,5 +1,5 @@
-const CACHE="ubereats-progress-v94";
-const ASSETS=["./?v=94","index.html?v=94","styles/main.css?v=94","styles/appearance.css?v=94","src/appearance.js?v=94","assets/ui-icons.svg?v=94","src/app-core.js?v=94","src/quest-store.js?v=94","src/quest-image.js?v=94","src/quest-ui.js?v=94","styles/quest.css?v=94","styles/rich.css?v=94","src/main-app.js?v=94","src/session-engine.js?v=94","src/session-editors.js?v=94","src/data-backup.js?v=94","compact.html?v=94","styles/compact.css?v=94","src/compact-app.js?v=94","manifest.webmanifest?v=10","apple-touch-icon.png?v=10","assets/favicon-32.png?v=10","assets/icon-192.png?v=10","assets/icon-512.png?v=10","assets/delivery-scooter.png"];
+const CACHE="ubereats-progress-v95";
+const ASSETS=["./?v=95","index.html?v=95","styles/main.css?v=95","styles/appearance.css?v=95","src/appearance.js?v=95","assets/ui-icons.svg?v=95","src/app-core.js?v=95","src/quest-store.js?v=95","src/quest-image.js?v=95","src/quest-ui.js?v=95","styles/quest.css?v=95","styles/rich.css?v=95","src/main-app.js?v=95","src/session-engine.js?v=95","src/session-editors.js?v=95","src/data-backup.js?v=95","compact.html?v=95","styles/compact.css?v=95","src/compact-app.js?v=95","manifest.webmanifest?v=10","apple-touch-icon.png?v=10","assets/favicon-32.png?v=10","assets/icon-192.png?v=10","assets/icon-512.png?v=10","assets/delivery-scooter.png"];
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
