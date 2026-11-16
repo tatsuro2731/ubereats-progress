@@ -158,7 +158,8 @@ test("the rich skin keeps classic sizing except its documented padding, gaps and
     // The deliberate sizing differences: inner padding, a few gaps in the tightest layout, and weights.
     if (/^html\[data-skin="rich"\] body\.(mainView|progressApp)/.test(selector) && !/button:disabled/.test(selector) && !/(animation|transition)\s*:/.test(body)) {
       for (const decl of body.split(";").map(part => part.trim()).filter(Boolean)) {
-        assert.match(decl, /^(padding-inline|padding-block|margin-top|margin-bottom|gap|min-height|font-weight): /, `unexpected sizing in the rich skin: ${selector} { ${decl} }`);
+        // "position: relative" only anchors a decorative pseudo-element; it does not move the element.
+        assert.match(decl, /^((padding-inline|padding-block|margin-top|margin-bottom|gap|min-height|font-weight): |position: relative$)/, `unexpected sizing in the rich skin: ${selector} { ${decl} }`);
       }
       continue;
     }
@@ -167,13 +168,18 @@ test("the rich skin keeps classic sizing except its documented padding, gaps and
   assert.match(css, /@media \(prefers-reduced-motion: no-preference\)/);
   const outsideMotionQuery = css.replace(/@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?\n\}\n/, "").replace(/@keyframes[^{]+\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
   assert.doesNotMatch(outsideMotionQuery, /animation\s*:/, "every animation respects the reduce-motion setting");
-  for (const token of ["--working-fill", "--break-fill", "--good", "--late", "--bad"]) {
-    assert.equal((css.match(new RegExp(`${token}:`, "g")) || []).length, 2, `${token} is defined for light and dark`);
-  }
   const tokens = block => new Set([...block.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(match => match[1]));
   const light = tokens(css.slice(css.indexOf(':root[data-skin="rich"] {')).split("}")[0]);
   const dark = tokens(css.slice(css.indexOf(':root[data-skin="rich"][data-theme="dark"] {')).split("}")[0]);
   assert.ok(light.size > 40);
+  for (const token of ["--working-fill", "--break-fill", "--good", "--late", "--bad", "--r-jewel-good", "--r-jewel-late", "--r-jewel-bad"]) {
+    assert.ok(light.has(token) && dark.has(token), `${token} is defined for light and dark`);
+  }
+  // The main card states stay distinguishable: each state has its own surface and the card re-colours its own text.
+  const heroScope = css.slice(css.indexOf(':where([data-skin="rich"]) body.progressApp .hero {')).split("}")[0];
+  for (const token of ["--text", "--muted", "--good", "--late", "--bad"]) assert.match(heroScope, new RegExp(`${token}:`), `the jewel card sets ${token} for readable text on its dark surface`);
+  assert.match(css, /\.hero\.late \{[^}]*--r-jewel: var\(--r-jewel-late\)/);
+  assert.match(css, /\.hero\.bad \{[^}]*--r-jewel: var\(--r-jewel-bad\)/);
   assert.deepEqual([...light].sort(), [...dark].sort(), "a token set for light must also be set for dark, or light colours leak into the dark theme");
   const looping = [...css.matchAll(/@keyframes (r-[a-z-]+) \{((?:[^{}]*\{[^{}]*\})*)/g)].filter(match => new RegExp(`animation:\\s*${match[1]}[^;]*infinite`).test(css));
   assert.ok(looping.length >= 3);

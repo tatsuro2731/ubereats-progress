@@ -165,20 +165,103 @@
     html.classList.add("r-intro");
     const hero = doc.getElementById("hero");
     const done = doc.getElementById("heroDone");
-    if (!hero || !done || !hero.classList || !root.MutationObserver) return;
+    const target = doc.getElementById("heroTarget");
+    if (!hero || !done || typeof hero.setAttribute !== "function" || !root.MutationObserver) return;
+    const number = element => { const match = element ? /\d+/.exec(element.textContent) : null; return match ? Number(match[0]) : NaN; };
+    const reached = () => { const goal = number(target); return goal > 0 && number(done) >= goal; };
+    // The app rewrites the card's class list on every draw, so the hooks are data
+    // attributes. One-shot hooks restart their animation on every change, so rapid
+    // taps each get a response.
+    const timers = new Map();
+    const flash = (name, ms) => {
+      hero.removeAttribute(name);
+      void hero.offsetWidth;
+      hero.setAttribute(name, "");
+      if (timers.has(name)) root.clearTimeout(timers.get(name));
+      timers.set(name, root.setTimeout(() => { hero.removeAttribute(name); timers.delete(name); }, ms));
+    };
+    const mark = (name, on) => { if (on) hero.setAttribute(name, ""); else hero.removeAttribute(name); };
     let shown = done.textContent;
-    let timer = null;
-    new root.MutationObserver(() => {
+    let goal = reached();
+    mark("data-r-goal", goal);
+    const update = () => {
+      const nowGoal = reached();
+      if (nowGoal !== goal) {
+        goal = nowGoal;
+        mark("data-r-goal", goal);
+        // Celebrate only when the count just crossed the target on this screen, not on launch.
+        if (goal && done.textContent !== shown && skin === "rich") { flash("data-r-cheer", 1200); celebrate(hero); }
+      }
       if (done.textContent === shown) return;
+      const before = number({ textContent: shown });
       const first = shown === "" || shown === "-";
       shown = done.textContent;
       if (first || skin !== "rich") return;
-      hero.classList.remove("r-tick");
-      void hero.offsetWidth; // restart the animation for rapid taps
-      hero.classList.add("r-tick");
-      if (timer !== null) root.clearTimeout(timer);
-      timer = root.setTimeout(() => { hero.classList.remove("r-tick"); timer = null; }, 800);
-    }).observe(done, { childList: true, characterData: true, subtree: true });
+      flash("data-r-tick", 800);
+      if (number(done) > before) flash("data-r-up", 700);
+    };
+    const observer = new root.MutationObserver(update);
+    observer.observe(done, { childList: true, characterData: true, subtree: true });
+    if (target) observer.observe(target, { childList: true, characterData: true, subtree: true });
+  }
+
+  // A short burst of confetti from the main card when the day's target is reached.
+  // Drawn on a temporary canvas that removes itself; skipped when motion is reduced.
+  function celebrate(hero) {
+    if (typeof root.requestAnimationFrame !== "function" || typeof root.matchMedia !== "function") return;
+    if (doc.hidden || root.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const canvas = doc.createElement("canvas");
+    const context = typeof canvas.getContext === "function" ? canvas.getContext("2d") : null;
+    if (!context || !doc.body) return;
+    const ratio = Math.min(root.devicePixelRatio || 1, 2);
+    const width = root.innerWidth;
+    const height = root.innerHeight;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:80;pointer-events:none";
+    doc.body.appendChild(canvas);
+    context.scale(ratio, ratio);
+    const box = hero.getBoundingClientRect();
+    const colors = ["#ffffff", "#ffe08a", "#6bf7c4", "#5ab8ff", "#ffd15c", "#c4ffe6"];
+    const pieces = Array.from({ length: 130 }, (_, index) => {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
+      const speed = 380 + Math.random() * 680;
+      return {
+        x: box.left + box.width * (0.25 + Math.random() * 0.5), y: box.top + box.height * 0.45,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        size: 5 + Math.random() * 6, turn: Math.random() * 6.28, spin: (Math.random() - 0.5) * 16,
+        color: colors[index % colors.length], round: index % 4 === 0
+      };
+    });
+    const duration = 2800;
+    let start = null;
+    let last = null;
+    const frame = now => {
+      if (start === null) { start = now; last = now; }
+      const step = Math.min((now - last) / 1000, 0.05);
+      const life = (now - start) / duration;
+      last = now;
+      context.clearRect(0, 0, width, height);
+      if (life >= 1 || !canvas.isConnected) { canvas.remove(); return; }
+      context.globalAlpha = life < 0.7 ? 1 : Math.max(0, 1 - (life - 0.7) / 0.3);
+      for (const piece of pieces) {
+        piece.vy += 1500 * step;
+        piece.vx *= 1 - 1.1 * step;
+        piece.x += piece.vx * step;
+        piece.y += piece.vy * step;
+        piece.turn += piece.spin * step;
+        context.save();
+        context.translate(piece.x, piece.y);
+        context.rotate(piece.turn);
+        context.fillStyle = piece.color;
+        if (piece.round) { context.beginPath(); context.arc(0, 0, piece.size / 2, 0, Math.PI * 2); context.fill(); }
+        else { context.scale(1, Math.cos(piece.turn * 1.6)); context.fillRect(-piece.size / 2, -piece.size * 0.3, piece.size, piece.size * 0.6); }
+        context.restore();
+      }
+      root.requestAnimationFrame(frame);
+    };
+    root.requestAnimationFrame(frame);
   }
 
   function setupDashboardLayout() {
