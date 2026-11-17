@@ -494,6 +494,29 @@ test("image import keeps template dates and times when OCR has no period", async
   assert.equal(app.storage.getItem(QUEST_KEY), stored, "import must remain an unsaved form edit");
 });
 
+test("conflicting OCR dates keep the edited form period and show the resolved reward separately", async () => {
+  const app = imageImportHarness({ recognize: async () => ({
+    candidates: [{ label: "進行中のクエスト", completed: 9, tiers: [{ target: 100, reward: 9590 }] }],
+    period: null, periodConflict: true, skipped: 0, warning: "開始・終了日時の読み取り結果が一致しません。"
+  }) });
+  await app.emit("questNew", "click");
+  app.element("questTemplate").value = "custom";
+  await app.emit("questTemplate", "change");
+  app.element("questEndTime").value = "04:15";
+  await app.emit("questEndTime", "change");
+  const before = app.period();
+  const stored = app.storage.getItem(QUEST_KEY);
+  await app.importImage();
+  assert.deepEqual(app.period(), before);
+  assert.equal(app.element("questTemplate").value, "custom");
+  assert.match(app.element("questImageDateNote").textContent, /元画像と照合/);
+  assert.equal(app.element("questImageError").hidden, false);
+  assert.match(app.element("questImageError").textContent, /一致しません/);
+  assert.equal(app.element("questInitialTotal").value, "9");
+  assert.equal(app.element("questTierInputs").querySelector("[data-tier-reward]").value, "9590");
+  assert.equal(app.storage.getItem(QUEST_KEY), stored);
+});
+
 test("image import preserves manual dates, times, and custom template when OCR has no period", async () => {
   const app = imageImportHarness();
   await app.emit("questNew", "click");

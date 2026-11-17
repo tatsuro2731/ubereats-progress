@@ -8,6 +8,7 @@
   const DAY = 86400000;
   const JST = 9 * 60 * 60000;
   const CDN = "https://cdn.jsdelivr.net/npm/";
+  const VERSION = "97";
   let libraryPromise;
 
   function normalize(text) {
@@ -316,7 +317,25 @@
     let retryStarted = false;
     let inputSize = "";
     const attempts = [];
-    const diagnostic = () => attempts.length ? `読み取り v84（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` : "";
+    const readAt = Date.now();
+    let period = null;
+    let periodConflict = false;
+    function observePeriod(value) {
+      if (!value) return;
+      // 03:59 is the inclusive label for the 04:00 cutoff on both Uber screens.
+      const end = time => time === "03:59" ? "04:00" : time;
+      if (period && (period.startDate !== value.startDate || period.startTime !== value.startTime ||
+          period.endDate !== value.endDate || end(period.endTime) !== end(value.endTime))) {
+        periodConflict = true;
+      } else if (!period || (value.dateSource === "calendar" && (period.dateSource !== "calendar" || (period.inferred && !value.inferred)))) {
+        period = value;
+      }
+    }
+    function finishResult(parsed, warning) {
+      if (periodConflict) warning = [warning, "開始・終了日時の読み取り結果が一致しません。入力済みの日時を保持しました。元画像で確認してください。"].filter(Boolean).join(" ");
+      return { ...parsed, period: periodConflict ? null : period, periodConflict, warning, diagnosticText: diagnostic() };
+    }
+    const diagnostic = () => attempts.length ? `読み取り v${VERSION}（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` : "";
     // The worker may finish starting after cancellation. Taking ownership before
     // awaiting termination prevents both paths from terminating it twice.
     async function terminateWorker() {
@@ -353,12 +372,19 @@
           // Row grouping can recover rewards while splitting or reordering the
           // period. Recover that period independently from the original text;
           // never mix candidates or reward tiers from the two arrangements.
-          let parsed = parseText(arranged);
-          if ((!parsed.candidates.length || !parsed.period) && data.text && data.text !== arranged) {
-            const original = parseText(data.text);
-            attempts.push(data.text);
-            if (!parsed.candidates.length && original.candidates.length) parsed = { ...original, period: original.period || parsed.period };
-            else if (!parsed.period && original.period) parsed = { ...parsed, period: original.period };
+          let parsed = parseText(arranged, readAt);
+          observePeriod(parsed.period);
+          if (data.text && data.text !== arranged) {
+            if (!parsed.candidates.length || !parsed.period) {
+              const original = parseText(data.text, readAt);
+              observePeriod(original.period);
+              attempts.push(data.text);
+              if (!parsed.candidates.length && original.candidates.length) parsed = { ...original, period: original.period || parsed.period };
+              else if (!parsed.period && original.period) parsed = { ...parsed, period: original.period };
+            } else {
+              observePeriod(readPeriod(data.text, readAt));
+              if (periodConflict) attempts.push(data.text);
+            }
           }
           return parsed;
         }
@@ -380,15 +406,14 @@
             first?.completed === second?.completed && Number.isInteger(first?.completed) &&
             second.tiers.length > first.tiers.length && first.tiers.every((tier, index) =>
               tier.target === second.tiers[index].target && tier.reward === second.tiers[index].reward);
-          if (alternative.candidates.length > parsed.candidates.length || extendsProgress) parsed = { ...alternative, period: alternative.period || parsed.period };
-          else if (!parsed.period && alternative.period) parsed = { ...parsed, period: alternative.period };
+          if (alternative.candidates.length > parsed.candidates.length || extendsProgress) parsed = alternative;
           if (progressRead && !extendsProgress && (!second || JSON.stringify(first) !== JSON.stringify(second))) {
             warning = "2回の読み取り結果が一致しませんでした。画像と件数・すべての報酬を確認してください。";
           }
           original.width = original.height = 1;
         }
         if (parsed.inferredProgress) warning = `${warning}${warning ? " " : ""}進捗の区切りを周囲の数字から補いました。元画像と照らして確認してください。`;
-        return { ...parsed, diagnosticText: diagnostic(), warning };
+        return finishResult(parsed, warning);
       })();
       return await Promise.race([job, interruption]);
     } catch (error) {
@@ -398,7 +423,7 @@
       if (error?.name === "AbortError") throw error;
       if (retryStarted && lastParsed?.candidates.length) {
         const inferred = lastParsed.inferredProgress ? "進捗の区切りを周囲の数字から補いました。" : "";
-        return { ...lastParsed, diagnosticText: diagnostic(), warning: `再読み取りが完了しなかったため、最初に読み取れた候補を表示しています。${inferred}元画像と照らして確認してください。` };
+        return finishResult(lastParsed, `再読み取りが完了しなかったため、最初に読み取れた候補を表示しています。${inferred}元画像と照らして確認してください。`);
       }
       // Workers can reject with a string, null, or a DOMException whose message
       // is read-only. Wrap the failure before attaching diagnostic information.
@@ -417,5 +442,5 @@
     }
   }
 
-  return { version: "84", parseText, readPeriod, textFromBlocks, recognize };
+  return { version: VERSION, parseText, readPeriod, textFromBlocks, recognize };
 });

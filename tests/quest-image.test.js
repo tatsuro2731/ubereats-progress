@@ -448,7 +448,7 @@ test("a read with excluded candidates is retried and only a read with more compl
   assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
   assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
   assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
-  assert.match(result.diagnosticText, /読み取り v84[\s\S]*結果1[\s\S]*結果2/);
+  assert.match(result.diagnosticText, /読み取り v97[\s\S]*結果1[\s\S]*結果2/);
 
   const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
   const kept = await worse.recognize();
@@ -565,5 +565,20 @@ test("OCR retry does not discard a complete first reading of the November 6 ques
   assert.deepEqual(Array.from(actual.candidates[0].tiers,tier=>({...tier})),[{target:120,reward:17230},{target:130,reward:2260}]);
   assert.equal(actual.skipped,0);
   assert.match(actual.warning,/一致しません/);
-  assert.match(actual.diagnosticText,/読み取り v84/);
+  assert.match(actual.diagnosticText,/読み取り v97/);
+});
+
+test("conflicting OCR periods keep tiers but leave the form dates for manual confirmation", async () => {
+  const wrongEnd = PROGRESS.replace("(金)4:00", "(金)4:30");
+  const wrongStart = PROGRESS.replace("(月)4:00", "(月)4:30");
+  for (const changed of [wrongEnd, wrongStart, PROGRESS.replace("9月14日(月)", "9月15日(火)")]) {
+    const result = await loadRecognizer({texts: [changed, PROGRESS]}).recognize();
+    assert.equal(result.period, null);
+    assert.match(result.warning, /日時/);
+    assert.equal(result.candidates[0].completed, 9);
+    assert.equal(result.candidates[0].tiers[1].reward, 1380);
+  }
+  const equivalent = await loadRecognizer({texts: [PROGRESS, PROGRESS.replace("(金)4:00", "(金)3:59")]}).recognize();
+  assert.ok(equivalent.period);
+  assert.equal(equivalent.warning, "");
 });

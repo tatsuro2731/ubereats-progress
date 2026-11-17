@@ -56,21 +56,41 @@
     return { exportedAt: typeof data.exportedAt === "string" ? data.exportedAt : "", items };
   }
 
-  // Replaces every app key with the backup. If any write fails, the previous
-  // values are put back so a half-restored state is never left behind.
   function restoreBackup(storage, backup) {
-    const previous = new Map(appKeys(storage).map(key => [key, storage.getItem(key)]));
+    const keys = new Set([...appKeys(storage), ...Object.keys(backup.items)]);
+    const changes = [];
+    for (const key of keys) {
+      const before = storage.getItem(key);
+      const after = backup.items[key] ?? null;
+      if (before === after) continue;
+      const oldSize = before === null ? 0 : key.length + before.length;
+      const newSize = after === null ? 0 : key.length + after.length;
+      changes.push({ key, before, after, growth: newSize - oldSize });
+    }
+    // Free space before growing other records, even when the backup lists them first.
+    changes.sort((a, b) => a.growth - b.growth);
+    function write(key, value) {
+      if (value === null) storage.removeItem(key);
+      else storage.setItem(key, value);
+    }
+    const applied = [];
     try {
-      for (const key of previous.keys()) {
-        if (!Object.prototype.hasOwnProperty.call(backup.items, key)) storage.removeItem(key);
+      for (const change of changes) {
+        write(change.key, change.after);
+        applied.push(change);
       }
-      for (const [key, value] of Object.entries(backup.items)) storage.setItem(key, value);
       return true;
-    } catch (error) {
-      try {
-        for (const key of appKeys(storage)) if (!previous.has(key)) storage.removeItem(key);
-        for (const [key, value] of previous) storage.setItem(key, value);
-      } catch (_) {}
+    } catch (_) {
+      // Undo successful writes in reverse order, retracing states that already fit.
+      let restored = true;
+      for (const { key, before, after } of applied.reverse()) {
+        try {
+          const current = storage.getItem(key);
+          if (current === after) write(key, before);
+          else if (current !== before) restored = false; // Preserve another tab's edit.
+        } catch (_) { restored = false; }
+      }
+      if (!restored) throw new Error("復元に失敗し、一部の記録を元に戻せませんでした。バックアップを保管し、端末の空き容量と保存権限を確認してください。");
       throw new Error("復元できませんでした。元の記録はそのまま残しています。端末の空き容量を確認してください。");
     }
   }

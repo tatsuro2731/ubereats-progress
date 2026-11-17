@@ -1,12 +1,21 @@
-const CACHE="ubereats-progress-v96";
-const ASSETS=["./?v=96","index.html?v=96","styles/main.css?v=96","styles/appearance.css?v=96","src/appearance.js?v=96","assets/ui-icons.svg?v=96","src/app-core.js?v=96","src/quest-store.js?v=96","src/quest-image.js?v=96","src/quest-ui.js?v=96","styles/quest.css?v=96","styles/rich.css?v=96","src/main-app.js?v=96","src/session-engine.js?v=96","src/session-editors.js?v=96","src/data-backup.js?v=96","compact.html?v=96","styles/compact.css?v=96","src/compact-app.js?v=96","src/haptics.js?v=96","manifest.webmanifest?v=10","apple-touch-icon.png?v=10","assets/favicon-32.png?v=10","assets/icon-192.png?v=10","assets/icon-512.png?v=10","assets/delivery-scooter.png"];
+const CACHE="ubereats-progress-v97";
+const ASSETS=["./?v=97","index.html?v=97","styles/main.css?v=97","styles/appearance.css?v=97","src/appearance.js?v=97","assets/ui-icons.svg?v=97","src/app-core.js?v=97","src/quest-store.js?v=97","src/quest-image.js?v=97","src/quest-ui.js?v=97","styles/quest.css?v=97","styles/rich.css?v=97","src/main-app.js?v=97","src/session-engine.js?v=97","src/session-editors.js?v=97","src/data-backup.js?v=97","compact.html?v=97","styles/compact.css?v=97","src/compact-app.js?v=97","src/haptics.js?v=97","manifest.webmanifest?v=10","apple-touch-icon.png?v=10","assets/favicon-32.png?v=10","assets/icon-192.png?v=10","assets/icon-512.png?v=10","assets/delivery-scooter.png"];
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
 });
 
 self.addEventListener("activate",event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
+  event.waitUntil((async () => {
+    const revision = Number(CACHE.split("-v")[1]);
+    const keys = await caches.keys();
+    const obsolete = keys.filter(key => {
+      const match = /^ubereats-progress-v(\d+)$/.exec(key);
+      return match && Number(match[1]) < revision;
+    });
+    await Promise.all(obsolete.map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
 
 // Pages are matched without their query so "./", "./?v=10" and "index.html" all
@@ -17,16 +26,16 @@ self.addEventListener("fetch",event=>{
   if(request.method!=="GET"||new URL(request.url).origin!==self.location.origin)return;
   event.respondWith((async()=>{
     if(request.mode==="navigate"){
-      const page=await caches.match(request,{ignoreSearch:true});
+      const page=await caches.match(request,{cacheName:CACHE,ignoreSearch:true});
       if(page)return page;
       try{return await fetch(request);}
       catch(error){
-        const fallback=await caches.match("index.html",{ignoreSearch:true});
+        const fallback=await caches.match("index.html",{cacheName:CACHE,ignoreSearch:true});
         if(fallback)return fallback;
         throw error;
       }
     }
-    const exact=await caches.match(request);
+    const exact=await caches.match(request,{cacheName:CACHE});
     if(exact)return exact;
     try{
       const response=await fetch(request);
@@ -36,7 +45,7 @@ self.addEventListener("fetch",event=>{
       }
       return response;
     }catch(error){
-      const fallback=await caches.match(request,{ignoreSearch:true});
+      const fallback=await caches.match(request,{cacheName:CACHE,ignoreSearch:true});
       if(fallback)return fallback;
       throw error;
     }

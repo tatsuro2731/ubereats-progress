@@ -754,3 +754,21 @@ test("close controls are excluded and an external close cleans an active swipe",
   app.runTimers();
   assert.equal(app.element("settingsLayer").hidden, false, "an old pointer cannot close a reopened sheet");
 });
+
+test("service worker activation removes only earlier numbered caches of this app", async () => {
+  const listeners = {};
+  const worker = read("sw.js");
+  const version = Number(worker.match(/const CACHE="ubereats-progress-v(\d+)"/)[1]);
+  const oldCache = `ubereats-progress-v${version - 1}`;
+  const keys = [oldCache, `ubereats-progress-v${version}`, `ubereats-progress-v${version + 1}`, "another-app-v1", oldCache + "-notes"];
+  const removed = [];
+  const self = {addEventListener(type, listener) { listeners[type] = listener; }, clients: { async claim() {} }};
+  require("node:vm").runInNewContext(worker, { self, caches: {
+    async keys() { return keys; },
+    async delete(key) { removed.push(key); return true; }
+  }});
+  let activation;
+  listeners.activate({waitUntil(promise) { activation = promise; }});
+  await activation;
+  assert.deepEqual(removed, [oldCache]);
+});

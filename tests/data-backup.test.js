@@ -67,3 +67,33 @@ test("files that are not this app's backup are rejected before anything is writt
   ];
   for (const text of cases) assert.throws(() => backup.parseBackup(text), Error, text.slice(0, 40));
 });
+
+test("quota failure after exchanging space between keys restores the original bytes", () => {
+  const before = { ubereatsProgressClock: "a".repeat(75), ubereatsProgressQuest: "b".repeat(5), ubereatsProgressWorkHistory: "c".repeat(5), other: "keep" };
+  const storage = new MemoryStorage(before);
+  const write = storage.setItem.bind(storage);
+  storage.setItem = (key, value) => {
+    const items = { ...Object.fromEntries(storage.values), [key]: value };
+    if (Object.values(items).join("").length > 104) throw new Error("quota");
+    write(key, value);
+  };
+  const items = { ubereatsProgressClock: "x".repeat(5), ubereatsProgressQuest: "y".repeat(75), ubereatsProgressWorkHistory: "z".repeat(30) };
+  assert.throws(() => backup.restoreBackup(storage, { items }), /元の記録/);
+  assert.deepEqual(Object.fromEntries(storage.values), before);
+  delete items.ubereatsProgressWorkHistory;
+  backup.restoreBackup(storage, { items });
+  assert.deepEqual(Object.fromEntries(storage.values), { ...items, other: "keep" });
+});
+
+test("a failed rollback is reported and the remaining earlier changes are still undone", () => {
+  const before = { ubereatsProgressA: "first original", ubereatsProgressB: "second original" };
+  const storage = new MemoryStorage(before);
+  const write = storage.setItem.bind(storage);
+  storage.setItem = (key, value) => {
+    if (key === "ubereatsProgressC" || (key === "ubereatsProgressA" && value === before[key])) throw new Error("write failed");
+    write(key, value);
+  };
+  const items = { ubereatsProgressA: "a", ubereatsProgressB: "b", ubereatsProgressC: "new" };
+  assert.throws(() => backup.restoreBackup(storage, { items }), /一部の記録を元に戻せません/);
+  assert.deepEqual(Object.fromEntries(storage.values), { ...before, ubereatsProgressA: "a" });
+});

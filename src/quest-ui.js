@@ -44,7 +44,7 @@
         reject(new Error("画像読み取り機能を準備できませんでした。通信を確認して、もう一度お試しください。"));
       };
       const timeout = window.setTimeout(fail, 20000);
-      script.src = "src/quest-image.js?v=96";
+      script.src = "src/quest-image.js?v=97";
       script.onload = () => {
         if (settled) return;
         if (!window.UberQuestImage) { fail(); return; }
@@ -91,6 +91,8 @@
       text("questImageDateNote", period.dateSource === "calendar"
         ? `${fields.startDate} ${fields.startTime} 〜 ${fields.endDate} ${fields.endTime}までを入力しました。${period.inferred ? "年は推定です。" : ""}画像の対象期間を確認してください。`
         : `画像には曜日だけが表示されているため、${fields.startDate} ${fields.startTime} 〜 ${fields.endDate} ${fields.endTime}までを仮入力しました。対象の週を確認し、違う場合は日付を変更してください。`);
+    } else if (imageResult.periodConflict) {
+      text("questImageDateNote", "画像から期間を確定できませんでした。入力済みの開始・終了日時を元画像と照合してください。");
     } else {
       text("questImageDateNote", "期間を読み取れなかったため、入力済みの日時を保持しました。Uberの画面と一致するか確認してください。未入力の日時は入力してください。");
     }

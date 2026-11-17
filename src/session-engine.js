@@ -1315,7 +1315,9 @@
   $("reset").onclick = function() {
     if (!confirm("完了件数・残り時間・終了上限・今日の稼働計測をリセットしますか？")) return;
     const hadSession = Boolean(!clockState.sessionEndedAt && clockState.sessionStartAt && (clockUsedMs() > 0 || n("done") > 0));
-    if (hadSession && confirm("リセット前に今日の稼働記録を保存しますか？")) recordSession(false);
+    if (hadSession && confirm("リセット前に今日の稼働記録を保存しますか？")) {
+      if (!recordSession(false)) return;
+    }
     if (typeof UberQuestStore !== "undefined" && !UberQuestStore.resetCounter()) return;
     $("done").value = "0";
     $("remainH").value = "12";

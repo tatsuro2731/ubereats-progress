@@ -1728,3 +1728,25 @@ test("returning from achievement restores previously rendered progress markup", 
   assert.equal(app.element("mainValue").innerHTML, initial);
   assert.equal(app.element("subValue").innerHTML, guide);
 });
+
+test("reset preserves the active session and count when the requested history save fails", () => {
+  const app = timerHarness({ fullMain: true, regular: {target: "46", done: "12", remainH: "12", remainM: "0"} });
+  app.api.enhancedToggleClock();
+  const startedAt = app.api.getState().sessionStartAt;
+  app.setNow(app.now() + 60000);
+  const write = app.storage.setItem.bind(app.storage);
+  app.storage.setItem = (key, value) => {
+    if (key === HISTORY_KEY) throw new Error("quota");
+    write(key, value);
+  };
+  app.element("reset").onclick();
+  assert.equal(app.confirmMessages.length, 2);
+  assert.equal(app.storage.getItem(HISTORY_KEY), null);
+  assert.equal(app.element("done").value, "12");
+  assert.equal(app.api.getState().sessionStartAt, startedAt);
+  assert.equal(app.api.getState().on, true);
+  app.storage.setItem = write;
+  app.element("reset").onclick();
+  assert.equal(JSON.parse(app.storage.getItem(HISTORY_KEY))[0].done, 12);
+  assert.equal(app.api.getState().sessionStartAt, null);
+});
