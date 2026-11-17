@@ -22,6 +22,7 @@
 | `src/session-engine.js` | 連続時計、休憩・他社稼働、履歴、稼働終了 |
 | `src/session-editors.js` | 開始時刻・休憩時間の編集ダイアログ |
 | `src/data-backup.js` | 保存データのJSON書き出し・読み込み（キーと形式はそのまま複製） |
+| `src/haptics.js` | ＋／−を押したときの振動（Androidは振動API、iPhoneは透明なスイッチ）。独立した端末設定で、件数の計算には関わらない |
 | `sw.js` | オフラインキャッシュと更新世代 |
 | `tests/` | 計算、保存互換、時計、同期、UI契約の回帰テスト |
 
@@ -34,7 +35,7 @@
 3. `session-engine.js`
 4. `session-editors.js`
 
-`quest-ui.js`と`data-backup.js`はその後に読み込みます。
+`quest-ui.js`と`data-backup.js`はその後に読み込みます。`haptics.js`は最後に読み込み、描画済みの`＋`・`−`に重ねます（コンパクト版も同じ）。
 
 後段は前段の公開値や画面要素を利用します。順番を変更する場合は、依存関係を先に解消してください。コンパクト版は `app-core.js`、`compact-app.js` の順です。
 

@@ -475,3 +475,10 @@ html:not([data-theme-mode="auto"]) .themeSchedule { display: none; }
 .questToolbar:has(~ #questEmpty:not([hidden])) #questNew { display: none; }
 .themeModes.skinModes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .compactAppearance label + select + .settingHint + label { display: block; margin-top: 12px; }
+
+/* 押した感（振動）：iPhoneでは、見えないスイッチをボタンに重ねて指のタップを受ける。
+ * 受け皿はボタン全体（枠線の上まで）を覆う透明なラベルで、OFFのときは取り除く（[hidden]）。 */
+.hapticHost { position: relative; }
+.hapticTap { position: absolute; inset: -1px; z-index: 1; margin: 0; border-radius: inherit; opacity: 0; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.hapticTap[hidden], .hapticHelper { display: none; }
+.hapticTap input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; pointer-events: none; }

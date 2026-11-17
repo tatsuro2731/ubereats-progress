@@ -13,18 +13,19 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=95"></script>
-  <link rel="stylesheet" href="styles/main.css?v=95">
-  <link rel="stylesheet" href="styles/appearance.css?v=95">
-  <link rel="stylesheet" href="styles/quest.css?v=95">
-  <link rel="stylesheet" href="styles/rich.css?v=95">
-  <script defer src="src/app-core.js?v=95"></script>
-  <script defer src="src/quest-store.js?v=95"></script>
-  <script defer src="src/main-app.js?v=95"></script>
-  <script defer src="src/session-engine.js?v=95"></script>
-  <script defer src="src/session-editors.js?v=95"></script>
-  <script defer src="src/quest-ui.js?v=95"></script>
-  <script defer src="src/data-backup.js?v=95"></script>
+  <script src="src/appearance.js?v=96"></script>
+  <link rel="stylesheet" href="styles/main.css?v=96">
+  <link rel="stylesheet" href="styles/appearance.css?v=96">
+  <link rel="stylesheet" href="styles/quest.css?v=96">
+  <link rel="stylesheet" href="styles/rich.css?v=96">
+  <script defer src="src/app-core.js?v=96"></script>
+  <script defer src="src/quest-store.js?v=96"></script>
+  <script defer src="src/main-app.js?v=96"></script>
+  <script defer src="src/session-engine.js?v=96"></script>
+  <script defer src="src/session-editors.js?v=96"></script>
+  <script defer src="src/quest-ui.js?v=96"></script>
+  <script defer src="src/data-backup.js?v=96"></script>
+  <script defer src="src/haptics.js?v=96"></script>
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -147,8 +148,12 @@
       </section>
       <div class="cardOrderSetting"><button id="cardOrderToggle" class="cardOrderToggle" type="button" aria-pressed="false"><span class="cardOrderIcon" aria-hidden="true">≡</span><span class="cardOrderCopy"><strong id="cardOrderLabel">カードを並び替える</strong><small>ドラッグで順番を変更・自動保存</small></span><span class="cardOrderChevron" aria-hidden="true">›</span></button></div>
       <section class="settingsSection skinSection" aria-labelledby="skinTitle">
-        <div class="settingsSectionHead"><div><h3 id="skinTitle" class="settingsSectionTitle">見た目のスタイル</h3><p class="settingsSectionNote">配色と配置は同じまま、質感だけを切り替えます</p></div></div>
+        <div class="settingsSectionHead"><div><h3 id="skinTitle" class="settingsSectionTitle">見た目のスタイル</h3><p class="settingsSectionNote">リッチは配色・質感・動きのある見た目、クラシックは従来の見た目です</p></div></div>
         <div class="themeModes skinModes" role="group" aria-label="見た目のスタイル"><button type="button" data-skin-mode="rich" aria-pressed="true">リッチ</button><button type="button" data-skin-mode="classic" aria-pressed="false">クラシック</button></div>
+      </section>
+      <section class="settingsSection hapticsSection" aria-labelledby="hapticsTitle">
+        <div class="settingsSectionHead"><div><h3 id="hapticsTitle" class="settingsSectionTitle">押した感（振動）</h3><p class="settingsSectionNote">＋／−を押したとき、本体を小さく振動させます</p></div></div>
+        <div class="themeModes skinModes" role="group" aria-label="押した感（振動）"><button type="button" data-haptics-mode="on" aria-pressed="true">ON</button><button type="button" data-haptics-mode="off" aria-pressed="false">OFF</button></div>
       </section>
       <section class="settingsSection appearanceSection" aria-labelledby="appearanceTitle">
         <div class="settingsSectionHead"><div><h3 id="appearanceTitle" class="settingsSectionTitle">画面の明るさ</h3><p class="settingsSectionNote">時間帯で自動切替、または手動で固定</p></div></div>
