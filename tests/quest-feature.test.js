@@ -335,7 +335,7 @@ test("a manual downward correction never makes counts negative or redistributes 
 
 // Run the shipped registration/import event handlers. The DOM checks data flow,
 // and does not replace browser or iPhone screen verification.
-function imageImportHarness({ period = null, recognize, openCrop, defaultJpeg, readApi } = {}) {
+function imageImportHarness({ period = null, recognize, openCrop, defaultJpeg, readApi, owner, sessionStorage = new MemoryStorage() } = {}) {
   class Events {
     constructor() { this.listeners = new Map(); }
     addEventListener(type, callback) {
@@ -401,12 +401,11 @@ function imageImportHarness({ period = null, recognize, openCrop, defaultJpeg, r
   }
   class Event { constructor(type, options = {}) { this.type = type; Object.assign(this, options); } preventDefault() {} }
   const storage = seedStore();
-  const sessionStorage = new MemoryStorage();
   const window = new Events();
   Object.assign(window, { window, document, Date: FakeDate, Event, CustomEvent: Event, AbortController,
     localStorage: storage, sessionStorage, location: { hash: "#quest", pathname: "/", search: "" }, history: { replaceState() {} },
     URL: { createObjectURL: () => "blob:quest-test", revokeObjectURL() {} }, setTimeout() {}, clearTimeout() {}, setInterval() {},
-    UberQuestImageCrop: { open: openCrop, defaultJpeg }, UberQuestImageApi: { read: readApi },
+    UberQuestOwner: owner, UberQuestImageCrop: { open: openCrop, defaultJpeg }, UberQuestImageApi: { read: readApi },
     UberQuestImage: { recognize: recognize || (async () => ({ candidates: [{ label: "進行中のクエスト", tiers: [{ target: 110, reward: 11550 }, { target: 120, reward: 1500 }] }], period, skipped: 0, diagnosticText: "テスト用の読み取り結果" })) }
   });
   const context = vm.createContext(window);
@@ -678,22 +677,21 @@ test("after an empty interactive read, the local retry uses the original image a
   assert.ok(!freshOptions.previousReading);
 });
 
-async function enableAutoApi(app) {
-  app.element("questAutoApiKey").value = "temporary-test-key";
-  await app.emit("questAutoApiEnable", "click");
-  assert.equal(app.element("questAutoApiKey").value, "");
-  assert.equal(app.element("questAutoApiActive").hidden, false);
+function testOwner(read, signedIn = true) {
+  return {
+    read, hasSession: () => signedIn, init: async () => false,
+    signIn: async () => { signedIn = true; }, signOut: () => { signedIn = false; }
+  };
 }
 
-test("tab opt-in sends only the cropped image on a local OCR failure", async () => {
+test("a signed-in owner gets automatic cropped reading without configuring a key or pressing enable", async () => {
   const recognized = { candidates: [apiCandidate], period: localPeriod };
   const unreadable = { candidates: [], period: localPeriod, diagnosticText: "クエストの進捗" };
   const recognize = test.mock.fn(async () => recognized);
   const defaultJpeg = test.mock.fn(async () => cropUrl);
   const readApi = test.mock.fn(async () => apiCandidate);
-  const app = imageImportHarness({ recognize, defaultJpeg, readApi });
+  const app = imageImportHarness({ recognize, defaultJpeg, owner: testOwner(readApi) });
   await app.emit("questNew", "click");
-  await enableAutoApi(app);
   assert.equal(defaultJpeg.mock.callCount(), 0);
   assert.equal(readApi.mock.callCount(), 0);
   await app.importImage();
@@ -706,16 +704,13 @@ test("tab opt-in sends only the cropped image on a local OCR failure", async () 
   assert.equal(defaultJpeg.mock.calls[0].arguments[0], recognize.mock.calls[1].arguments[0]);
   assert.equal(readApi.mock.callCount(), 1);
   const request = readApi.mock.calls[0].arguments[0];
-  assert.equal(request.key, "temporary-test-key");
   assert.equal(request.imageUrl, cropUrl);
-  assert.deepEqual(Object.keys(request).sort(), ["imageUrl", "key", "signal"]);
+  assert.deepEqual(Object.keys(request).sort(), ["imageUrl", "signal"]);
   assert.equal(app.element("questInitialTotal").value, "20");
   assert.equal(app.element("questStartDate").value, "2026-09-04");
-  for (const storage of [app.storage, app.sessionStorage]) {
-    assert.doesNotMatch(JSON.stringify([...storage.values]), /temporary-test-key/);
-  }
+  assert.equal(app.element("questOwnerSignIn").hidden, true);
 
-  await app.emit("questAutoApiDisable", "click");
+  await app.emit("questOwnerSignOut", "click");
   await app.importImage();
   assert.equal(readApi.mock.callCount(), 1);
   assert.equal(app.element("questApiOpen").hidden, false);
@@ -726,10 +721,9 @@ test("an automatic API failure leaves local retry available without another auto
   const readApi = test.mock.fn(async () => { throw new Error("API unavailable"); });
   const app = imageImportHarness({
     recognize: async () => ({ candidates: [], period: localPeriod, diagnosticText: "クエストの進捗" }),
-    defaultJpeg, readApi
+    defaultJpeg, owner: testOwner(readApi)
   });
   await app.emit("questNew", "click");
-  await enableAutoApi(app);
   await app.importImage();
   assert.equal(readApi.mock.callCount(), 1);
   assert.equal(app.element("questImageRetry").hidden, false);
@@ -738,19 +732,18 @@ test("an automatic API failure leaves local retry available without another auto
   assert.equal(readApi.mock.callCount(), 1);
 });
 
-test("disabling the tab opt-in aborts an active request and ignores its response", async () => {
+test("logging out aborts an active request and ignores its response", async () => {
   let resolveRead, markStarted;
   const started = new Promise(resolve => { markStarted = resolve; });
   const app = imageImportHarness({
     recognize: async () => { throw new Error("local OCR unavailable"); },
     defaultJpeg: async () => cropUrl,
-    readApi: ({ signal }) => new Promise(resolve => { resolveRead = resolve; markStarted(signal); })
+    owner: testOwner(({ signal }) => new Promise(resolve => { resolveRead = resolve; markStarted(signal); }))
   });
   await app.emit("questNew", "click");
-  await enableAutoApi(app);
   const pending = app.importImage();
   const signal = await started;
-  await app.emit("questAutoApiDisable", "click");
+  await app.emit("questOwnerSignOut", "click");
   assert.equal(signal.aborted, true);
   resolveRead(apiCandidate);
   await pending;
@@ -763,10 +756,9 @@ test("a recognized quest selection screen is never sent through automatic progre
   const readApi = test.mock.fn(async () => apiCandidate);
   const app = imageImportHarness({
     recognize: async () => ({ candidates: [], diagnosticText: "次のクエストを選択する\nクエスト1\nクエスト2" }),
-    defaultJpeg, readApi
+    defaultJpeg, owner: testOwner(readApi)
   });
   await app.emit("questNew", "click");
-  await enableAutoApi(app);
   await app.importImage();
   assert.equal(defaultJpeg.mock.callCount(), 0);
   assert.equal(readApi.mock.callCount(), 0);
@@ -777,12 +769,48 @@ test("enabling automatic reading cannot send a previously selected image", async
   const local = new Promise(resolve => { complete = resolve; });
   const defaultJpeg = test.mock.fn(async () => cropUrl);
   const readApi = test.mock.fn(async () => apiCandidate);
-  const app = imageImportHarness({ recognize: () => local, defaultJpeg, readApi });
+  const app = imageImportHarness({ recognize: () => local, defaultJpeg, owner: testOwner(readApi, false) });
   await app.emit("questNew", "click");
   const pending = app.importImage();
-  await enableAutoApi(app);
+  await app.emit("questOwnerSignIn", "click");
   complete({ candidates: [], diagnosticText: "クエストの進捗" });
   await pending;
   assert.equal(defaultJpeg.mock.callCount(), 0);
   assert.equal(readApi.mock.callCount(), 0);
+});
+
+test("the owner can adjust a rejected crop manually without entering a key", async () => {
+  const read = test.mock.fn(async () => { throw new Error("画像を切り直してください"); });
+  const app = imageImportHarness({
+    recognize: async () => ({ candidates: [], diagnosticText: "クエストの進捗" }),
+    defaultJpeg: async () => cropUrl, owner: testOwner(read),
+    openCrop: async () => () => cropUrl
+  });
+  await app.emit("questNew", "click");
+  await app.importImage();
+  assert.equal(read.mock.callCount(), 1);
+  await app.emit("questApiOpen", "click");
+  assert.equal(app.element("questApiKeyField").hidden, true);
+  read.mock.mockImplementation(async () => apiCandidate);
+  await app.emit("questApiSend", "click");
+  assert.equal(read.mock.callCount(), 2);
+  assert.deepEqual(Object.keys(read.mock.calls[1].arguments[0]).sort(), ["imageUrl", "signal"]);
+  assert.equal(app.element("questInitialTotal").value, "20");
+});
+
+test("owner sign-in restores only draft fields and does not store the image or manual key", async () => {
+  const owner = testOwner(async () => apiCandidate, false);
+  const app = imageImportHarness({ owner });
+  await app.emit("questNew", "click");
+  app.element("questInitialToday").value = "7";
+  app.element("questApiKey").value = "temporary-test-key";
+  await app.emit("questOwnerSignIn", "click");
+  assert.doesNotMatch(JSON.stringify([...app.sessionStorage.values]), /temporary-test-key/);
+  const resumed = imageImportHarness({ owner: { ...owner, init: async () => true }, sessionStorage: app.sessionStorage });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(resumed.element("questInitialToday").value, "7");
+  assert.equal(resumed.element("questApiKey").value, "");
+  assert.equal(resumed.element("questOwnerSignIn").hidden, true);
+  assert.equal(resumed.element("questConfigForm").hidden, false);
+  assert.equal(app.sessionStorage.values.size, 0);
 });

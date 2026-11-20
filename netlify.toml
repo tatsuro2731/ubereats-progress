@@ -1,0 +1,7 @@
+[build]
+  command = "npm ci --prefix relay-auth && npm run build --prefix relay-auth"
+  publish = "relay-public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

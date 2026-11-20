@@ -13,19 +13,20 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=100"></script>
-  <link rel="stylesheet" href="styles/main.css?v=100">
-  <link rel="stylesheet" href="styles/appearance.css?v=100">
-  <link rel="stylesheet" href="styles/quest.css?v=100">
-  <link rel="stylesheet" href="styles/rich.css?v=100">
-  <script defer src="src/app-core.js?v=100"></script>
-  <script defer src="src/quest-store.js?v=100"></script>
-  <script defer src="src/main-app.js?v=100"></script>
-  <script defer src="src/session-engine.js?v=100"></script>
-  <script defer src="src/session-editors.js?v=100"></script>
-  <script defer src="src/quest-ui.js?v=100"></script>
-  <script defer src="src/data-backup.js?v=100"></script>
-  <script defer src="src/haptics.js?v=100"></script>
+  <script src="src/appearance.js?v=101"></script>
+  <link rel="stylesheet" href="styles/main.css?v=101">
+  <link rel="stylesheet" href="styles/appearance.css?v=101">
+  <link rel="stylesheet" href="styles/quest.css?v=101">
+  <link rel="stylesheet" href="styles/rich.css?v=101">
+  <script defer src="src/app-core.js?v=101"></script>
+  <script defer src="src/quest-store.js?v=101"></script>
+  <script defer src="src/main-app.js?v=101"></script>
+  <script defer src="src/session-engine.js?v=101"></script>
+  <script defer src="src/session-editors.js?v=101"></script>
+  <script defer src="src/quest-owner.js?v=101"></script>
+  <script defer src="src/quest-ui.js?v=101"></script>
+  <script defer src="src/data-backup.js?v=101"></script>
+  <script defer src="src/haptics.js?v=101"></script>
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -102,25 +103,21 @@
         <div class="questBetween"><h4 id="questImportTitle">スクリーンショットから入力</h4><button id="questImagePick" class="questSecondary" type="button">画像を選ぶ</button></div>
         <input id="questImageFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
         <p class="questMuted">Uberのクエスト選択画面・進捗画面から、件数・報酬・期間を読み取ります。通常の読み取りは端末内で行います。読み取りの準備には通信が必要です。</p>
-        <details id="questAutoApiSetup">
-          <summary>進捗欄の自動API補完を設定</summary>
-          <p class="questMuted">このタブで進捗画面の画像を選ぶと、最初の端末内読み取りで候補が得られなかった場合に、画像の上から18〜57%を横幅いっぱいに切り出してOpenAIへ1回自動送信します。送信ごとにご自身のAPI利用料がかかります。</p>
-          <label class="questField" for="questAutoApiKey">OpenAI APIキー<input id="questAutoApiKey" type="password" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
-          <p class="questMuted">キーはこのタブのメモリに保持します。解除・再読み込み・ページを離れたときに消去します。</p>
-          <p id="questAutoApiError" class="questError" role="alert" hidden></p>
-          <button id="questAutoApiEnable" class="questSecondary" type="button">このタブで自動送信を有効にする</button>
-        </details>
-        <div id="questAutoApiActive" class="questBetween" hidden><span>進捗欄の自動API補完が有効です</span><button id="questAutoApiDisable" class="questTextButton" type="button">解除</button></div>
+        <div id="questOwnerAccess" hidden>
+          <p id="questOwnerNotice" class="questMuted"></p>
+          <button id="questOwnerSignIn" class="questSecondary" type="button">本人確認する</button>
+          <button id="questOwnerSignOut" class="questTextButton" type="button" hidden>ログアウト</button>
+        </div>
         <div class="questBetween"><p id="questImageStatus" class="questMuted" role="status" aria-live="polite"></p><button id="questImageStop" class="questTextButton" type="button" hidden>読み取りを中止</button></div>
         <p id="questImageError" class="questError" role="alert" hidden></p>
         <button id="questImageRetry" class="questSecondary" type="button" hidden>端末内で再試行</button>
         <button id="questApiOpen" class="questSecondary" type="button" hidden>進捗欄をAPIで再読み取り</button>
         <section id="questApiPanel" aria-labelledby="questApiTitle" hidden>
           <h4 id="questApiTitle">進捗欄をOpenAIで再読み取り</h4>
-          <p class="questMuted">プレビューの画像をOpenAIに送信します。API利用料はご自身のOpenAIアカウントにかかります。</p>
+          <p id="questApiNotice" class="questMuted">選択範囲をOpenAIへ送ります。送信ごとにAPI利用料がかかります。</p>
           <fieldset id="questApiFields" aria-labelledby="questApiTitle">
             <div id="questApiCrop"></div>
-            <label class="questField" for="questApiKey">OpenAI APIキー（保存されません）<input id="questApiKey" type="password" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+            <label id="questApiKeyField" class="questField" for="questApiKey">OpenAI APIキー（保存されません）<input id="questApiKey" type="password" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
           </fieldset>
           <div class="questBetween"><button id="questApiSend" class="questPrimary" type="button" disabled>選択範囲をOpenAIに送信</button><button id="questApiCancel" class="questTextButton" type="button">キャンセル</button></div>
         </section>

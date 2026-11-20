@@ -1,0 +1,14 @@
+{
+  "name": "quest-owner-login",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild login.mjs --bundle --platform=browser --target=safari15.4 --format=esm --outfile=../relay-public/identity.js"
+  },
+  "dependencies": {
+    "@netlify/identity": "2.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

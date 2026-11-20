@@ -31,12 +31,13 @@
   const imageModules = new Map();
   let apiController = null;
   let getApiCrop = null;
-  let autoApiSession = null;
+  const owner = window.UberQuestOwner;
+  let manualOwnerSession = false;
   let autoApiController = null;
   let lastImageFile = null;
   let lastProgressDone = null;
 
-  function loadImageModule(name = "UberQuestImage", path = "src/quest-image.js?v=100") {
+  function loadImageModule(name = "UberQuestImage", path = "src/quest-image.js?v=101") {
     if (window[name]) return Promise.resolve(window[name]);
     if (imageModules.has(name)) return imageModules.get(name);
     const pending = new Promise((resolve, reject) => {
@@ -140,7 +141,7 @@
     resetImage();
     if (!file) return;
     lastImageFile = file;
-    const sessionAtSelection = allowAutoApi && !previousReading ? autoApiSession : null;
+    const signedInAtSelection = allowAutoApi && !previousReading && owner?.hasSession();
     imageResult = previousReading;
     const controller = new AbortController(); imageController = controller;
     imageBusy(true);
@@ -167,11 +168,11 @@
         byId("questImageDebugText").value = error.diagnosticText;
         byId("questImageDebug").hidden = false;
       }
-      if (sessionAtSelection && sessionAtSelection === autoApiSession && !error.fileProblem &&
+      if (signedInAtSelection && owner.hasSession() && !error.fileProblem &&
           error.name !== "AbortError" && !imageResult?.candidates?.length &&
           !isSelectionScreen(byId("questImageDebugText").value)) {
         try {
-          const candidate = await autoReadProgress(file, sessionAtSelection, controller);
+          const candidate = await autoReadProgress(file, controller);
           if (imageController !== controller || controller.signal.aborted) return;
           showImageResult({ ...imageResult, candidates: [candidate], skipped: 0 }, file);
           return;
@@ -182,6 +183,7 @@
         }
       }
       if (error.name !== "AbortError") {
+        updateOwnerControls();
         imageMessage(error.message || "画像を読み取れませんでした。通信を確認して再度お試しください。", "error");
         // 画像自体の問題でなければ、選び直さずに同じ画像で再試行できるようにする。
         if (byId("questImageRetry")) byId("questImageRetry").hidden = Boolean(error.fileProblem);
@@ -234,7 +236,7 @@
     text("questImageStatus", message);
   }
 
-  async function autoReadProgress(file, session, controller) {
+  async function autoReadProgress(file, controller) {
     autoApiController = controller;
     const timer = window.setTimeout(() => {
       if (imageController === controller) stopImageRead("APIの応答が時間内に届きませんでした。手動でも再読み取りできます。");
@@ -242,33 +244,75 @@
     const signal = controller.signal;
     try {
       text("questImageStatus", "進捗欄を切り出しています…");
-      const [crop, api] = await Promise.all([
-        loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=100"),
-        loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=100")
-      ]);
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=101");
       if (signal.aborted) return;
       const imageUrl = await crop.defaultJpeg(file, { signal });
-      if (signal.aborted || session !== autoApiSession) return;
+      if (signal.aborted) return;
+      if (!owner.hasSession()) throw new Error("自動読み取りを続けるには、もう一度本人確認してください。");
       text("questImageStatus", "進捗欄をOpenAIで自動読み取り中…");
-      return await api.read({ key: session.key, imageUrl, signal });
+      return await owner.read({ imageUrl, signal });
     } finally {
       window.clearTimeout(timer);
       if (autoApiController === controller) autoApiController = null;
     }
   }
 
-  function disableAutoApi() {
-    if (autoApiSession) autoApiSession.key = "";
-    autoApiSession = null;
-    byId("questAutoApiKey").value = "";
-    byId("questAutoApiError").hidden = true;
-    byId("questAutoApiActive").hidden = true;
-    byId("questAutoApiSetup").hidden = false;
-    if (autoApiController) stopImageRead("自動API補完を解除し、読み取りを中止しました。");
+  function updateOwnerControls() {
+    byId("questOwnerAccess").hidden = !owner;
+    if (!owner) return;
+    const signedIn = owner.hasSession();
+    byId("questOwnerSignIn").hidden = signedIn;
+    byId("questOwnerSignOut").hidden = !signedIn;
+    text("questOwnerNotice", signedIn
+      ? "端末で読めなかったときだけ、進捗欄をNetlify経由でOpenAIに1回送ります。送信ごとにAPI利用料がかかります。"
+      : "所有者は初回の本人確認で自動読み取りを使えます。端末で読めなかったときだけ進捗欄をNetlify経由でOpenAIに送り、API利用料がかかります。");
+  }
+
+  // A top-level sign-in may replace this page on iPhone. Keep only editable
+  // quest values in the current tab; files and credentials never enter a draft.
+  const ownerDraftKey = "ubereats-progress.quest-signin-draft";
+  const ownerDraftFields = ["questTemplate", "questInitialTotal", "questInitialToday"];
+  function saveSignInDraft() {
+    const draft = {
+      questId: editingId, period: periodFields(),
+      fields: ownerDraftFields.map(id => byId(id).value),
+      tiers: tierRows().map(row => [row.querySelector("[data-tier-count]").value, row.querySelector("[data-tier-reward]").value]),
+      goalIndex: Number(byId("questGoalInput").value), imageCountApplied
+    };
+    try { sessionStorage.setItem(ownerDraftKey, JSON.stringify(draft)); }
+    catch (_) { throw new Error("入力内容を一時保存できませんでした。ブラウザーのストレージを許可してから本人確認してください。"); }
+  }
+
+  function returnToImport() {
+    showTab(true);
+    let draft;
+    try {
+      draft = JSON.parse(sessionStorage.getItem(ownerDraftKey));
+      sessionStorage.removeItem(ownerDraftKey);
+    } catch (_) { /* A direct return can have no tab storage. */ }
+    if (draft?.questId && draft.questId !== "new") {
+      manualSelection = draft.questId;
+      render();
+      if (lastSelectedId !== draft.questId) {
+        errorMessage("編集中のクエストが見つかりません。期間を選び直してください。");
+        return false;
+      }
+    }
+    openForm(!draft || draft.questId === "new");
+    if (draft) {
+      fillPeriod(draft.period);
+      ownerDraftFields.forEach((id, i) => { byId(id).value = draft.fields[i]; });
+      byId("questTierInputs").replaceChildren();
+      draft.tiers.forEach(([count, reward]) => addTier(count, reward));
+      refreshTierLabels(draft.goalIndex);
+      imageCountApplied = draft.imageCountApplied;
+      checkPeriodEdit();
+    }
+    return true;
   }
 
   function closeApiPanel() {
-    apiController?.abort(); apiController = null; getApiCrop = null;
+    apiController?.abort(); apiController = null; getApiCrop = null; manualOwnerSession = false;
     byId("questApiPanel").hidden = true;
     byId("questApiKey").value = "";
     byId("questApiFields").disabled = false;
@@ -281,12 +325,17 @@
     const file = lastImageFile;
     const controller = new AbortController();
     apiController = controller;
+    manualOwnerSession = Boolean(owner?.hasSession());
+    byId("questApiKeyField").hidden = manualOwnerSession;
+    text("questApiNotice", manualOwnerSession
+      ? "選択範囲をNetlify経由でOpenAIへ送ります。送信ごとにAPI利用料がかかります。"
+      : "ご自身のAPIキーで選択範囲をOpenAIへ直接送ります。送信ごとにAPI利用料がかかります。");
     byId("questApiOpen").hidden = true;
     byId("questApiPanel").hidden = false;
     byId("questImageError").hidden = true;
     text("questImageStatus", "送信範囲を準備しています…");
     try {
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=100");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=101");
       if (apiController !== controller) return;
       const getCrop = await crop.open(file, byId("questApiCrop"), { signal: controller.signal });
       if (apiController !== controller) return;
@@ -304,7 +353,7 @@
     const controller = apiController;
     const keyInput = byId("questApiKey");
     if (!controller || !getApiCrop || byId("questApiSend").disabled) return;
-    if (!keyInput.value.trim()) {
+    if (!manualOwnerSession && !keyInput.value.trim()) {
       imageMessage("ご自身のOpenAI APIキーを入力してください。", "error");
       keyInput.focus(); return;
     }
@@ -320,15 +369,22 @@
     try {
       const imageUrl = getApiCrop();
       text("questImageStatus", "選択範囲をOpenAIで読み取っています…");
-      const api = await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=100");
+      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=101");
       if (apiController !== controller) return;
-      const candidate = await api.read({ key, imageUrl, signal: controller.signal });
+      const request = { imageUrl, signal: controller.signal };
+      if (!manualOwnerSession) request.key = key;
+      const candidate = await api.read(request);
       if (apiController !== controller) return;
       closeApiPanel(); byId("questImageRetry").hidden = true;
       showImageResult({ ...imageResult, candidates: [candidate], skipped: 0 }, lastImageFile);
     } catch (error) {
       if (apiController !== controller) return;
-      byId("questApiFields").disabled = false; byId("questApiSend").disabled = false;
+      if (manualOwnerSession && !owner.hasSession()) {
+        closeApiPanel(); byId("questApiOpen").hidden = false;
+      } else {
+        byId("questApiFields").disabled = false; byId("questApiSend").disabled = false;
+      }
+      updateOwnerControls();
       text("questImageStatus", ""); imageMessage(error.message, "error");
     } finally { window.clearTimeout(timer); }
   }
@@ -461,7 +517,7 @@
   }
   function showTab(questTab, updateHash = true) {
     if (questTab) manualSelection = null;
-    else if (autoApiSession) stopImageRead("読み取りを中止しました。");
+    else stopImageRead("読み取りを中止しました。");
     if (!questTab && apiController) {
       closeApiPanel(); byId("questApiOpen").hidden = false; text("questImageStatus", "");
     }
@@ -546,26 +602,18 @@
   window.setInterval(() => { if (!document.hidden) render(); }, 30000);
   if (!full) { render(); return; }
 
-  byId("questAutoApiEnable").addEventListener("click", () => {
-    const input = byId("questAutoApiKey");
-    const key = input.value.trim();
-    if (!key || /\s/.test(key)) {
-      errorMessage("ご自身のOpenAI APIキーを入力してください。", "questAutoApiError");
-      input.focus(); return;
-    }
-    input.value = "";
-    autoApiSession = { key };
-    byId("questAutoApiError").hidden = true;
-    byId("questAutoApiSetup").open = false;
-    byId("questAutoApiSetup").hidden = true;
-    byId("questAutoApiActive").hidden = false;
-    byId("questImagePick").focus();
+  updateOwnerControls();
+  window.addEventListener("pageshow", updateOwnerControls);
+  window.addEventListener("storage", updateOwnerControls);
+  byId("questOwnerSignIn").addEventListener("click", async () => {
+    try { saveSignInDraft(); await owner.signIn(); }
+    catch (error) { imageMessage(error.message, "error"); }
   });
-  byId("questAutoApiKey").addEventListener("keydown", event => {
-    if (event.key === "Enter") { event.preventDefault(); byId("questAutoApiEnable").click(); }
-  });
-  byId("questAutoApiDisable").addEventListener("click", () => {
-    disableAutoApi();
+  byId("questOwnerSignOut").addEventListener("click", () => {
+    stopImageRead("読み取りを中止しました。");
+    if (manualOwnerSession) { closeApiPanel(); byId("questApiOpen").hidden = !lastImageFile; }
+    owner.signOut();
+    updateOwnerControls();
     byId("questImagePick").focus();
   });
   byId("questApiOpen").addEventListener("click", openApiPanel);
@@ -580,7 +628,7 @@
     byId("questApiOpen").focus();
   });
   window.addEventListener("pagehide", () => {
-    disableAutoApi();
+    stopImageRead("読み取りを中止しました。");
     if (apiController) {
       closeApiPanel(); byId("questApiOpen").hidden = false; text("questImageStatus", "");
     }
@@ -669,4 +717,14 @@
     }, "公式アプリの件数に合わせました。進捗画面の完了件数は変更しません。");
   });
   showTab(location.hash === "#quest", false);
+  if (owner) owner.init().then(signedIn => {
+    updateOwnerControls();
+    if (signedIn && returnToImport()) {
+      text("questImageStatus", "本人確認が完了しました。クエストの画像を選んでください。");
+      byId("questImagePick").focus();
+    }
+  }).catch(error => {
+    if (returnToImport()) imageMessage(error.message, "error");
+    updateOwnerControls();
+  });
 })();

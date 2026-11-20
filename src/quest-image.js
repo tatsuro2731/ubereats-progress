@@ -8,7 +8,7 @@
   const DAY = 86400000;
   const JST = 9 * 60 * 60000;
   const CDN = "https://cdn.jsdelivr.net/npm/";
-  const VERSION = "100";
+  const VERSION = "101";
   let libraryPromise;
 
   function normalize(text) {
