@@ -58,3 +58,9 @@ body.progressApp .questBrief { display:flex; justify-content:space-between; flex
 .questImport .questError[data-kind="warning"] { border-left-color:var(--accent); background:var(--card2); color:var(--text); font-weight:500; }
 .questImport #questImageRetry { margin-top:10px; }
 .questImport #questImageRetry[hidden] { display:none; }
+.questApiCrop { display:grid; gap:6px; min-width:0; }
+.questApiCrop canvas { display:block; width:100%; height:min(34vh,290px); object-fit:contain; background:var(--card2); border-radius:8px; }
+.questApiCrop label { display:grid; grid-template-columns:auto minmax(0,1fr); gap:12px; align-items:center; color:var(--muted); font-size:14px; }
+.questView .questApiCrop input[type="range"] { min-height:44px; margin:0; padding:0; border:0; background:transparent; accent-color:var(--accent); }
+
+#questApiFields { min-width:0; border:0; margin:0; padding:0; }

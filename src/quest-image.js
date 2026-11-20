@@ -8,7 +8,7 @@
   const DAY = 86400000;
   const JST = 9 * 60 * 60000;
   const CDN = "https://cdn.jsdelivr.net/npm/";
-  const VERSION = "98";
+  const VERSION = "99";
   let libraryPromise;
 
   function normalize(text) {
@@ -179,11 +179,12 @@
     const converted = ["クエスト1"];
     const header = [];
     let bonusStart = null;
+    let duplicatedSlash = false;
     let completed = null; let target = null; let inferredProgress = false;
     for (const row of rows) {
       const compact = row.replace(/\s/g, "");
       if (/^詳細/.test(compact)) break;
-      let progress = row.match(/(?:^|[^\d.,\-−A-Za-z])(\d{1,4})\s*\/\s*(\d{1,4})\s*(?:回|件)/);
+      let progress = row.match(/(?:^|[^\d.,+\-−A-Za-z])(\d{1,4})\s*\/\s*(\d{1,4})\s*(?:回|件)/);
       if (!progress && completed === null) {
         // OCR can turn the slash in a progress fraction into 7 (5/110 ->
         // 57110). Recover it only when the independently printed remaining
@@ -211,6 +212,13 @@
         // A later-stage progress fraction does not establish the full period total.
         if (completed !== null) return reject();
         completed = Number(progress[1]); target = Number(progress[2]);
+        // Safari OCR can render the separator twice: 20/120 becomes 207/120.
+        // Only reconsider an impossible fraction; corroborate both counts and
+        // the independently printed base reward below before accepting it.
+        if (completed > target && /^(?:0|[1-9]\d*)7$/.test(progress[1])) {
+          completed = Number(progress[1].slice(0, -1));
+          duplicatedSlash = true;
+        }
         if (completed > target || target < 1) return reject();
         converted.push(`${target}回${row.slice(progress.index + progress[0].length)}`);
       } else if (completed !== null) {
@@ -233,14 +241,16 @@
     // progress row repeats that reward, but use it only with an exact count
     // match and a complete currency/amount/獲得 phrase, never a guessed amount.
     const summaries = [...description.matchAll(/(?:あと|(?<!午)後)(\d{1,4})(?:回|件)の(?:乗車サービス|乗車|配達)を完了すると[、,]?[¥￥\\半]+([\d,.]+)を獲得/g)];
-    if (summaries.length > 1) return reject();
+    if (summaries.length > 1 || (duplicatedSlash && !summaries.length)) return reject();
     if (summaries.length === 1) {
       const summary = summaries[0];
       if (Number(summary[1]) + completed !== target) return reject();
       const summaryTier = parseText(`クエスト1\n${target}回¥${summary[2]}`, now).candidates[0]?.tiers[0];
       const baseRows = converted.slice(0, bonusStart ?? converted.length).join("\n");
       const baseTier = parseText(baseRows, now).candidates[0]?.tiers[0];
+      if (duplicatedSlash && (!summaryTier || !baseTier)) return reject();
       if (summaryTier && baseTier && summaryTier.reward !== baseTier.reward) return reject();
+      if (duplicatedSlash) inferredProgress = true;
       // Keep malformed or conflicting visible amounts rejected. Only a missing
       // base reward can be recovered; bonus rewards must still be read in full.
       if (summaryTier && !/[+¥￥\\半]/.test(baseRows)) converted[1] += ` ¥${summaryTier.reward}`;

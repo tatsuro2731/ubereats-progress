@@ -28,32 +28,36 @@
   let imageResult = null;
   let imagePreviewUrl = null;
   let imageCountApplied = false;
-  let imageModulePromise = null;
+  const imageModules = new Map();
+  let apiController = null;
+  let getApiCrop = null;
   let lastImageFile = null;
   let lastProgressDone = null;
 
-  function loadImageModule() {
-    if (window.UberQuestImage) return Promise.resolve(window.UberQuestImage);
-    if (!imageModulePromise) imageModulePromise = new Promise((resolve, reject) => {
+  function loadImageModule(name = "UberQuestImage", path = "src/quest-image.js?v=99") {
+    if (window[name]) return Promise.resolve(window[name]);
+    if (imageModules.has(name)) return imageModules.get(name);
+    const pending = new Promise((resolve, reject) => {
       const script = document.createElement("script");
       let settled = false;
       const fail = () => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timeout); script.remove(); imageModulePromise = null;
+        window.clearTimeout(timeout); script.remove(); imageModules.delete(name);
         reject(new Error("画像読み取り機能を準備できませんでした。通信を確認して、もう一度お試しください。"));
       };
       const timeout = window.setTimeout(fail, 20000);
-      script.src = "src/quest-image.js?v=98";
+      script.src = path;
       script.onload = () => {
         if (settled) return;
-        if (!window.UberQuestImage) { fail(); return; }
-        settled = true; window.clearTimeout(timeout); resolve(window.UberQuestImage);
+        if (!window[name]) { fail(); return; }
+        settled = true; window.clearTimeout(timeout); resolve(window[name]);
       };
       script.onerror = fail;
       document.head.appendChild(script);
     });
-    return imageModulePromise;
+    imageModules.set(name, pending);
+    return pending;
   }
 
   function imageBusy(busy) {
@@ -62,6 +66,8 @@
     byId("questConfigForm").querySelector('button[type="submit"]').disabled = busy;
   }
   function resetImage(resetCount = false) {
+    closeApiPanel();
+    byId("questApiOpen").hidden = true;
     imageController?.abort(); imageController = null; imageResult = null; lastImageFile = null;
     if (resetCount) imageCountApplied = false;
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
@@ -146,31 +152,10 @@
       if (imageController !== controller) return;
       byId("questImageDebugText").value = result.diagnosticText || "";
       byId("questImageDebug").hidden = !result.diagnosticText;
+      imageResult = result;
       if (!result.candidates.length) throw new Error("読み取った文字から件数と報酬を確定できませんでした。下の「読み取り結果を確認」を開いた画面を送ってください。手入力もできます。");
       if (result.warning) imageMessage(result.warning, "warning");
-      imageResult = result;
-      imagePreviewUrl = URL.createObjectURL(file); byId("questImageOriginal").src = imagePreviewUrl; byId("questImagePreview").hidden = false;
-      byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
-        const button = document.createElement("button"); button.type = "button"; button.className = "questImageChoice"; button.setAttribute("aria-pressed", "false");
-        const title = document.createElement("strong"); title.textContent = candidate.label; button.append(title);
-        if (Number.isInteger(candidate.completed)) { const progress = document.createElement("span"); progress.textContent = `現在の累計 ${candidate.completed}件`; button.append(progress); }
-        core.questTierTotals(candidate.tiers).forEach(tier => {
-          const group = document.createElement("span"); group.className = "questImageTier";
-          const row = document.createElement("span"); const count = document.createElement("em"); const reward = document.createElement("em");
-          count.textContent = `累計${tier.target}件`;
-          reward.textContent = `報酬合計 ${yen(tier.totalReward)}`; row.append(count, reward);
-          const average = document.createElement("span"); average.className = "questAverage"; average.textContent = averageLabel(tier.averageReward);
-          group.append(row, average); button.append(group);
-        });
-        const action = document.createElement("small"); action.textContent = "この候補を入力"; button.append(action);
-        button.addEventListener("click", () => applyImageCandidate(index)); return button;
-      }));
-      byId("questImageResults").hidden = false;
-      byId("questImageSkipped").hidden = !result.skipped;
-      text("questImageSkipped", `${result.skipped}候補は途中で切れているか、数字を確認できなかったため除外しました。`);
-      text("questImageStatus", `${result.candidates.length}件の候補を読み取りました。`);
-      if (result.candidates.length === 1) applyImageCandidate(0);
-      else byId("questImageChoices").firstElementChild.focus();
+      showImageResult(result, file);
     } catch (error) {
       if (imageController !== controller) return;
       text("questImageStatus", error.name === "AbortError" ? "読み取りを中止しました。" : "");
@@ -182,8 +167,101 @@
         imageMessage(error.message || "画像を読み取れませんでした。通信を確認して再度お試しください。", "error");
         // 画像自体の問題でなければ、選び直さずに同じ画像で再試行できるようにする。
         if (byId("questImageRetry")) byId("questImageRetry").hidden = Boolean(error.fileProblem);
+        byId("questApiOpen").hidden = Boolean(error.fileProblem);
       }
     } finally { window.clearTimeout(slowHint); if (imageController === controller) { imageController = null; imageBusy(false); } }
+  }
+
+  function showImageResult(result, file) {
+    imageResult = result;
+    imagePreviewUrl = URL.createObjectURL(file); byId("questImageOriginal").src = imagePreviewUrl; byId("questImagePreview").hidden = false;
+    byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
+      const button = document.createElement("button"); button.type = "button"; button.className = "questImageChoice"; button.setAttribute("aria-pressed", "false");
+      const title = document.createElement("strong"); title.textContent = candidate.label; button.append(title);
+      if (Number.isInteger(candidate.completed)) { const progress = document.createElement("span"); progress.textContent = `現在の累計 ${candidate.completed}件`; button.append(progress); }
+      core.questTierTotals(candidate.tiers).forEach(tier => {
+        const group = document.createElement("span"); group.className = "questImageTier";
+        const row = document.createElement("span"); const count = document.createElement("em"); const reward = document.createElement("em");
+        count.textContent = `累計${tier.target}件`;
+        reward.textContent = `報酬合計 ${yen(tier.totalReward)}`; row.append(count, reward);
+        const average = document.createElement("span"); average.className = "questAverage"; average.textContent = averageLabel(tier.averageReward);
+        group.append(row, average); button.append(group);
+      });
+      const action = document.createElement("small"); action.textContent = "この候補を入力"; button.append(action);
+      button.addEventListener("click", () => applyImageCandidate(index)); return button;
+    }));
+    byId("questImageResults").hidden = false;
+    byId("questImageSkipped").hidden = !result.skipped;
+    text("questImageSkipped", `${result.skipped}候補は途中で切れているか、数字を確認できなかったため除外しました。`);
+    text("questImageStatus", `${result.candidates.length}件の候補を読み取りました。`);
+    if (result.candidates.length === 1) applyImageCandidate(0);
+    else byId("questImageChoices").firstElementChild.focus();
+  }
+
+  function closeApiPanel() {
+    apiController?.abort(); apiController = null; getApiCrop = null;
+    byId("questApiPanel").hidden = true;
+    byId("questApiKey").value = "";
+    byId("questApiFields").disabled = false;
+    byId("questApiCrop").replaceChildren();
+    byId("questApiSend").disabled = true;
+  }
+
+  async function openApiPanel() {
+    if (!lastImageFile || apiController) return;
+    const file = lastImageFile;
+    const controller = new AbortController();
+    apiController = controller;
+    byId("questApiOpen").hidden = true;
+    byId("questApiPanel").hidden = false;
+    byId("questImageError").hidden = true;
+    text("questImageStatus", "送信範囲を準備しています…");
+    try {
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=99");
+      if (apiController !== controller) return;
+      const getCrop = await crop.open(file, byId("questApiCrop"), { signal: controller.signal });
+      if (apiController !== controller) return;
+      getApiCrop = getCrop;
+      byId("questApiSend").disabled = false;
+      text("questImageStatus", "送信範囲を確認してください。");
+    } catch (error) {
+      if (apiController !== controller) return;
+      closeApiPanel(); byId("questApiOpen").hidden = false;
+      text("questImageStatus", ""); imageMessage(error.message, "error");
+    }
+  }
+
+  async function sendApiCrop() {
+    const controller = apiController;
+    const keyInput = byId("questApiKey");
+    if (!controller || !getApiCrop || byId("questApiSend").disabled) return;
+    if (!keyInput.value.trim()) {
+      imageMessage("ご自身のOpenAI APIキーを入力してください。", "error");
+      keyInput.focus(); return;
+    }
+    byId("questApiSend").disabled = true;
+    byId("questImageError").hidden = true;
+    const key = keyInput.value.trim(); keyInput.value = "";
+    byId("questApiFields").disabled = true;
+    const timer = window.setTimeout(() => {
+      if (apiController !== controller) return;
+      closeApiPanel(); byId("questApiOpen").hidden = false;
+      text("questImageStatus", ""); imageMessage("APIの応答が時間内に届きませんでした。", "error");
+    }, 60000);
+    try {
+      const imageUrl = getApiCrop();
+      text("questImageStatus", "選択範囲をOpenAIで読み取っています…");
+      const api = await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=99");
+      if (apiController !== controller) return;
+      const candidate = await api.read({ key, imageUrl, signal: controller.signal });
+      if (apiController !== controller) return;
+      closeApiPanel(); byId("questImageRetry").hidden = true;
+      showImageResult({ ...imageResult, candidates: [candidate], skipped: 0 }, lastImageFile);
+    } catch (error) {
+      if (apiController !== controller) return;
+      byId("questApiFields").disabled = false; byId("questApiSend").disabled = false;
+      text("questImageStatus", ""); imageMessage(error.message, "error");
+    } finally { window.clearTimeout(timer); }
   }
 
   function selected(state) {
@@ -314,6 +392,9 @@
   }
   function showTab(questTab, updateHash = true) {
     if (questTab) manualSelection = null;
+    else if (apiController) {
+      closeApiPanel(); byId("questApiOpen").hidden = false; text("questImageStatus", "");
+    }
     byId("progressView").hidden = questTab; byId("questView").hidden = !questTab;
     byId("progressTab").setAttribute("aria-selected", String(!questTab)); byId("questTab").setAttribute("aria-selected", String(questTab));
     document.body.classList.toggle("questMode", questTab);
@@ -395,6 +476,22 @@
   window.setInterval(() => { if (!document.hidden) render(); }, 30000);
   if (!full) { render(); return; }
 
+  byId("questApiOpen").addEventListener("click", openApiPanel);
+  byId("questApiSend").addEventListener("click", sendApiCrop);
+  byId("questApiKey").addEventListener("keydown", event => {
+    if (event.key === "Enter") event.preventDefault();
+  });
+  byId("questApiCancel").addEventListener("click", () => {
+    closeApiPanel(); byId("questApiOpen").hidden = false;
+    byId("questImageError").hidden = true;
+    text("questImageStatus", "APIでの再読み取りを閉じました。");
+    byId("questApiOpen").focus();
+  });
+  window.addEventListener("pagehide", () => {
+    if (apiController) {
+      closeApiPanel(); byId("questApiOpen").hidden = false; text("questImageStatus", "");
+    }
+  });
   byId("questImagePick").addEventListener("click", () => byId("questImageFile").click());
   byId("questImageFile").addEventListener("change", event => readQuestImage(event.target.files[0]));
   byId("questImageRetry")?.addEventListener("click", () => lastImageFile ? readQuestImage(lastImageFile) : undefined);

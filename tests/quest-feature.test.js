@@ -335,7 +335,7 @@ test("a manual downward correction never makes counts negative or redistributes 
 
 // Run the shipped registration/import event handlers. The DOM checks data flow,
 // and does not replace browser or iPhone screen verification.
-function imageImportHarness({ period = null, recognize } = {}) {
+function imageImportHarness({ period = null, recognize, openCrop, readApi } = {}) {
   class Events {
     constructor() { this.listeners = new Map(); }
     addEventListener(type, callback) {
@@ -405,6 +405,7 @@ function imageImportHarness({ period = null, recognize } = {}) {
   Object.assign(window, { window, document, Date: FakeDate, Event, CustomEvent: Event, AbortController,
     localStorage: storage, location: { hash: "#quest", pathname: "/", search: "" }, history: { replaceState() {} },
     URL: { createObjectURL: () => "blob:quest-test", revokeObjectURL() {} }, setTimeout() {}, clearTimeout() {}, setInterval() {},
+    UberQuestImageCrop: { open: openCrop }, UberQuestImageApi: { read: readApi },
     UberQuestImage: { recognize: recognize || (async () => ({ candidates: [{ label: "進行中のクエスト", tiers: [{ target: 110, reward: 11550 }, { target: 120, reward: 1500 }] }], period, skipped: 0, diagnosticText: "テスト用の読み取り結果" })) }
   });
   const context = vm.createContext(window);
@@ -557,3 +558,88 @@ test("image import replaces entered dates with its recognized period and present
   assert.match(app.element("questImageDateNote").textContent, /2026-09-11 04:00.*2026-09-14 03:59までを入力しました/);
   assert.equal(period.endTime, "04:00", "presentation must not rewrite the raw OCR period");
 });
+
+const apiCandidate = {
+  label: "進行中のクエスト", completed: 20, tiers: [{ target: 120, reward: 13220 }, { target: 130, reward: 1730 }]
+};
+const localPeriod = {
+  startDate: "2026-09-04", startTime: "04:00", endDate: "2026-09-07", endTime: "04:00",
+  dateSource: "calendar", template: "weekend", inferred: true
+};
+const cropUrl = "data:image/jpeg;base64,dGVzdA==";
+
+test("a successful local image import never opens or calls the API fallback", async () => {
+  const openCrop = test.mock.fn();
+  const readApi = test.mock.fn();
+  const app = imageImportHarness({ openCrop, readApi });
+  await app.emit("questNew", "click");
+  await app.importImage();
+  assert.match(app.element("questImageStatus").textContent, /入力しました/);
+  assert.equal(app.element("questApiOpen").hidden, true);
+  assert.equal(app.element("questApiPanel").hidden, true);
+  assert.equal(openCrop.mock.callCount(), 0);
+  assert.equal(readApi.mock.callCount(), 0);
+});
+
+test("API fallback sends the selected crop only after confirmation and applies locally recognized dates", async () => {
+  const recognize = test.mock.fn(async () => ({ candidates: [], period: localPeriod }));
+  const getCrop = test.mock.fn(() => cropUrl);
+  const openCrop = test.mock.fn(async () => getCrop);
+  const readApi = test.mock.fn(async () => apiCandidate);
+  const app = imageImportHarness({ recognize, openCrop, readApi });
+  await app.emit("questNew", "click");
+  const initialRecord = app.storage.getItem(QUEST_KEY);
+  await app.importImage();
+  assert.equal(app.element("questApiOpen").hidden, false);
+  assert.equal(openCrop.mock.callCount(), 0);
+  assert.equal(readApi.mock.callCount(), 0);
+
+  await app.emit("questApiOpen", "click");
+  const [file, container] = openCrop.mock.calls[0].arguments;
+  assert.equal(file, recognize.mock.calls[0].arguments[0]);
+  assert.equal(container, app.element("questApiCrop"));
+  assert.equal(app.element("questApiPanel").hidden, false);
+  app.element("questApiKey").value = "test-key";
+  assert.equal(readApi.mock.callCount(), 0);
+  await app.emit("questApiSend", "click");
+  assert.equal(readApi.mock.callCount(), 1);
+  const request = readApi.mock.calls[0].arguments[0];
+  assert.equal(request.key, "test-key");
+  assert.equal(request.imageUrl, cropUrl);
+  assert.equal(app.element("questApiKey").value, "");
+  assert.equal(app.element("questInitialTotal").value, "20");
+  const inputs = app.element("questTierInputs");
+  assert.deepEqual(inputs.querySelectorAll("[data-tier-count]").map(el => el.value), ["120", "130"]);
+  assert.deepEqual(inputs.querySelectorAll("[data-tier-reward]").map(el => el.value), ["13220", "1730"]);
+  assert.deepEqual(app.period(), { StartDate: "2026-09-04", StartTime: "04:00", EndDate: "2026-09-07", EndTime: "03:59" });
+  assert.equal(app.storage.getItem(QUEST_KEY), initialRecord, "applying a crop is an unsaved edit");
+});
+
+for (const stopId of ["questApiCancel", "questCancel"]) {
+  test(`closing with ${stopId} aborts the in-flight API request and ignores late results`, async () => {
+    let resolveRead;
+    let markStarted;
+    const started = new Promise(resolve => { markStarted = resolve; });
+    const app = imageImportHarness({
+      recognize: async () => { throw new Error("local OCR unavailable"); },
+      openCrop: async () => () => cropUrl,
+      readApi: ({ signal }) => new Promise(resolve => { resolveRead = resolve; markStarted(signal); })
+    });
+    await app.emit("questNew", "click");
+    await app.importImage();
+    await app.emit("questApiOpen", "click");
+    app.element("questApiKey").value = "test-key";
+    const before = app.period();
+    const pending = app.emit("questApiSend", "click");
+    const signal = await started;
+    assert.equal(app.element("questApiKey").value, "");
+    await app.emit(stopId, "click");
+    assert.equal(signal.aborted, true);
+    assert.equal(app.element("questApiPanel").hidden, true);
+    resolveRead(apiCandidate);
+    await pending;
+    assert.deepEqual(app.period(), before);
+    assert.notEqual(app.element("questInitialTotal").value, "20");
+    assert.equal(app.element("questImageResults").hidden, true);
+  });
+}
