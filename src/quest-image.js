@@ -8,7 +8,7 @@
   const DAY = 86400000;
   const JST = 9 * 60 * 60000;
   const CDN = "https://cdn.jsdelivr.net/npm/";
-  const VERSION = "97";
+  const VERSION = "98";
   let libraryPromise;
 
   function normalize(text) {
@@ -289,12 +289,13 @@
           for (let i = 0; i < pixels.data.length; i += 400) { if (Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]) < 128) dark++; samples++; }
           const invert = dark > samples / 2;
           for (let i = 0; i < pixels.data.length; i += 4) {
-            // Keep colored rewards dark against a light background. Taking the
-            // brightest channel here washes out the pale green bonus amounts,
-            // and doubling their distance from white keeps them through OCR binarization.
+            const min = Math.min(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]);
+            const max = Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]);
+            // Dark green rewards have little brightness contrast on charcoal.
+            // Boost their color contrast before inversion, leaving gray text alone.
             const value = invert
-              ? 255 - Math.max(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2])
-              : Math.max(0, 2 * Math.min(pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]) - 255);
+              ? Math.max(0, 255 - max - 2 * (max - min))
+              : Math.max(0, 2 * min - 255);
             pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = value;
           }
           context.putImageData(pixels, 0, 0);

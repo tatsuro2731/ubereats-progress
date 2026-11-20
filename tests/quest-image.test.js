@@ -152,6 +152,28 @@ test("real OCR of 2026-10-26 screenshot recovers a slash read as 7 only with ind
   ]) assert.equal(image.parseText(bad).candidates.length, 0, bad);
 });
 
+test("November 20 dark progress screenshots retain both rewards with and without the online banner", () => {
+  // Spatially grouped output from the Japanese worker after enhancing the green text.
+  for (const [startClock, base, bonus] of [
+    ["4.00", "\\13,.220", "+\\1,730"],
+    ["4:.00", "\\13,220", "+\\\\1,730"]
+  ]) {
+    const text = `クエ スト の 進捗 ビ
+11 月 20 日 ( 金 ) ${startClock} 11 月 23 日 (月 ) 4:00
+後 100 回 の 配達 を 完了 する と 、\\13.220 を 獲得 で き
+別 の 特典 が 利用 可能 に な り ま す
+207120 回 の 乗車 ${base}
+画 癌 症
+ら 10 回 の 乗車 ${bonus}
+詳細`;
+    const result = image.parseText(text, Date.parse("2026-11-20T19:24:00+09:00"));
+    assert.deepEqual(result.candidates, [{ label: "進行中のクエスト", completed: 20,
+      tiers: [{ target: 120, reward: 13220 }, { target: 130, reward: 1730 }] }]);
+    assert.equal(result.period.startDate, "2026-11-20");
+    assert.equal(result.period.endDate, "2026-11-23");
+  }
+});
+
 test("後 remaining-count wording is cross-checked and can restore a lost base reward", () => {
   const lostBase = OCT23_PROGRESS.replace('12/120 回 の 乗車 \\22.960', '12/120 回 の 乗車');
   assert.deepEqual(image.parseText(lostBase, OCT23_NOW).candidates, OCT23_EXPECTED);
@@ -430,14 +452,14 @@ test("recovering original reward rows retains a period recognized only by spatia
   assert.equal(result.period.endTime, '03:59');
 });
 
-test("pale colored text on a light screen is darkened before OCR while white and dark mode are unchanged", async () => {
+test("colored reward text gains contrast on light and dark screens before OCR", async () => {
   // white, pale green bonus, base green, mid gray, black
   const light = loadRecognizer({ texts: [SCREEN.replace(/\nクエスト3$/, '')], pixels: [255,255,255,255, 163,212,174,255, 59,129,75,255, 128,128,128,255, 0,0,0,255] });
   await light.recognize();
   assert.deepEqual(light.calls.drawn[0].filter((_, i) => i % 4 === 0), [255, 71, 0, 1, 0]);
-  const dark = loadRecognizer({ texts: [SCREEN.replace(/\nクエスト3$/, '')], pixels: [0,0,0,255, 163,212,174,255, 255,255,255,255] });
+  const dark = loadRecognizer({ texts: [SCREEN.replace(/\nクエスト3$/, '')], pixels: [28,28,28,255, 43,96,62,255, 163,212,174,255, 255,255,255,255] });
   await dark.recognize();
-  assert.deepEqual(dark.calls.drawn[0].filter((_, i) => i % 4 === 0), [255, 43, 0]);
+  assert.deepEqual(dark.calls.drawn[0].filter((_, i) => i % 4 === 0), [227, 53, 0, 0]);
 });
 
 test("a read with excluded candidates is retried and only a read with more complete candidates replaces it", async () => {
@@ -448,7 +470,7 @@ test("a read with excluded candidates is retried and only a read with more compl
   assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
   assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
   assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
-  assert.match(result.diagnosticText, /読み取り v97[\s\S]*結果1[\s\S]*結果2/);
+  assert.match(result.diagnosticText, /読み取り v98[\s\S]*結果1[\s\S]*結果2/);
 
   const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
   const kept = await worse.recognize();
@@ -565,7 +587,7 @@ test("OCR retry does not discard a complete first reading of the November 6 ques
   assert.deepEqual(Array.from(actual.candidates[0].tiers,tier=>({...tier})),[{target:120,reward:17230},{target:130,reward:2260}]);
   assert.equal(actual.skipped,0);
   assert.match(actual.warning,/一致しません/);
-  assert.match(actual.diagnosticText,/読み取り v97/);
+  assert.match(actual.diagnosticText,/読み取り v98/);
 });
 
 test("conflicting OCR periods keep tiers but leave the form dates for manual confirmation", async () => {
