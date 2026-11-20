@@ -470,7 +470,7 @@ test("a read with excluded candidates is retried and only a read with more compl
   assert.equal(improved.calls.reads, 2); assert.equal(improved.calls.terminated, 1);
   assert.deepEqual(Array.from(result.candidates, item => item.label), ['クエスト1', 'クエスト2', 'クエスト3']);
   assert.equal(result.skipped, 0); assert.equal(result.period.template, 'weekend');
-  assert.match(result.diagnosticText, /読み取り v99[\s\S]*結果1[\s\S]*結果2/);
+  assert.match(result.diagnosticText, /読み取り v100[\s\S]*結果1[\s\S]*結果2/);
 
   const worse = loadRecognizer({ texts: [lostBonus, '読み取り失敗'] });
   const kept = await worse.recognize();
@@ -587,7 +587,7 @@ test("OCR retry does not discard a complete first reading of the November 6 ques
   assert.deepEqual(Array.from(actual.candidates[0].tiers,tier=>({...tier})),[{target:120,reward:17230},{target:130,reward:2260}]);
   assert.equal(actual.skipped,0);
   assert.match(actual.warning,/一致しません/);
-  assert.match(actual.diagnosticText,/読み取り v99/);
+  assert.match(actual.diagnosticText,/読み取り v100/);
 });
 
 test("conflicting OCR periods keep tiers but leave the form dates for manual confirmation", async () => {
@@ -603,4 +603,57 @@ test("conflicting OCR periods keep tiers but leave the form dates for manual con
   const equivalent = await loadRecognizer({texts: [PROGRESS, PROGRESS.replace("(金)4:00", "(金)3:59")]}).recognize();
   assert.ok(equivalent.period);
   assert.equal(equivalent.warning, "");
+});
+
+test("interactive recognition returns an empty enhanced reading before the user chooses the next step", async () => {
+  const periodOnly = "2026年11月20日(金)4:00〜2026年11月23日(月)4:00";
+  const rewardsOnly = "クエスト1\n120回 ¥13,220\n+10回 +¥1,730";
+  const reader = loadRecognizer({ texts: [periodOnly, rewardsOnly] });
+  const first = await reader.recognize({ mode: "interactive" });
+  assert.equal(reader.calls.reads, 1);
+  assert.equal(reader.calls.drawn.length, 1, "the first pass enhanced the image");
+  assert.equal(reader.calls.terminated, 1);
+  assert.equal(first.candidates.length, 0);
+  assert.equal(first.period.startDate, "2026-11-20");
+  assert.match(first.diagnosticText, /11月20日/);
+
+  const second = await reader.recognize({ mode: "original", previousReading: first });
+  assert.equal(reader.calls.reads, 2);
+  assert.equal(reader.calls.drawn.length, 1, "the second pass used the original pixels");
+  assert.equal(reader.calls.terminated, 2);
+  assert.deepEqual(Array.from(second.candidates[0].tiers, tier => [tier.target, tier.reward]), [[120, 13220], [130, 1730]]);
+  assert.deepEqual(second.period, first.period);
+  assert.match(second.diagnosticText, /11月20日[\s\S]*13,220/);
+
+  const legacy = loadRecognizer({ texts: [periodOnly, rewardsOnly] });
+  const result = await legacy.recognize();
+  assert.equal(legacy.calls.reads, 2);
+  assert.equal(result.candidates[0].tiers[1].target, 130);
+});
+
+test("an original-only retry preserves earlier date conflicts and detects new ones", async () => {
+  const period = "2026年11月20日(金)4:00〜2026年11月23日(月)4:00";
+  const otherPeriod = period.replace("日(月)4:00", "日(月)5:00");
+  const blocks = [{ paragraphs: [{ lines: [{ text: period, bbox: { x0: 10, y0: 10, x1: 300, y1: 40 } }] }] }];
+  for (const conflictingFirst of [true, false]) {
+    const firstData = { text: conflictingFirst ? otherPeriod : period, blocks };
+    const retryData = { text: (conflictingFirst ? period : otherPeriod) + "\nクエスト1\n120回 ¥13,220" };
+    const reader = loadRecognizer({ results: [firstData, retryData] });
+    const first = await reader.recognize({ mode: "interactive" });
+    assert.equal(Boolean(first.periodConflict), conflictingFirst);
+    const retry = await reader.recognize({ mode: "original", previousReading: first });
+    assert.equal(reader.calls.reads, 2);
+    assert.equal(retry.periodConflict, true);
+    assert.equal(retry.period, null);
+    assert.equal(retry.candidates[0].tiers[0].reward, 13220);
+    assert.match(retry.warning, /日時/);
+  }
+});
+
+test("interactive recognition still checks a successful progress reading for missing bonus tiers", async () => {
+  const base = "クエストの進捗\n20/120回 ¥13,220";
+  const reader = loadRecognizer({ texts: [base, base + "\n10回 +¥1,730"] });
+  const result = await reader.recognize({ mode: "interactive" });
+  assert.equal(reader.calls.reads, 2);
+  assert.equal(result.candidates[0].tiers[1].reward, 1730);
 });

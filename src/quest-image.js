@@ -8,7 +8,7 @@
   const DAY = 86400000;
   const JST = 9 * 60 * 60000;
   const CDN = "https://cdn.jsdelivr.net/npm/";
-  const VERSION = "99";
+  const VERSION = "100";
   let libraryPromise;
 
   function normalize(text) {
@@ -317,7 +317,7 @@
     });
   }
 
-  async function recognize(file, { signal, onProgress = () => {} } = {}) {
+  async function recognize(file, { signal, mode = "auto", previousReading, onProgress = () => {} } = {}) {
     if (!file || file.size > 20 * 1024 * 1024) throw fileProblem("20MB以下のスクリーンショットを選んでください。");
     if (!/image\/(png|jpeg|webp)/.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) throw fileProblem("PNG・JPEG・WebP形式の画像を選んでください。");
     let worker;
@@ -329,8 +329,11 @@
     let inputSize = "";
     const attempts = [];
     const readAt = Date.now();
-    let period = null;
-    let periodConflict = false;
+    const originalOnly = mode === "original";
+    const prior = originalOnly ? previousReading : null;
+    const firstDiagnostic = prior?.firstDiagnostic || prior?.diagnosticText || "";
+    let period = prior?.period || null;
+    let periodConflict = Boolean(prior?.periodConflict);
     function observePeriod(value) {
       if (!value) return;
       // 03:59 is the inclusive label for the 04:00 cutoff on both Uber screens.
@@ -344,9 +347,10 @@
     }
     function finishResult(parsed, warning) {
       if (periodConflict) warning = [warning, "開始・終了日時の読み取り結果が一致しません。入力済みの日時を保持しました。元画像で確認してください。"].filter(Boolean).join(" ");
-      return { ...parsed, period: periodConflict ? null : period, periodConflict, warning, diagnosticText: diagnostic() };
+      return { ...parsed, period: periodConflict ? null : period, periodConflict, warning, ...(originalOnly && { firstDiagnostic }), diagnosticText: diagnostic() };
     }
-    const diagnostic = () => attempts.length ? `読み取り v${VERSION}（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` : "";
+    const currentDiagnostic = () => attempts.length ? `読み取り v${VERSION}（処理画像 ${inputSize}px）\n${attempts.map((text, i) => `--- 結果${i + 1} ---\n${text}`).join("\n")}` : "";
+    const diagnostic = () => [firstDiagnostic, currentDiagnostic()].filter(Boolean).join("\n--- 元画像で再試行 ---\n");
     // The worker may finish starting after cancellation. Taking ownership before
     // awaiting termination prevents both paths from terminating it twice.
     async function terminateWorker() {
@@ -361,7 +365,7 @@
     try {
       const job = (async () => {
         onProgress("読み取りの準備中…初回は少し時間がかかります。");
-        const [library, canvas] = await Promise.all([loadLibrary(), imageCanvas(file)]);
+        const [library, canvas] = await Promise.all([loadLibrary(), imageCanvas(file, !originalOnly)]);
         if (stopped) return;
         worker = await library.createWorker("jpn", 1, {
           workerPath: `${CDN}tesseract.js@7.0.0/dist/worker.min.js`,
@@ -406,7 +410,8 @@
         // A progress screenshot may lose an entire pale bonus row without
         // producing a parse error. Read it twice to look for a fuller result.
         const progressRead = parsed.candidates.some(candidate => Number.isInteger(candidate.completed));
-        if ((!parsed.candidates.length || !parsed.period || parsed.skipped || progressRead) && !stopped) {
+        const retryNeeded = parsed.candidates.length ? !parsed.period || parsed.skipped || progressRead : mode !== "interactive";
+        if (!originalOnly && retryNeeded && !stopped) {
           retryStarted = true;
           onProgress("別の画像処理で、もう一度読み取り中…");
           const original = await imageCanvas(file, false);

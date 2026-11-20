@@ -335,7 +335,7 @@ test("a manual downward correction never makes counts negative or redistributes 
 
 // Run the shipped registration/import event handlers. The DOM checks data flow,
 // and does not replace browser or iPhone screen verification.
-function imageImportHarness({ period = null, recognize, openCrop, readApi } = {}) {
+function imageImportHarness({ period = null, recognize, openCrop, defaultJpeg, readApi } = {}) {
   class Events {
     constructor() { this.listeners = new Map(); }
     addEventListener(type, callback) {
@@ -401,17 +401,18 @@ function imageImportHarness({ period = null, recognize, openCrop, readApi } = {}
   }
   class Event { constructor(type, options = {}) { this.type = type; Object.assign(this, options); } preventDefault() {} }
   const storage = seedStore();
+  const sessionStorage = new MemoryStorage();
   const window = new Events();
   Object.assign(window, { window, document, Date: FakeDate, Event, CustomEvent: Event, AbortController,
-    localStorage: storage, location: { hash: "#quest", pathname: "/", search: "" }, history: { replaceState() {} },
+    localStorage: storage, sessionStorage, location: { hash: "#quest", pathname: "/", search: "" }, history: { replaceState() {} },
     URL: { createObjectURL: () => "blob:quest-test", revokeObjectURL() {} }, setTimeout() {}, clearTimeout() {}, setInterval() {},
-    UberQuestImageCrop: { open: openCrop }, UberQuestImageApi: { read: readApi },
+    UberQuestImageCrop: { open: openCrop, defaultJpeg }, UberQuestImageApi: { read: readApi },
     UberQuestImage: { recognize: recognize || (async () => ({ candidates: [{ label: "進行中のクエスト", tiers: [{ target: 110, reward: 11550 }, { target: 120, reward: 1500 }] }], period, skipped: 0, diagnosticText: "テスト用の読み取り結果" })) }
   });
   const context = vm.createContext(window);
   for (const name of ["app-core.js", "quest-store.js", "quest-ui.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, "src", name), "utf8"), context, { filename: `src/${name}` });
   const element = id => { assert.ok(elements.has(id), `Missing real HTML element: ${id}`); return elements.get(id); };
-  return { element, storage, emit: (id, type) => element(id).dispatchEvent(new Event(type)),
+  return { element, storage, sessionStorage, emit: (id, type) => element(id).dispatchEvent(new Event(type)),
     period: () => Object.fromEntries(["StartDate", "StartTime", "EndDate", "EndTime"].map(key => [key, element(`quest${key}`).value])),
     importImage: () => element("questImageFile").dispatchEvent(new Event("change", { target: { files: [{ name: "quest.png", type: "image/png", size: 100 }] } }))
   };
@@ -643,3 +644,145 @@ for (const stopId of ["questApiCancel", "questCancel"]) {
     assert.equal(app.element("questImageResults").hidden, true);
   });
 }
+
+test("after an empty interactive read, the local retry uses the original image and previous reading", async () => {
+  const first = { candidates: [], skipped: 1, period: localPeriod, diagnosticText: "first pass" };
+  const recognize = test.mock.fn(async (file, options) => options.mode === "original"
+    ? { ...first, candidates: [apiCandidate], skipped: 0, diagnosticText: "first pass\nsecond pass" } : first);
+  const readApi = test.mock.fn();
+  const app = imageImportHarness({ recognize, readApi });
+  await app.emit("questNew", "click");
+  await app.importImage();
+  assert.equal(recognize.mock.callCount(), 1);
+  const [file, options] = recognize.mock.calls[0].arguments;
+  assert.equal(options.mode, "interactive");
+  assert.equal(app.element("questApiOpen").hidden, false);
+  assert.equal(app.element("questImageRetry").hidden, false);
+
+  await app.emit("questImageRetry", "click");
+  assert.equal(recognize.mock.callCount(), 2);
+  const [retryFile, retryOptions] = recognize.mock.calls[1].arguments;
+  assert.equal(retryFile, file);
+  assert.equal(retryOptions.mode, "original");
+  assert.equal(retryOptions.previousReading, first);
+  assert.equal(app.element("questInitialTotal").value, "20");
+  assert.equal(app.element("questStartDate").value, localPeriod.startDate);
+  assert.match(app.element("questImageDebugText").value, /first pass\nsecond pass/);
+  assert.equal(app.element("questApiOpen").hidden, true);
+  assert.equal(readApi.mock.callCount(), 0);
+
+  await app.importImage();
+  const [newFile, freshOptions] = recognize.mock.calls[2].arguments;
+  assert.notEqual(newFile, file);
+  assert.equal(freshOptions.mode, "interactive");
+  assert.ok(!freshOptions.previousReading);
+});
+
+async function enableAutoApi(app) {
+  app.element("questAutoApiKey").value = "temporary-test-key";
+  await app.emit("questAutoApiEnable", "click");
+  assert.equal(app.element("questAutoApiKey").value, "");
+  assert.equal(app.element("questAutoApiActive").hidden, false);
+}
+
+test("tab opt-in sends only the cropped image on a local OCR failure", async () => {
+  const recognized = { candidates: [apiCandidate], period: localPeriod };
+  const unreadable = { candidates: [], period: localPeriod, diagnosticText: "クエストの進捗" };
+  const recognize = test.mock.fn(async () => recognized);
+  const defaultJpeg = test.mock.fn(async () => cropUrl);
+  const readApi = test.mock.fn(async () => apiCandidate);
+  const app = imageImportHarness({ recognize, defaultJpeg, readApi });
+  await app.emit("questNew", "click");
+  await enableAutoApi(app);
+  assert.equal(defaultJpeg.mock.callCount(), 0);
+  assert.equal(readApi.mock.callCount(), 0);
+  await app.importImage();
+  assert.equal(defaultJpeg.mock.callCount(), 0);
+  assert.equal(readApi.mock.callCount(), 0);
+
+  recognize.mock.mockImplementation(async () => unreadable);
+  await app.importImage();
+  assert.equal(defaultJpeg.mock.callCount(), 1);
+  assert.equal(defaultJpeg.mock.calls[0].arguments[0], recognize.mock.calls[1].arguments[0]);
+  assert.equal(readApi.mock.callCount(), 1);
+  const request = readApi.mock.calls[0].arguments[0];
+  assert.equal(request.key, "temporary-test-key");
+  assert.equal(request.imageUrl, cropUrl);
+  assert.deepEqual(Object.keys(request).sort(), ["imageUrl", "key", "signal"]);
+  assert.equal(app.element("questInitialTotal").value, "20");
+  assert.equal(app.element("questStartDate").value, "2026-09-04");
+  for (const storage of [app.storage, app.sessionStorage]) {
+    assert.doesNotMatch(JSON.stringify([...storage.values]), /temporary-test-key/);
+  }
+
+  await app.emit("questAutoApiDisable", "click");
+  await app.importImage();
+  assert.equal(readApi.mock.callCount(), 1);
+  assert.equal(app.element("questApiOpen").hidden, false);
+});
+
+test("an automatic API failure leaves local retry available without another automatic request", async () => {
+  const defaultJpeg = test.mock.fn(async () => cropUrl);
+  const readApi = test.mock.fn(async () => { throw new Error("API unavailable"); });
+  const app = imageImportHarness({
+    recognize: async () => ({ candidates: [], period: localPeriod, diagnosticText: "クエストの進捗" }),
+    defaultJpeg, readApi
+  });
+  await app.emit("questNew", "click");
+  await enableAutoApi(app);
+  await app.importImage();
+  assert.equal(readApi.mock.callCount(), 1);
+  assert.equal(app.element("questImageRetry").hidden, false);
+  await app.emit("questImageRetry", "click");
+  assert.equal(defaultJpeg.mock.callCount(), 1);
+  assert.equal(readApi.mock.callCount(), 1);
+});
+
+test("disabling the tab opt-in aborts an active request and ignores its response", async () => {
+  let resolveRead, markStarted;
+  const started = new Promise(resolve => { markStarted = resolve; });
+  const app = imageImportHarness({
+    recognize: async () => { throw new Error("local OCR unavailable"); },
+    defaultJpeg: async () => cropUrl,
+    readApi: ({ signal }) => new Promise(resolve => { resolveRead = resolve; markStarted(signal); })
+  });
+  await app.emit("questNew", "click");
+  await enableAutoApi(app);
+  const pending = app.importImage();
+  const signal = await started;
+  await app.emit("questAutoApiDisable", "click");
+  assert.equal(signal.aborted, true);
+  resolveRead(apiCandidate);
+  await pending;
+  assert.notEqual(app.element("questInitialTotal").value, "20");
+  assert.equal(app.element("questImageResults").hidden, true);
+});
+
+test("a recognized quest selection screen is never sent through automatic progress reading", async () => {
+  const defaultJpeg = test.mock.fn(async () => cropUrl);
+  const readApi = test.mock.fn(async () => apiCandidate);
+  const app = imageImportHarness({
+    recognize: async () => ({ candidates: [], diagnosticText: "次のクエストを選択する\nクエスト1\nクエスト2" }),
+    defaultJpeg, readApi
+  });
+  await app.emit("questNew", "click");
+  await enableAutoApi(app);
+  await app.importImage();
+  assert.equal(defaultJpeg.mock.callCount(), 0);
+  assert.equal(readApi.mock.callCount(), 0);
+});
+
+test("enabling automatic reading cannot send a previously selected image", async () => {
+  let complete;
+  const local = new Promise(resolve => { complete = resolve; });
+  const defaultJpeg = test.mock.fn(async () => cropUrl);
+  const readApi = test.mock.fn(async () => apiCandidate);
+  const app = imageImportHarness({ recognize: () => local, defaultJpeg, readApi });
+  await app.emit("questNew", "click");
+  const pending = app.importImage();
+  await enableAutoApi(app);
+  complete({ candidates: [], diagnosticText: "クエストの進捗" });
+  await pending;
+  assert.equal(defaultJpeg.mock.callCount(), 0);
+  assert.equal(readApi.mock.callCount(), 0);
+});
