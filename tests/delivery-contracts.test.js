@@ -49,6 +49,12 @@ test("startup scripts download early without blocking document parsing", () => {
   }
 });
 
+test("the active import and offline cache have no local OCR engine or retry path", () => {
+  for (const file of ["index.html", "src/quest-ui.js", "sw.js"]) {
+    assert.doesNotMatch(read(file), /quest-image\.js|Tesseract|\.recognize\(|questImageRetry|端末内で再試行/);
+  }
+});
+
 test("a fresh visit starts at zero deliveries with the full 12 hours in both views", () => {
   const index = read("src/main-app.js");
   const compact = read("src/compact-app.js");

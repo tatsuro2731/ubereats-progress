@@ -113,10 +113,11 @@ test("both GET and HEAD verify the owner without sending an image to OpenAI", as
   assert.equal(verify.mock.callCount(), 6);
 });
 
-test("a verified owner sends one fixed OCR request and receives only the validated candidate", async t => {
+test("a verified owner sends one fixed OCR request and receives validated cards and the legacy progress response", async t => {
   configure(t, { QUEST_OWNER_EMAIL: user.email, QUEST_OPENAI_API_KEY: openAiKey });
   const handle = await relay;
   let providerFailure = false;
+  let screen = "progress";
   const fetch = t.mock.method(globalThis, "fetch", async (url, options) => {
     if (String(url) === context.site.url + "/.netlify/identity/user") return Response.json(user);
     if (String(url) === context.site.url + "/.netlify/identity/settings") return Response.json({ autoconfirm: false });
@@ -125,18 +126,27 @@ test("a verified owner sends one fixed OCR request and receives only the validat
     const body = JSON.parse(options.body);
     assert.equal(body.model, "gpt-4.1-mini");
     assert.equal(body.store, false);
-    assert.equal(body.max_output_tokens, 600);
+    assert.ok(body.max_output_tokens >= 1000);
     assert.equal(body.text.format.strict, true);
     assert.equal(body.input[0].content[0].image_url, "data:image/jpeg;base64," + jpeg.toString("base64"));
     if (providerFailure) return new Response(openAiKey, { status: 500 });
-    const text = JSON.stringify({ readable: true, completed: 2, target: 10, remaining: 8, baseReward: 200, bonusTiers: [] });
+    const card = { readable: true, number: null, completed: 2, target: 10, remaining: 8, baseReward: "¥200", bonusTiers: [] };
+    const cards = screen === "selection" ? [{ ...card, number: 2, completed: null, remaining: null }] : [card];
+    const text = JSON.stringify({ screen, cards, periodText: null });
     return Response.json({ status: "completed", output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text }] }] });
   });
   const result = await handle(request(), context);
   assert.equal(result.status, 200);
   assert.equal(result.headers.get("Cache-Control"), "no-store");
-  assert.deepEqual(await result.json(), { candidate: { label: "進行中のクエスト", completed: 2, tiers: [{ target: 10, reward: 200 }] } });
+  const sample = { label: "進行中のクエスト", completed: 2, tiers: [{ target: 10, reward: 200 }] };
+  assert.deepEqual(await result.json(), { screen, periodText: null, candidates: [sample], skipped: 0, candidate: sample });
   assert.equal(fetch.mock.callCount(), 3);
+  screen = "selection";
+  const choices = await handle(request(), context);
+  assert.deepEqual(await choices.json(), { screen, periodText: null, skipped: 0,
+    candidates: [{ label: "クエスト2", tiers: [{ target: 10, reward: 200 }] }] });
+  screen = "other";
+  assert.equal((await handle(request(), context)).status, 422);
   providerFailure = true;
   const failure = await handle(request(), context);
   assert.equal(failure.status, 502);

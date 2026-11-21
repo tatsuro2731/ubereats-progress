@@ -29,10 +29,10 @@ function setup({ width = 1320, height = 2868, encoded = jpeg } = {}) {
   return { state, defaultJpeg: scope.window.UberQuestImageCrop.defaultJpeg };
 }
 
-test("automatic crop encodes only the configured progress region and releases the pixels", async () => {
+test("automatic import retains the entire selection screen and releases the pixels", async () => {
   const { state, defaultJpeg } = setup();
   assert.equal(await defaultJpeg(file), jpeg);
-  assert.deepEqual(state.draws, [[0, 516, 1320, 1119, 0, 0, 1320, 1119]]);
+  assert.deepEqual(state.draws, [[0, 0, 1320, 2868, 0, 0, 1012, 2200]]);
   assert.equal(state.canvases[0].width, 1);
   assert.equal(state.canvases[0].height, 1);
   assert.equal(state.releasedImages, 1);

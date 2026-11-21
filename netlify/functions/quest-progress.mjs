@@ -2,9 +2,9 @@ import questImageApi from "../../src/quest-image-api.js";
 
 const appOrigin = "https://tatsuro2731.github.io";
 const maxBytes = 2 * 1024 * 1024;
-const unavailable = "自動補完のサーバーを利用できません。時間をおいてお試しください。";
+const unavailable = "クエスト読み取りのサーバーを利用できません。時間をおいてお試しください。";
 const loginRequired = "もう一度、クエスト読み取りの本人確認をしてください。";
-const forbidden = "このアカウントではクエストの自動補完を利用できません。";
+const forbidden = "このアカウントではクエストの読み取りを利用できません。";
 
 // Canvas produces a baseline or progressive JPEG within these bounds (quest-image-crop.js).
 function isCroppedJpeg(bytes) {
@@ -93,23 +93,26 @@ export default async function questProgress(request, context) {
   if (ownerCheck) return new Response(null, { status: 204, headers });
 
   if (request.headers.get("Content-Type")?.toLowerCase() !== "image/jpeg" || !request.body) {
-    return fail(415, "進捗欄を切り出したJPEG画像を選んでください。");
+    return fail(415, "クエストのJPEG画像を選んでください。");
   }
-  const tooLarge = "進捗欄を2MB以下に切り出してください。";
+  const tooLarge = "送信するクエスト画像を2MB以下にしてください。";
   if (Number(request.headers.get("Content-Length")) > maxBytes) return fail(413, tooLarge);
   let bytes;
   try { bytes = await readBody(request.body); } catch { return fail(400, "画像を受信できませんでした。"); }
   if (!bytes) return fail(413, tooLarge);
-  if (!isCroppedJpeg(bytes)) return fail(422, "進捗欄を切り出したJPEG画像を選んでください。");
+  if (!isCroppedJpeg(bytes)) return fail(422, "クエストのJPEG画像を選んでください。");
 
   try {
-    const candidate = await questImageApi.read({
+    const result = await questImageApi.read({
       key, imageUrl: "data:image/jpeg;base64," + bytes.toString("base64"),
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(35000)])
     });
-    return Response.json({ candidate }, { headers });
-  } catch {
-    return fail(502, "OpenAIで進捗欄を読み取れませんでした。端末内で再試行するか、手入力してください。");
+    // Installed v101 clients expect this field for their progress-only import.
+    const candidate = result.screen === "progress" ? result.candidates[0] : undefined;
+    return Response.json({ ...result, candidate }, { headers });
+  } catch (error) {
+    if (error instanceof questImageApi.UnreadableQuest) return fail(422, error.message);
+    return fail(502, "OpenAIでクエストを読み取れませんでした。時間をおいて再度お試しください。");
   }
 }
 

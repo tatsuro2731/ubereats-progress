@@ -358,6 +358,88 @@
     return Date.parse(`${day}T00:00:00+09:00`) + boundaryMinutes * 60000;
   }
 
+  function questImageClock(meridiem, hour, minute) {
+    let h = Number(hour); const m = Number(minute || 0);
+    if (m > 59 || (meridiem ? h > 12 : h > 23)) return null;
+    if (meridiem === "午前") h %= 12;
+    if (meridiem === "午後") h = h % 12 + 12;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  function readQuestImagePeriod(text, now = Date.now(), nextQuest = false) {
+    const JST = 540 * 60000;
+    const compact = String(text || "").normalize("NFKC").replace(/\s/g, "").replace(/(\d{1,2}):[.,](\d{2})/g, "$1:$2");
+    // Both Uber screens and Japanese OCR mix colon clocks with 時/分 clocks.
+    // Keep every digit mandatory as printed; only punctuation and weekday
+    // spelling may vary, so an unreadable time never becomes a guessed 04:00.
+    const weekdayPattern = prefix => `(?<${prefix}Weekday>\\([日月火水木金土](?:曜日|曜)?\\)|[日月火水木金土](?:曜日|曜))`;
+    const timeEnd = "(?![\\d:.,時分])";
+    const timePattern = (prefix, end = timeEnd) => `(?<${prefix}Meridiem>午前|午後)?(?<${prefix}Hour>\\d{1,2})(?:[:.,](?<${prefix}Minute>\\d{2})|時(?:(?<${prefix}JapaneseMinute>\\d{1,2})分)?)${end}`;
+    const dateBody = (prefix, end) => `(?:(?<${prefix}Year>\\d{4})年)?(?<${prefix}Month>\\d{1,2})月(?<${prefix}Day>\\d{1,2})日(?:${weekdayPattern(prefix)})?${timePattern(prefix, end)}`;
+    const rangePattern = "(?:から|[〜~～へー−\\-–—→⇒]+)";
+    // OCR can drop the pale 〜 between two full calendar stamps ("4.0010月26日").
+    // Allow that only after a two-digit punctuated minute and directly before
+    // a complete month/day, so no clock digit is borrowed or guessed.
+    const fullDate = "(?:\\d{4}年)?\\d{1,2}月\\d{1,2}日";
+    const startEnd = `(?:${timeEnd}|(?<=[:.,]\\d{2})(?=${fullDate}))`;
+    const calendarRange = `(?:${rangePattern}|(?<=[:.,]\\d{2})(?=${fullDate}))`;
+    const timeFrom = (parts, prefix) => questImageClock(parts[`${prefix}Meridiem`], parts[`${prefix}Hour`], parts[`${prefix}Minute`] ?? parts[`${prefix}JapaneseMinute`]);
+    const weekdayFrom = value => value?.match(/[日月火水木金土]/)?.[0];
+    const dated = compact.match(new RegExp(`(?<!\\d)${dateBody("start", startEnd)}${calendarRange}${dateBody("end", timeEnd)}`));
+    if (dated) {
+      const parts = dated.groups;
+      const startTime = timeFrom(parts, "start"); const endTime = timeFrom(parts, "end");
+      if (!startTime || !endTime) return null;
+      const startMonth = Number(parts.startMonth); const startDay = Number(parts.startDay);
+      const endMonth = Number(parts.endMonth); const endDay = Number(parts.endDay);
+      const startWeekday = weekdayFrom(parts.startWeekday); const endWeekday = weekdayFrom(parts.endWeekday);
+      const currentYear = new Date(now + JST).getUTCFullYear();
+      const crossesYear = endMonth < startMonth;
+      const years = parts.startYear ? [Number(parts.startYear)] : parts.endYear ? [Number(parts.endYear) - Number(crossesYear)] : [currentYear - 1, currentYear, currentYear + 1];
+      const periods = years.flatMap(year => {
+        const endYear = parts.endYear ? Number(parts.endYear) : year + Number(crossesYear);
+        const start = new Date(Date.UTC(year, startMonth - 1, startDay));
+        const end = new Date(Date.UTC(endYear, endMonth - 1, endDay));
+        if (start.getUTCMonth() + 1 !== startMonth || start.getUTCDate() !== startDay || end.getUTCMonth() + 1 !== endMonth || end.getUTCDate() !== endDay ||
+            (startWeekday && start.getUTCDay() !== "日月火水木金土".indexOf(startWeekday)) || (endWeekday && end.getUTCDay() !== "日月火水木金土".indexOf(endWeekday))) return [];
+        const startDate = start.toISOString().slice(0, 10); const endDate = end.toISOString().slice(0, 10);
+        const startAt = Date.parse(`${startDate}T${startTime}:00+09:00`); const endAt = Date.parse(`${endDate}T${endTime}:00+09:00`);
+        if (endAt <= startAt || endAt - startAt > 35 * DAY_MS) return [];
+        return [{ startDate, endDate, startTime, endTime, inferred: !parts.startYear || !parts.endYear, dateSource: "calendar", next: false,
+          template: start.getUTCDay() === 1 && end.getUTCDay() === 5 ? "weekday" : start.getUTCDay() === 5 && end.getUTCDay() === 1 ? "weekend" : "custom", distance: Math.abs(now - startAt) }];
+      });
+      const best = periods.sort((a, b) => a.distance - b.distance)[0];
+      if (!best) return null;
+      delete best.distance; return best;
+    }
+    // A selection deadline contains one weekday; it must never become the quest period.
+    const match = compact.match(new RegExp(`${weekdayPattern("start")}${timePattern("start")}${rangePattern}${weekdayPattern("end")}${timePattern("end")}`));
+    if (!match) return null;
+    // A partially recognized calendar range still contains its starting
+    // weekday. Do not strip its date and silently infer a different week.
+    if (/\d{1,2}月\d{1,2}日[\p{P}\p{S}]*$/u.test(compact.slice(0, match.index))) return null;
+    const parts = match.groups;
+    const startTime = timeFrom(parts, "start");
+    const endTime = timeFrom(parts, "end");
+    if (!startTime || !endTime) return null;
+    const startDay = "日月火水木金土".indexOf(weekdayFrom(parts.startWeekday));
+    const endDay = "日月火水木金土".indexOf(weekdayFrom(parts.endWeekday));
+    const date = new Date(now + JST);
+    const midnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    const minutes = value => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
+    let start = midnight - ((date.getUTCDay() - startDay + 7) % 7) * DAY_MS;
+    const span = (endDay - startDay + 7) % 7 || (minutes(endTime) > minutes(startTime) ? 0 : 7);
+    const next = nextQuest || /次のクエスト|クエストを選択できるのはあと/.test(compact);
+    const endMinutes = minutes(endTime) + (endTime === "03:59" ? 1 : 0);
+    if (next ? start - JST + minutes(startTime) * 60000 <= now : start + span * DAY_MS - JST + endMinutes * 60000 <= now) start += 7 * DAY_MS;
+    return {
+      startDate: new Date(start).toISOString().slice(0, 10), startTime,
+      endDate: new Date(start + span * DAY_MS).toISOString().slice(0, 10), endTime,
+      inferred: true, next,
+      template: startDay === 5 && endDay === 1 ? "weekend" : startDay === 1 && endDay === 5 ? "weekday" : "custom"
+    };
+  }
+
   // Storage keeps an exclusive deadline. Forms show the last included minute,
   // so "03:59まで" includes 03:59:59.999 and the next period starts at 04:00.
   function questPeriodFields(quest) {
@@ -542,6 +624,7 @@
     QUEST_STORAGE_KEY,
     questDayKey,
     questDayStart,
+    readQuestImagePeriod,
     questPeriodFields,
     questPeriodTimes,
     questDateKeys,

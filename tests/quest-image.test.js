@@ -234,7 +234,7 @@ test("failed recognition retries once and retains diagnostics while terminating 
   const vm = require('node:vm'); const fs = require('node:fs');
   let reads = 0; let terminated = 0; let workerOptions;
   const ctx = {fillRect(){},drawImage(){},getImageData(){return {data:new Uint8ClampedArray([255,255,255,255])};},putImageData(){}};
-  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:async(l,o,opts)=>{
+  const scope = {require: () => core, module:{exports:{}},window:{Tesseract:{createWorker:async(l,o,opts)=>{
     workerOptions=opts; return {setParameters:async()=>{},recognize:async()=>({data:{text:++reads===1?'読み取り失敗':PROGRESS}}),terminate:async()=>{terminated++;}};
   }}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=943;naturalHeight=2048;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,setTimeout,clearTimeout,console};
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/quest-image.js'),'utf8'),scope);
@@ -414,7 +414,7 @@ function loadRecognizer({ texts, results, pixels = [255, 255, 255, 255], read, c
   const calls = { reads: 0, terminated: 0, drawn: [] };
   const ctx = {fillRect(){},drawImage(){},getImageData(){return {data:new Uint8ClampedArray(pixels)};},putImageData(data){calls.drawn.push(Array.from(data.data));}};
   const worker = {setParameters:async()=>{},recognize:async()=>{const index = calls.reads++; return read ? read(index) : {data:results ? results[index] : {text:texts[index]}};},terminate:async()=>{calls.terminated++;}};
-  const scope = {module:{exports:{}},window:{Tesseract:{createWorker:createWorker ? () => createWorker(worker) : async()=>worker}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=1320;naturalHeight=2868;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,...timers,console};
+  const scope = {require: () => core, module:{exports:{}},window:{Tesseract:{createWorker:createWorker ? () => createWorker(worker) : async()=>worker}},document:{createElement:()=>({width:0,height:0,getContext:()=>ctx})},Image:class {naturalWidth=1320;naturalHeight=2868;set src(value){queueMicrotask(()=>this.onload());}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},DOMException,...timers,console};
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/quest-image.js'),'utf8'),scope);
   return { calls, recognize: options => scope.module.exports.recognize({name:'test.png',type:'image/png',size:100}, options) };
 }

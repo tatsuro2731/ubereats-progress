@@ -143,7 +143,7 @@ function harness({ state = stateFor(), now = BOUNDARY - 1, compact = false, hash
     element, storage, alerts, document, timers, writes: () => writes,
     saveProgress: (...args) => window.UberQuestStore.saveProgress(...args),
     scripts: () => document.head.children.filter(script => !script.removed),
-    imageModule: value => { window.UberQuestImage = value; },
+    cropModule: value => { window.UberQuestImageCrop = value; },
     read: () => JSON.parse(storage.get(QUEST_KEY)),
     selected: () => element("questSelect").value,
     emitWindow: (type, options) => emit(window, type, options),
@@ -270,27 +270,25 @@ test("background storage events wait until foreground recovery to update the que
   assert.equal(app.element("questTotal").textContent, "9");
 });
 
-test("image parsing loads only after file selection and cancelling a pending load never recognizes the old image", async () => {
+test("the API preview loads on demand and cancelling a pending load never opens the old image", async () => {
   const app = harness({ hash: "" });
   assert.equal(app.scripts().length, 0);
   const oldImage = { name: "old.png" }, nextImage = { name: "next.png" };
   app.emit("questImageFile", "change", { target: { files: [oldImage] } });
   assert.equal(app.scripts().length, 1);
   const script = app.scripts()[0];
-  assert.match(script.src, /src\/quest-image\.js\?v=\d+/);
-  assert.equal(app.element("questImagePick").disabled, true);
-  app.emit("questImageStop", "click");
-  assert.equal(app.element("questImagePick").disabled, false);
-  assert.match(app.element("questImageStatus").textContent, /中止/);
+  assert.match(script.src, /src\/quest-image-crop\.js\?v=\d+/);
+  app.emit("questApiCancel", "click");
+  assert.equal(app.element("questApiPanel").hidden, true);
   app.emit("questImageFile", "change", { target: { files: [nextImage] } });
   assert.equal(app.scripts().length, 1, "pending module loads must be shared");
-  const recognized = [];
-  app.imageModule({ recognize: async file => { recognized.push(file); return { candidates: [] }; } });
+  const opened = [];
+  app.cropModule({ open: async file => { opened.push(file); return () => "reviewed JPEG"; } });
   script.onload();
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(recognized, [nextImage]);
-  assert.equal(app.element("questImagePick").disabled, false);
-  assert.equal(app.element("questImageError").hidden, false);
+  assert.deepEqual(opened, [nextImage]);
+  assert.equal(app.element("questApiSend").disabled, false);
+  assert.equal(app.element("questImageError").hidden, true);
 });
 
 test("a failed lazy image module load leaves manual input usable and can be retried", async () => {

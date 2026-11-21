@@ -1,8 +1,11 @@
 (function exposeQuestImageCrop(root) {
   "use strict";
 
-  const INITIAL_TOP = 18;
-  const INITIAL_BOTTOM = 57;
+  const MAX_BYTES = 2 * 1024 * 1024;
+
+  function fileError(message) {
+    return Object.assign(new Error(message), { fileProblem: true });
+  }
 
   function abortError() {
     return new DOMException("画像の切り出しを中止しました。", "AbortError");
@@ -10,12 +13,12 @@
 
   async function loadImage(file, signal) {
     if (signal?.aborted) throw abortError();
-    if (!file || file.size > 20 * 1024 * 1024) throw new Error("20MB以下の画像を選んでください。");
+    if (!file || file.size > 20 * 1024 * 1024) throw fileError("20MB以下の画像を選んでください。");
     const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
     const has = (offset, signature) => signature.every((byte, i) => bytes[offset + i] === byte);
     if (!has(0, [0xff, 0xd8, 0xff]) && !has(0, [137, 80, 78, 71, 13, 10, 26, 10]) &&
         !(has(0, [82, 73, 70, 70]) && has(8, [87, 69, 66, 80]))) {
-      throw new Error("PNG・JPEG・WebP形式の画像を選んでください。");
+      throw fileError("PNG・JPEG・WebP形式の画像を選んでください。");
     }
     if (signal?.aborted) throw abortError();
     const url = URL.createObjectURL(file);
@@ -33,7 +36,7 @@
         };
         image.onerror = () => {
           signal?.removeEventListener("abort", abort);
-          reject(new Error("画像を開けませんでした。別のスクリーンショットを選んでください。"));
+          reject(fileError("画像を開けませんでした。別のスクリーンショットを選んでください。"));
         };
         image.src = url;
       });
@@ -43,7 +46,7 @@
     }
     if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 40000000) {
       image.removeAttribute("src");
-      throw new Error("画像が大きすぎます。クエスト部分を切り出した画像を選んでください。");
+      throw fileError("画像が大きすぎます。クエスト部分を切り出した画像を選んでください。");
     }
     return image;
   }
@@ -65,9 +68,13 @@
   }
 
   function encode(canvas) {
-    const url = canvas.toDataURL("image/jpeg", 0.9);
-    if (!url.startsWith("data:image/jpeg;base64,")) throw new Error("送信用の画像を作成できませんでした。");
-    return url;
+    const prefix = "data:image/jpeg;base64,";
+    for (const quality of [0.9, 0.75, 0.6]) {
+      const url = canvas.toDataURL("image/jpeg", quality);
+      if (!url.startsWith(prefix)) throw new Error("送信用の画像を作成できませんでした。");
+      if (url.length - prefix.length <= 4 * Math.floor(MAX_BYTES / 3)) return url;
+    }
+    throw new Error("送信する画像が大きいため、クエストが写っている範囲に絞ってください。");
   }
 
   async function defaultJpeg(file, { signal } = {}) {
@@ -75,7 +82,7 @@
     const canvas = document.createElement("canvas");
     try {
       if (signal?.aborted) throw abortError();
-      drawCrop(image, canvas, INITIAL_TOP, INITIAL_BOTTOM);
+      drawCrop(image, canvas, 0, 100);
       return encode(canvas);
     } finally {
       image.removeAttribute("src");
@@ -89,7 +96,7 @@
     const panel = document.createElement("div");
     panel.className = "questApiCrop";
     const help = document.createElement("p");
-    help.textContent = "残り件数の説明文、現在の進捗、追加報酬のすべてが入るように上下を調整してください。ここに表示された範囲を送信します。";
+    help.textContent = "対象期間と、読みたいクエストの全段階が入るように上下を調整してください。表示された範囲を送信します。";
     const preview = document.createElement("canvas");
     preview.setAttribute("role", "img");
     preview.setAttribute("aria-label", "送信する画像のプレビュー");
@@ -109,8 +116,8 @@
       return input;
     }
 
-    const top = slider("範囲の上端", INITIAL_TOP, 0, INITIAL_BOTTOM - 1);
-    const bottom = slider("範囲の下端", INITIAL_BOTTOM, INITIAL_TOP + 1, 100);
+    const top = slider("範囲の上端", 0, 0, 99);
+    const bottom = slider("範囲の下端", 100, 1, 100);
 
     function draw() {
       const start = Number(top.value);

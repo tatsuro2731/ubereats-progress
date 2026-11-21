@@ -63,9 +63,10 @@ test("owner login returns to the same browser, verifies ownership before sending
   assert.equal(calls[0].body.get("refresh_token"), "synthetic-refresh-token");
   assert.equal(calls[1].method, "GET");
   assert.ok(owner.hasSession());
-  requests.push(Response.json({ candidate: sample }));
+  const result = { screen: "progress", periodText: null, candidates: [sample], skipped: 0 };
+  requests.push(Response.json(result));
   const signal = new AbortController().signal;
-  assert.deepEqual(await owner.read({ imageUrl, signal }), sample);
+  assert.deepEqual(await owner.read({ imageUrl, signal }), result);
   const uploaded = calls[2];
   assert.equal(uploaded.url, readUrl);
   assert.equal(uploaded.headers.Authorization, "Bearer test-access");

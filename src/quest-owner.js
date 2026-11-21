@@ -18,7 +18,7 @@
   }
 
   async function signIn() {
-    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=101");
+    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=102");
     const request = await startTransfer();
     try { localStorage.setItem(pendingKey, JSON.stringify(request)); } catch {
       throw new Error("本人確認には、このブラウザーのサイトデータ保存を許可してください。");
@@ -52,7 +52,7 @@
       throw new Error("本人確認を開始したブラウザーでアプリを開き、もう一度お試しください。");
     }
     try {
-      const { openCredential } = await import("./quest-owner-transfer.mjs?v=101");
+      const { openCredential } = await import("./quest-owner-transfer.mjs?v=102");
       const refresh = await openCredential(pending, result);
       const session = await exchange(refresh);
       // The encrypted handoff identifies the recipient, not the issuer.
@@ -103,7 +103,7 @@
   function jpegBytes(imageUrl) {
     const prefix = "data:image/jpeg;base64,";
     const max = 2 * 1024 * 1024;
-    const error = "送信する進捗欄の画像を小さく切り出してください。";
+    const error = "送信するクエスト画像の範囲を小さくしてください。";
     if (typeof imageUrl !== "string" || imageUrl.length > prefix.length + Math.ceil(max / 3) * 4 ||
         !imageUrl.startsWith(prefix + "/9j/")) throw new Error(error);
     let binary;
@@ -125,14 +125,20 @@
       throw new Error(response.status === 403 ? "このアカウントには利用権限がありません。" : authMessage);
     }
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(payload?.error || "進捗欄の自動読み取りに失敗しました。");
-    const candidate = payload?.candidate;
-    if (!candidate || typeof candidate.label !== "string" || !Number.isInteger(candidate.completed) ||
-        !Array.isArray(candidate.tiers) || !candidate.tiers.length || candidate.tiers.length > 5 ||
-        !candidate.tiers.every(t => Number.isInteger(t?.target) && t.target > 0 && Number.isInteger(t.reward) && t.reward >= 0)) {
+    if (!response.ok) throw new Error(payload?.error || "クエストのAPI読み取りに失敗しました。");
+    const selection = payload?.screen === "selection";
+    const candidates = payload?.candidates;
+    if ((!selection && payload?.screen !== "progress") || !Array.isArray(candidates) ||
+        !candidates.length || candidates.length > (selection ? 20 : 1) ||
+        !Number.isInteger(payload.skipped) || payload.skipped < 0 ||
+        !candidates.every(c => typeof c?.label === "string" && Array.isArray(c.tiers) &&
+          c.tiers.length > 0 && c.tiers.length <= 5 &&
+          c.tiers.every((t, i) => Number.isInteger(t?.target) && t.target > (i ? c.tiers[i - 1].target : 0) &&
+            t.target <= 9999 && Number.isInteger(t.reward) && t.reward >= 0 && t.reward <= 9999999) &&
+          (selection ? c.completed === undefined : Number.isInteger(c.completed) && c.completed >= 0 && c.completed <= c.tiers[0].target))) {
       throw new Error("読み取り結果から件数と報酬を確認できませんでした。");
     }
-    return candidate;
+    return { screen: payload.screen, periodText: typeof payload.periodText === "string" ? payload.periodText : null, candidates, skipped: payload.skipped };
   }
 
   window.UberQuestOwner = { hasSession, signIn, signOut, init, read };
