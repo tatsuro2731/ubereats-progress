@@ -11,7 +11,7 @@
     type: "json_schema", name: "quest_screenshot", strict: true,
     schema: {
       type: "object", additionalProperties: false,
-      required: ["screen", "periodText", "cards"],
+      required: ["screen", "periodText", "cards", "lastCardBottom"],
       properties: {
         screen: { type: "string", enum: ["selection", "progress", "other"] }, periodText: textOrNull,
         cards: {
@@ -27,7 +27,8 @@
               } }
             }
           }
-        }
+        },
+        lastCardBottom: { type: "string", enum: ["visible", "cut_off", "uncertain", "not_applicable"] }
       }
     }
   };
@@ -38,8 +39,9 @@
     "For progress, return one card with number null. Copy completed/target from the progress fraction. Copy remaining only if independently printed.",
     "For each card copy all its additional rows in order. additionalCount and reward are the increments printed on that row, never cumulative totals.",
     "Transcribe each amount as printed with its yen sign, every digit, thousands commas and any leading plus. Visually recheck the digit immediately after the yen sign.",
-    "Never infer missing digits, rows, or amounts from other cards. Set readable false if the card extends off screen, its end is obscured, any required row or digit is unclear, or the summary contradicts the progress row.",
-    "A readable progress crop can omit the screen header if the progress fraction and all reward rows are clear.",
+    "Never infer missing digits, rows, or amounts from other cards. Mark each card readable independently if its printed rows are legible. If any digit or row is unclear or the summary contradicts the progress row, mark only that card unreadable.",
+    "After transcribing all cards, inspect the LAST selection card only. If its two sides disappear behind the sticky 完了 button, navigation bar, or image edge before the card's own lower border, lastCardBottom is cut_off. Use visible if its lower outline is visible, uncertain if you cannot tell, and not_applicable for other screen types.",
+    "A readable progress crop can omit the screen header if the progress fraction and all reward rows are clear. Reject progress if a bonus row is cut off.",
     "periodText is the exact Japanese start–end date/time range if both ends are visible, otherwise null. Exclude the separate selection deadline. Do not infer dates or years."
   ].join(" ");
   class UnreadableQuest extends Error {
@@ -82,7 +84,17 @@
     const selection = data?.screen === "selection";
     if ((!selection && data?.screen !== "progress") || !Array.isArray(data.cards) ||
         !inRange(data.cards.length, 1, selection ? 20 : 1)) throw new UnreadableQuest();
-    const candidates = data.cards.map(card => candidateFrom(card, selection)).filter(Boolean);
+    const candidates = [];
+    for (const [index, card] of data.cards.entries()) {
+      const lastChoice = selection && index === data.cards.length - 1;
+      if (lastChoice && data.lastCardBottom !== "visible") continue;
+      const candidate = candidateFrom(card, selection);
+      if (!candidate) continue;
+      if (lastChoice && candidates.some(other => other.tiers.length > candidate.tiers.length)) {
+        candidate.checkTiers = true;
+      }
+      candidates.push(candidate);
+    }
     if (!candidates.length || new Set(candidates.map(c => c.label)).size !== candidates.length) throw new UnreadableQuest();
     const periodText = typeof data.periodText === "string" && data.periodText.length <= 200 ? data.periodText : null;
     return { screen: data.screen, periodText, candidates, skipped: data.cards.length - candidates.length };

@@ -8,7 +8,7 @@ const example = { number: null, readable: true, completed: 20, target: 120, rema
   bonusTiers: [{ additionalCount: 10, reward: "+¥1,730" }] };
 function response(data) {
   return { ok: true, json: async () => ({ status: "completed", output: [{ type: "message", role: "assistant",
-    content: [{ type: "output_text", text: JSON.stringify(data.cards ? data : { screen: "progress", periodText: null, cards: [data] }) }] }] }) };
+    content: [{ type: "output_text", text: JSON.stringify(data.cards ? data : { screen: "progress", periodText: null, cards: [data], lastCardBottom: "not_applicable" }) }] }] }) };
 }
 
 test("only the reviewed JPEG goes to OpenAI, the key is used only for authorization, and tiers are cumulative", async t => {
@@ -59,8 +59,8 @@ test("selection cards keep each printed yen digit and skip incomplete cards inde
   });
   const periodText = "月曜日 午前4時00分 〜 金曜日 午前4時00分";
   const cards = [card(1, 120, "￥８，８４０", "＋￥１，０９０"), card(2, 110, "¥7,580", "+¥1,010"),
-    { ...card(3, 100, "¥6,420", null), readable: false }];
-  let data = { screen: "selection", periodText, cards };
+    { ...card(3, 100, "¥6,420", null), bonusTiers: [] }];
+  let data = { screen: "selection", periodText, cards, lastCardBottom: "cut_off" };
   t.mock.method(globalThis, "fetch", async () => response(data));
   const result = await read(input);
   assert.equal(result.periodText, periodText);
@@ -71,12 +71,17 @@ test("selection cards keep each printed yen digit and skip incomplete cards inde
   ]);
   const totals = require("../src/app-core.js").questTierTotals(result.candidates[1].tiers);
   assert.deepEqual(totals.map(row => row.totalReward), [7580, 8590]);
+  data = { ...data, lastCardBottom: "visible" };
+  assert.equal((await read(input)).candidates[2].checkTiers, true, "a last option with fewer stages must be checked even if the model marked its lower edge visible");
   for (const invalid of [[cards[0], cards[0]], [{ ...cards[1], baseReward: "¥,580" }],
-    [{ ...cards[1], completed: 0 }], [{ ...cards[1], bonusTiers: [{ additionalCount: 10, reward: null }] }]]) {
+    [{ ...cards[1], completed: 0 }],
+    [{ ...cards[1], bonusTiers: [{ additionalCount: 10, reward: null }] }]]) {
     data = { ...data, cards: invalid };
     await assert.rejects(read(input), /確定できません/);
   }
-  data = { screen: "other", periodText: null, cards: [] };
+  data = { ...data, cards: [cards[1]], lastCardBottom: "uncertain" };
+  await assert.rejects(read(input), /確定できません/);
+  data = { screen: "other", periodText: null, cards: [], lastCardBottom: "not_applicable" };
   await assert.rejects(read(input), /確定できません/);
 });
 

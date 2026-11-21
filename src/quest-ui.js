@@ -118,6 +118,7 @@
       byId("questInitialToday").value = candidate.completed === 0 ? "0" : "";
       byId("questImageDateNote").textContent += ` 累計${candidate.completed}件を入力しました。今日の件数は画像にないため、公式アプリを確認して入力してください。`;
     }
+    if (candidate.checkTiers) byId("questImageDateNote").textContent += " 最後の候補はほかの候補より段階が少ないため、追加報酬の続きがあるか元の画面で確認してください。";
     Array.from(byId("questImageChoices").children).forEach((button, i) => {
       button.setAttribute("aria-pressed", String(i === index));
       button.querySelector("small").textContent = i === index ? "入力済み" : "この候補を入力";
@@ -141,7 +142,7 @@
     }, 60000);
     try {
       text("questImageStatus", "送信する画像を準備しています…");
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=102");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=103");
       if (signal.aborted) return;
       const imageUrl = await crop.defaultJpeg(file, { signal });
       if (signal.aborted) return;
@@ -176,6 +177,11 @@
         const average = document.createElement("span"); average.className = "questAverage"; average.textContent = averageLabel(tier.averageReward);
         group.append(row, average); button.append(group);
       });
+      if (candidate.checkTiers) {
+        const note = document.createElement("span"); note.className = "questMuted";
+        note.textContent = `この画像で確認できたのは${candidate.tiers.length}段目までです。追加報酬の続きがあるか確認してください。`;
+        button.append(note);
+      }
       const action = document.createElement("small"); action.textContent = "この候補を入力"; button.append(action);
       button.addEventListener("click", () => applyImageCandidate(index)); return button;
     }));
@@ -274,7 +280,7 @@
     byId("questImageError").hidden = true;
     text("questImageStatus", "送信範囲を準備しています…");
     try {
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=102");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=103");
       if (apiController !== controller) return;
       const getCrop = await crop.open(file, byId("questApiCrop"), { signal: controller.signal });
       if (apiController !== controller) return;
@@ -309,7 +315,7 @@
     try {
       const imageUrl = getApiCrop();
       text("questImageStatus", "選択範囲をOpenAIで読み取っています…");
-      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=102");
+      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=103");
       if (apiController !== controller) return;
       const request = { imageUrl, signal: controller.signal };
       if (!manualOwnerSession) request.key = key;

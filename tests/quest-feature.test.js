@@ -526,6 +526,20 @@ test("a guest previews the crop and explicitly sends it with a transient persona
   assert.equal(app.element("questInitialTotal").value, "20");
 });
 
+test("a shorter final option keeps its stage warning when copied into the form", async () => {
+  const result = { screen: "selection", skipped: 0, periodText: null, candidates: [
+    { label: "クエスト2", tiers: [{ target: 110, reward: 7580 }, { target: 120, reward: 1010 }] },
+    { label: "クエスト3", tiers: [{ target: 100, reward: 6420 }], checkTiers: true }
+  ] };
+  const app = imageImportHarness({ owner: testOwner(async () => result) });
+  await app.emit("questNew", "click");
+  await app.importImage();
+  const last = app.element("questImageChoices").children[1];
+  assert.match(last.querySelector(".questMuted").textContent, /1段目まで/);
+  await last.dispatchEvent({ type: "click" });
+  assert.match(app.element("questImageDateNote").textContent, /追加報酬の続き/);
+});
+
 test("an API failure preserves the form, and only a user-requested retry sends the adjusted crop", async () => {
   const read = test.mock.fn(async () => { throw new Error("読み取れませんでした"); });
   const app = imageImportHarness({ owner: testOwner(read) });

@@ -132,7 +132,7 @@ test("a verified owner sends one fixed OCR request and receives validated cards 
     if (providerFailure) return new Response(openAiKey, { status: 500 });
     const card = { readable: true, number: null, completed: 2, target: 10, remaining: 8, baseReward: "¥200", bonusTiers: [] };
     const cards = screen === "selection" ? [{ ...card, number: 2, completed: null, remaining: null }] : [card];
-    const text = JSON.stringify({ screen, cards, periodText: null });
+    const text = JSON.stringify({ screen, cards, periodText: null, lastCardBottom: screen === "selection" ? "visible" : "not_applicable" });
     return Response.json({ status: "completed", output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text }] }] });
   });
   const result = await handle(request(), context);
