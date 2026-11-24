@@ -32,6 +32,7 @@
   let apiController = null;
   let getApiCrop = null;
   const owner = window.UberQuestOwner;
+  let ownerAtPickerOpen = false;
   let manualOwnerSession = false;
   let lastImageFile = null;
   let lastProgressDone = null;
@@ -68,6 +69,7 @@
     byId("questConfigForm").querySelector('button[type="submit"]').disabled = busy;
   }
   function resetImage(resetCount = false) {
+    ownerAtPickerOpen = false;
     closeApiPanel();
     byId("questApiOpen").hidden = true;
     imageController?.abort(); imageController = null; imageResult = null; lastImageFile = null;
@@ -127,11 +129,17 @@
     byId("questConfigError").hidden = true;
     byId("questStartDate").focus();
   }
-  async function readQuestImage(file) {
+  async function readQuestImage(file, pickedAsOwner) {
     if (!file) return;
     resetImage();
     lastImageFile = file;
-    if (!owner?.hasSession()) return openApiPanel();
+    if (!owner?.hasSession()) {
+      if (!pickedAsOwner) return openApiPanel();
+      updateOwnerControls();
+      errorMessage("読み取りを続けるには、もう一度本人確認してください。", "questImageError");
+      byId("questApiOpen").hidden = false;
+      return;
+    }
 
     const controller = new AbortController();
     const { signal } = controller;
@@ -142,7 +150,7 @@
     }, 60000);
     try {
       text("questImageStatus", "送信する画像を準備しています…");
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=103");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=104");
       if (signal.aborted) return;
       const imageUrl = await crop.defaultJpeg(file, { signal });
       if (signal.aborted) return;
@@ -280,7 +288,7 @@
     byId("questImageError").hidden = true;
     text("questImageStatus", "送信範囲を準備しています…");
     try {
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=103");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=104");
       if (apiController !== controller) return;
       const getCrop = await crop.open(file, byId("questApiCrop"), { signal: controller.signal });
       if (apiController !== controller) return;
@@ -315,7 +323,7 @@
     try {
       const imageUrl = getApiCrop();
       text("questImageStatus", "選択範囲をOpenAIで読み取っています…");
-      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=103");
+      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=104");
       if (apiController !== controller) return;
       const request = { imageUrl, signal: controller.signal };
       if (!manualOwnerSession) request.key = key;
@@ -580,8 +588,12 @@
       closeApiPanel(); byId("questApiOpen").hidden = false; text("questImageStatus", "");
     }
   });
-  byId("questImagePick").addEventListener("click", () => byId("questImageFile").click());
-  byId("questImageFile").addEventListener("change", event => readQuestImage(event.target.files[0]));
+  byId("questImagePick").addEventListener("click", () => {
+    ownerAtPickerOpen = Boolean(owner?.hasSession());
+    if (ownerAtPickerOpen) owner.prepareRead?.().then(updateOwnerControls);
+    byId("questImageFile").click();
+  });
+  byId("questImageFile").addEventListener("change", event => readQuestImage(event.target.files[0], ownerAtPickerOpen));
   byId("questImageStop").addEventListener("click", () => stopImageRead("読み取りを中止しました。"));
 
   byId("progressTab").addEventListener("click", () => showTab(false));

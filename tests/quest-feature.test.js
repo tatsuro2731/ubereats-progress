@@ -428,6 +428,19 @@ function imageImportHarness({ periodText = null, openCrop = async () => () => cr
   };
 }
 
+test("a session rejected while choosing an image shows sign-in before offering a personal key", async () => {
+  const owner = testOwner(() => assert.fail("unexpected image upload"));
+  owner.prepareRead = async () => { owner.signOut(); };
+  const app = imageImportHarness({ owner });
+  await app.emit("questNew", "click");
+  app.element("questImageFile").click = () => {};
+  await app.emit("questImagePick", "click");
+  await app.importImage();
+  assert.equal(app.element("questOwnerSignIn").hidden, false);
+  assert.equal(app.element("questApiPanel").hidden, true);
+  assert.match(app.element("questImageError").textContent, /本人確認/);
+});
+
 test("image import keeps template dates and times when OCR has no period", async () => {
   const app = imageImportHarness();
   await app.emit("questNew", "click");

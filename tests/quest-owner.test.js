@@ -51,6 +51,26 @@ async function callback(owner, routes) {
 
 const exchange = () => Response.json({ access_token: "test-access", refresh_token: "test-renewed", expires_in: 3600 });
 
+test("opening the picker renews an expired session without uploading and an immediate read shares that refresh", async t => {
+  const { owner, values, calls, requests } = setup(t);
+  const key = "questOwnerIdentity.v1";
+  owner.prepareRead();
+  assert.equal(calls.length, 0);
+  values.set(key, JSON.stringify({ access: "old", refresh: "test-refresh", expires: 0 }));
+  let finishRefresh;
+  requests.push(new Promise(resolve => { finishRefresh = resolve; }));
+  owner.prepareRead();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls.map(call => call.url), [relay + "/.netlify/identity/token"]);
+  const result = { screen: "progress", periodText: null, candidates: [sample], skipped: 0 };
+  requests.push(Response.json(result));
+  const reading = owner.read({ imageUrl });
+  finishRefresh(exchange());
+  assert.deepEqual(await reading, result);
+  assert.deepEqual(calls.map(call => call.url), [relay + "/.netlify/identity/token", readUrl]);
+  assert.equal(calls[1].headers.Authorization, "Bearer test-access");
+});
+
 test("owner login returns to the same browser, verifies ownership before sending one JPEG, and forgets a rejected session", async t => {
   const { owner, calls, requests, replacements, routes } = setup(t);
   assert.equal(await owner.init(), false);

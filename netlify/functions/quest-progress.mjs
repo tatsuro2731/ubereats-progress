@@ -56,6 +56,7 @@ export default async function questProgress(request, context) {
   if (request.method === "OPTIONS") {
     headers.set("Access-Control-Allow-Methods", allowedMethods);
     headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    headers.set("Access-Control-Max-Age", "600");
     return new Response(null, { status: 204, headers });
   }
   if (request.method !== "POST" && !ownerCheck) {
@@ -69,11 +70,17 @@ export default async function questProgress(request, context) {
   const ownerEmail = Netlify.env.get("QUEST_OWNER_EMAIL")?.trim().toLowerCase();
   if (!key || !(ownerId || ownerEmail) || !context.site?.url) return fail(503, unavailable);
 
+  const identityStart = performance.now();
   try {
     // The site URL comes from Netlify's runtime, never from the client Host header.
     const identity = new URL("/.netlify/identity/", context.site.url);
     if (identity.protocol !== "https:") return fail(503, unavailable);
     const options = { redirect: "error", cache: "no-store", signal: AbortSignal.any([request.signal, AbortSignal.timeout(8000)]) };
+    // In email mode the site must verify email addresses. Check this alongside the caller.
+    // A failed settings request cannot mask a 401/403 or leave an unhandled rejection.
+    const verifiesEmail = !ownerId && fetch(new URL("settings", identity), options)
+      .then(async response => response.ok && (await response.json()).autoconfirm === false)
+      .catch(() => false);
     const verified = await fetch(new URL("user", identity), { ...options, headers: { Authorization: auth } });
     if (verified.status === 401 || verified.status === 403) return fail(401, loginRequired);
     if (!verified.ok) return fail(503, unavailable);
@@ -83,25 +90,38 @@ export default async function questProgress(request, context) {
       if (user.id !== ownerId) return fail(403, forbidden);
     } else {
       if (user.email?.toLowerCase() !== ownerEmail) return fail(403, forbidden);
-      // An automatically confirmed email does not prove ownership of the address.
-      const settings = await fetch(new URL("settings", identity), options);
-      if (!settings.ok || (await settings.json()).autoconfirm !== false) return fail(503, unavailable);
+      if (!await verifiesEmail) return fail(503, unavailable);
     }
   } catch {
     return fail(503, unavailable);
   }
   if (ownerCheck) return new Response(null, { status: 204, headers });
 
+  const identityEnd = performance.now();
+  let modelStart;
+  function finish(response) {
+    const end = performance.now();
+    const durations = { identity: Math.round(identityEnd - identityStart), body: Math.round((modelStart ?? end) - identityEnd) };
+    if (modelStart !== undefined) durations.model = Math.round(end - modelStart);
+    const metrics = Object.entries(durations).map(([name, ms]) => name + ";dur=" + ms).join(", ");
+    response.headers.set("Server-Timing", metrics);
+    response.headers.set("Timing-Allow-Origin", appOrigin);
+    response.headers.set("Access-Control-Expose-Headers", "Server-Timing");
+    console.info("quest_read_ms", durations);
+    return response;
+  }
+  const failedRead = (status, message) => finish(fail(status, message));
   if (request.headers.get("Content-Type")?.toLowerCase() !== "image/jpeg" || !request.body) {
-    return fail(415, "クエストのJPEG画像を選んでください。");
+    return failedRead(415, "クエストのJPEG画像を選んでください。");
   }
   const tooLarge = "送信するクエスト画像を2MB以下にしてください。";
-  if (Number(request.headers.get("Content-Length")) > maxBytes) return fail(413, tooLarge);
+  if (Number(request.headers.get("Content-Length")) > maxBytes) return failedRead(413, tooLarge);
   let bytes;
-  try { bytes = await readBody(request.body); } catch { return fail(400, "画像を受信できませんでした。"); }
-  if (!bytes) return fail(413, tooLarge);
-  if (!isCroppedJpeg(bytes)) return fail(422, "クエストのJPEG画像を選んでください。");
+  try { bytes = await readBody(request.body); } catch { return failedRead(400, "画像を受信できませんでした。"); }
+  if (!bytes) return failedRead(413, tooLarge);
+  if (!isCroppedJpeg(bytes)) return failedRead(422, "クエストのJPEG画像を選んでください。");
 
+  modelStart = performance.now();
   try {
     const result = await questImageApi.read({
       key, imageUrl: "data:image/jpeg;base64," + bytes.toString("base64"),
@@ -109,10 +129,10 @@ export default async function questProgress(request, context) {
     });
     // Installed v101 clients expect this field for their progress-only import.
     const candidate = result.screen === "progress" ? result.candidates[0] : undefined;
-    return Response.json({ ...result, candidate }, { headers });
+    return finish(Response.json({ ...result, candidate }, { headers }));
   } catch (error) {
-    if (error instanceof questImageApi.UnreadableQuest) return fail(422, error.message);
-    return fail(502, "OpenAIでクエストを読み取れませんでした。時間をおいて再度お試しください。");
+    if (error instanceof questImageApi.UnreadableQuest) return failedRead(422, error.message);
+    return failedRead(502, "OpenAIでクエストを読み取れませんでした。時間をおいて再度お試しください。");
   }
 }
 

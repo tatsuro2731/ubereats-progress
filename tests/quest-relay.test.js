@@ -34,6 +34,8 @@ test("only the app origin passes preflight and unauthorized callers cannot trigg
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get("Access-Control-Allow-Origin"), appOrigin);
   assert.equal(preflight.headers.get("Access-Control-Allow-Credentials"), null);
+  assert.equal(preflight.headers.get("Access-Control-Max-Age"), "600");
+  assert.equal(preflight.headers.get("Cache-Control"), "no-store");
   assert.match(preflight.headers.get("Access-Control-Allow-Headers"), /Authorization/);
   const other = await handle(request({ headers: { Origin: "https://other.invalid" } }), context);
   assert.equal(other.status, 403);
@@ -49,17 +51,22 @@ test("only a confirmed owner from this site's Identity can invoke OCR", async t 
   const env = { QUEST_OWNER_EMAIL: user.email, QUEST_OPENAI_API_KEY: openAiKey };
   configure(t, env);
   const handle = await relay;
-  let identityStatus = 200, account = user, autoconfirm = false;
+  let identityStatus = 200, account = user, autoconfirm = false, settingsOffline = true;
   t.mock.method(globalThis, "fetch", async (url, options) => {
     assert.equal(url.origin, context.site.url);
     assert.equal(options.redirect, "error");
-    if (url.pathname === "/.netlify/identity/settings") return Response.json({ autoconfirm });
+    if (url.pathname === "/.netlify/identity/settings") {
+      if (settingsOffline) throw new Error("settings unavailable");
+      return Response.json({ autoconfirm });
+    }
     assert.equal(url.pathname, "/.netlify/identity/user");
     assert.equal(options.headers.Authorization, identityAuth);
     return Response.json(account, { status: identityStatus });
   });
   identityStatus = 401;
-  assert.equal((await handle(request(), context)).status, 401);
+  const expired = await handle(request(), context);
+  assert.equal(expired.status, 401);
+  assert.equal(expired.headers.get("Server-Timing"), null);
   identityStatus = 200;
   account = { ...user, confirmed_at: null };
   assert.equal((await handle(request(), context)).status, 403);
@@ -69,8 +76,44 @@ test("only a confirmed owner from this site's Identity can invoke OCR", async t 
   account = user;
   assert.equal((await handle(request(), context)).status, 403);
   delete env.QUEST_OWNER_ID;
+  assert.equal((await handle(request(), context)).status, 503);
+  settingsOffline = false;
   autoconfirm = true;
   assert.equal((await handle(request(), context)).status, 503);
+});
+
+test("email ownership checks overlap and OpenAI waits for both confirmations", async t => {
+  configure(t, { QUEST_OWNER_EMAIL: user.email, QUEST_OPENAI_API_KEY: openAiKey });
+  const handle = await relay;
+  const pending = new Map();
+  let modelCalls = 0;
+  t.mock.method(globalThis, "fetch", (url, options) => {
+    if (typeof url === "string" && url === "https://api.openai.com/v1/responses") {
+      modelCalls++;
+      return Promise.resolve(new Response(null, { status: 500 }));
+    }
+    assert.equal(url.origin, context.site.url);
+    if (url.pathname.endsWith("/settings")) assert.equal(options.headers?.Authorization, undefined);
+    return new Promise(resolve => pending.set(url.pathname, resolve));
+  });
+  const logs = t.mock.method(console, "info", () => {});
+  const result = handle(request(), context);
+  assert.equal(pending.size, 2);
+  pending.get("/.netlify/identity/user")(Response.json(user));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(modelCalls, 0);
+  pending.get("/.netlify/identity/settings")(Response.json({ autoconfirm: false }));
+  const failedRead = await result;
+  assert.equal(modelCalls, 1);
+  assert.equal(failedRead.status, 502);
+  assert.equal(failedRead.headers.get("Timing-Allow-Origin"), appOrigin);
+  assert.equal(failedRead.headers.get("Access-Control-Expose-Headers"), "Server-Timing");
+  assert.match(failedRead.headers.get("Server-Timing"), /^identity;dur=\d+, body;dur=\d+, model;dur=\d+$/);
+  assert.equal(logs.mock.callCount(), 1);
+  const [label, durations] = logs.mock.calls[0].arguments;
+  assert.equal(label, "quest_read_ms");
+  assert.deepEqual(Object.keys(durations), ["identity", "body", "model"]);
+  assert.ok(Object.values(durations).every(value => Number.isInteger(value) && value >= 0));
 });
 
 test("invalid body types, dimensions and sizes are rejected before a model request", async t => {
@@ -130,9 +173,9 @@ test("a verified owner sends one fixed OCR request and receives validated cards 
     assert.equal(body.text.format.strict, true);
     assert.equal(body.input[0].content[0].image_url, "data:image/jpeg;base64," + jpeg.toString("base64"));
     if (providerFailure) return new Response(openAiKey, { status: 500 });
-    const card = { readable: true, number: null, completed: 2, target: 10, remaining: 8, baseReward: "¥200", bonusTiers: [] };
-    const cards = screen === "selection" ? [{ ...card, number: 2, completed: null, remaining: null }] : [card];
-    const text = JSON.stringify({ screen, cards, periodText: null, lastCardBottom: screen === "selection" ? "visible" : "not_applicable" });
+    const card = { ok: true, goal: 10, yen: "¥200", bonus: [] };
+    const cards = screen === "selection" ? [{ ...card, n: 2 }] : [{ ...card, done: 2, left: 8 }];
+    const text = JSON.stringify({ screen, cards, period: null, bottom: screen === "selection" ? "visible" : null });
     return Response.json({ status: "completed", output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text }] }] });
   });
   const result = await handle(request(), context);

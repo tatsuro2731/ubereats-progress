@@ -18,7 +18,7 @@
   }
 
   async function signIn() {
-    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=103");
+    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=104");
     const request = await startTransfer();
     try { localStorage.setItem(pendingKey, JSON.stringify(request)); } catch {
       throw new Error("本人確認には、このブラウザーのサイトデータ保存を許可してください。");
@@ -52,7 +52,7 @@
       throw new Error("本人確認を開始したブラウザーでアプリを開き、もう一度お試しください。");
     }
     try {
-      const { openCredential } = await import("./quest-owner-transfer.mjs?v=103");
+      const { openCredential } = await import("./quest-owner-transfer.mjs?v=104");
       const refresh = await openCredential(pending, result);
       const session = await exchange(refresh);
       // The encrypted handoff identifies the recipient, not the issuer.
@@ -88,6 +88,12 @@
       refreshing = work.finally(() => { refreshing = null; });
     }
     return refreshing;
+  }
+
+  async function prepareRead() {
+    // The file picker can stay open while a stale session is renewed. A read
+    // that starts sooner joins the same refresh and still verifies the owner.
+    if (hasSession()) await getAccess().catch(() => {});
   }
 
   function signOut() {
@@ -141,5 +147,5 @@
     return { screen: payload.screen, periodText: typeof payload.periodText === "string" ? payload.periodText : null, candidates, skipped: payload.skipped };
   }
 
-  window.UberQuestOwner = { hasSession, signIn, signOut, init, read };
+  window.UberQuestOwner = { hasSession, signIn, signOut, init, prepareRead, read };
 })();

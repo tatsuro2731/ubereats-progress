@@ -4,11 +4,11 @@ const assert = require("node:assert/strict");
 const { read } = require("../src/quest-image-api.js");
 
 const input = { key: "test-key", imageUrl: "data:image/jpeg;base64,/9j/2Q==" };
-const example = { number: null, readable: true, completed: 20, target: 120, remaining: 100, baseReward: "¥13,220",
-  bonusTiers: [{ additionalCount: 10, reward: "+¥1,730" }] };
+const example = { done: 20, left: 100, ok: true, goal: 120, yen: "¥13,220",
+  bonus: [{ add: 10, yen: "+¥1,730" }] };
 function response(data) {
   return { ok: true, json: async () => ({ status: "completed", output: [{ type: "message", role: "assistant",
-    content: [{ type: "output_text", text: JSON.stringify(data.cards ? data : { screen: "progress", periodText: null, cards: [data], lastCardBottom: "not_applicable" }) }] }] }) };
+    content: [{ type: "output_text", text: JSON.stringify(data.cards ? data : { screen: "progress", period: null, cards: [data], bottom: null }) }] }] }) };
 }
 
 test("only the reviewed JPEG goes to OpenAI, the key is used only for authorization, and tiers are cumulative", async t => {
@@ -25,6 +25,9 @@ test("only the reviewed JPEG goes to OpenAI, the key is used only for authorizat
     assert.equal(body.store, false);
     assert.equal(body.model, "gpt-4.1-mini");
     assert.equal(body.text.format.strict, true);
+    const [selection, progress] = body.text.format.schema.properties.cards.items.anyOf;
+    assert.deepEqual(selection.required, ["n", "ok", "goal", "yen", "bonus"]);
+    assert.deepEqual(progress.required, ["done", "left", "ok", "goal", "yen", "bonus"]);
     assert.deepEqual(body.input, [{ role: "user", content: [{ type: "input_image", image_url: input.imageUrl, detail: "high" }] }]);
     return response(example);
   });
@@ -35,7 +38,7 @@ test("only the reviewed JPEG goes to OpenAI, the key is used only for authorizat
 });
 
 test("a missing remaining-count label and no bonus rows are valid", async t => {
-  t.mock.method(globalThis, "fetch", async () => response({ ...example, completed: 0, remaining: null, bonusTiers: [] }));
+  t.mock.method(globalThis, "fetch", async () => response({ ...example, done: 0, left: null, bonus: [] }));
   const result = await read(input);
   assert.equal(result.candidates[0].completed, 0);
   assert.deepEqual(result.candidates[0].tiers, [{ target: 120, reward: 13220 }]);
@@ -44,23 +47,23 @@ test("a missing remaining-count label and no bonus rows are valid", async t => {
 test("uncertain, incomplete, inconsistent and out-of-range readings cannot populate a quest", async t => {
   let change;
   t.mock.method(globalThis, "fetch", async () => response({ ...example, ...change }));
-  for (change of [{ readable: false }, { completed: null }, { completed: 207 }, { completed: 1.5 }, { target: "120" },
-    { remaining: 99 }, { remaining: undefined }, { baseReward: null }, { baseReward: "¥10,000,000" }, { baseReward: "¥,580" }, { baseReward: "¥7,58" }, { bonusTiers: null },
-    { bonusTiers: Array(5).fill(example.bonusTiers[0]) }, { bonusTiers: [null] },
-    { bonusTiers: [{ additionalCount: 9880, reward: "+¥200" }] }, { bonusTiers: [{ additionalCount: 10, reward: null }] }]) {
+  for (change of [{ ok: false }, { done: null }, { done: 207 }, { done: 1.5 }, { goal: "120" },
+    { left: 99 }, { left: undefined }, { yen: null }, { yen: "¥10,000,000" }, { yen: "¥,580" }, { yen: "¥7,58" }, { bonus: null },
+    { bonus: Array(5).fill(example.bonus[0]) }, { bonus: [null] },
+    { bonus: [{ add: 9880, yen: "+¥200" }] }, { bonus: [{ add: 10, yen: null }] }]) {
     await assert.rejects(read(input), /確定できません/);
   }
 });
 
 test("selection cards keep each printed yen digit and skip incomplete cards independently", async t => {
-  const card = (number, target, baseReward, bonus) => ({
-    number, readable: true, target, baseReward, completed: null, remaining: null,
-    bonusTiers: [{ additionalCount: 10, reward: bonus }]
+  const card = (n, goal, yen, extraYen) => ({
+    n, ok: true, goal, yen,
+    bonus: [{ add: 10, yen: extraYen }]
   });
   const periodText = "月曜日 午前4時00分 〜 金曜日 午前4時00分";
   const cards = [card(1, 120, "￥８，８４０", "＋￥１，０９０"), card(2, 110, "¥7,580", "+¥1,010"),
-    { ...card(3, 100, "¥6,420", null), bonusTiers: [] }];
-  let data = { screen: "selection", periodText, cards, lastCardBottom: "cut_off" };
+    { ...card(3, 100, "¥6,420", null), bonus: [] }];
+  let data = { screen: "selection", period: periodText, cards, bottom: "cut_off" };
   t.mock.method(globalThis, "fetch", async () => response(data));
   const result = await read(input);
   assert.equal(result.periodText, periodText);
@@ -71,17 +74,17 @@ test("selection cards keep each printed yen digit and skip incomplete cards inde
   ]);
   const totals = require("../src/app-core.js").questTierTotals(result.candidates[1].tiers);
   assert.deepEqual(totals.map(row => row.totalReward), [7580, 8590]);
-  data = { ...data, lastCardBottom: "visible" };
+  data = { ...data, bottom: "visible" };
   assert.equal((await read(input)).candidates[2].checkTiers, true, "a last option with fewer stages must be checked even if the model marked its lower edge visible");
-  for (const invalid of [[cards[0], cards[0]], [{ ...cards[1], baseReward: "¥,580" }],
-    [{ ...cards[1], completed: 0 }],
-    [{ ...cards[1], bonusTiers: [{ additionalCount: 10, reward: null }] }]]) {
+  for (const invalid of [[cards[0], cards[0]], [{ ...cards[1], yen: "¥,580" }],
+    [{ ...cards[1], done: 0 }],
+    [{ ...cards[1], bonus: [{ add: 10, yen: null }] }]]) {
     data = { ...data, cards: invalid };
     await assert.rejects(read(input), /確定できません/);
   }
-  data = { ...data, cards: [cards[1]], lastCardBottom: "uncertain" };
+  data = { ...data, cards: [cards[1]], bottom: "uncertain" };
   await assert.rejects(read(input), /確定できません/);
-  data = { screen: "other", periodText: null, cards: [], lastCardBottom: "not_applicable" };
+  data = { screen: "other", period: null, cards: [], bottom: null };
   await assert.rejects(read(input), /確定できません/);
 });
 
