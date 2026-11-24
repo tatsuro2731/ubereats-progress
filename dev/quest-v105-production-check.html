@@ -1,0 +1,59 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1"><title>クエスト本番計測</title>
+<h1>クエスト本番計測</h1><p>合成画像のみを選択してください。配達データはこの画面のメモリだけに保持します。画像を選ぶと本人用の本番中継に送信します。</p>
+<pre id="log"></pre><iframe title="検証用の配達進捗画面" id="test" style="width:98%;height:75vh;border:1px solid"></iframe>
+<script src="/ubereats-progress/src/quest-owner.js?v=105"></script>
+<script>
+(async()=>{
+  const log=document.querySelector('#log');
+  if(!UberQuestOwner.hasSession()){log.textContent='本人確認済みの本番アプリと同じブラウザーで開いてください。';return;}
+  const base=new URL('/ubereats-progress/',location.origin);
+  const response=await fetch(new URL('index.html?prod-compare=105',base),{cache:'no-store'});
+  if(!response.ok)throw Error('アプリの取得に失敗しました');
+  const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+  if(!doc.querySelector('script[src="src/quest-ui.js?v=105"]'))throw Error('v105の配信待ち');
+  const owner=doc.querySelector('script[src^="src/quest-owner.js"]');
+  if(!owner)throw Error('本人用の中継が見つかりません');
+  owner.remove();
+  // The authenticated production reader retains its native window. All editable
+  // data in the test frame uses a new in-memory Storage instance on each load.
+  function isolate() {
+    function store(){const values=new Map();return {get length(){return values.size;},getItem:k=>values.get(String(k))??null,setItem:(k,v)=>values.set(String(k),String(v)),removeItem:k=>values.delete(String(k)),clear:()=>values.clear(),key:i=>[...values.keys()][i]??null};}
+    Object.defineProperty(window,'localStorage',{value:store()});
+    Object.defineProperty(window,'sessionStorage',{value:store()});
+    window.UberQuestOwner=Object.freeze({init:async()=>false,hasSession:()=>parent.UberQuestOwner.hasSession(),prepareRead:()=>parent.UberQuestOwner.prepareRead(),
+      read:r=>parent.UberQuestOwner.read(r)});
+    const at=Date.parse('2026-11-23T04:00:00+09:00');
+    const quest={id:'synthetic-benchmark',template:'weekday',startAt:at,endAt:at+4*86400000,boundaryMinutes:240,tiers:[{target:40,reward:3680},{target:50,reward:1290},{target:65,reward:2050}],goalIndex:0,workDays:['2026-11-23','2026-11-24','2026-11-25','2026-11-26'],adjustments:{'2026-11-23':16},sales:{}};
+    localStorage.setItem('ubereatsProgressQuestV1',JSON.stringify({version:1,counter:{done:0,epoch:0,startedAt:at},sequence:0,entries:[],quests:[quest],selectedId:quest.id}));
+  }
+  const setup=doc.createElement('script');setup.textContent='('+isolate.toString()+')();';
+  const baseTag=doc.createElement('base');baseTag.href=base.href;
+  doc.head.prepend(baseTag,setup);
+  const frame=document.querySelector('#test');let sequence=0;
+  frame.onload=()=>{
+    const win=frame.contentWindow,body=frame.contentDocument;
+    if(!body.querySelector('#questTab'))return;
+    let start=null,networkStart=0;
+    body.addEventListener('change',event=>{
+      if(event.target.id==='questImageFile'&&event.target.files?.length){start=win.performance.now();networkStart=performance.now();}
+    },true);
+    new MutationObserver(()=>{
+      if(start===null)return;
+      const status=body.querySelector('#questImageStatus').textContent;
+      const note=body.querySelector('#questImageDateNote').textContent;
+      const err=body.querySelector('#questImageError');
+      const count=body.querySelector('#questInitialTotal').value;
+      const quick=status.includes('登録済みのクエストと一致しました');
+      if(!(quick||status.includes('進行中のクエストを入力しました')||!err.hidden))return;
+      const row={sample:++sequence,mode:quick?'count':'full',count,ms:Math.round(win.performance.now()-start),error:!err.hidden};
+      const resource=performance.getEntriesByType('resource').filter(e=>e.startTime>=networkStart&&e.name==='https://ubereats-quest-reader.netlify.app/api/quest-progress').at(-1);
+      if(resource){row.relayRoundTripMs=Math.round(resource.duration);row.server=Object.fromEntries(resource.serverTiming.map(t=>[t.name,t.duration]));}
+      if(!row.error && (count!=='18'||(!quick&&!note.includes('累計18件'))))row.error=true;
+      start=null;log.textContent+=JSON.stringify(row)+'\n';
+    }).observe(body.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden']});
+    body.querySelector('#questTab').click();
+    log.textContent='v105 本番中継・テスト用クエスト16件\n';
+  };
+  frame.srcdoc='<!doctype html>'+doc.documentElement.outerHTML;
+})().catch(e=>document.querySelector('#log').textContent=e.message);
+</script></html>
