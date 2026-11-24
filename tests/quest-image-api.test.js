@@ -159,6 +159,30 @@ test("selection cards keep each printed yen digit and skip incomplete cards inde
   await assert.rejects(read(input), /確定できません/);
 });
 
+test("a footer covering only the margin keeps quest 3, but a missing or obscured reward row does not", async t => {
+  const card = (n, goal, yen, extra) => ({ n, ok: true, goal, yen, bonus: [{ add: 10, yen: extra }] });
+  const cards = [card(1, 120, "¥12,460", "+¥1,640"), card(2, 110, "¥10,580", "+¥1,500"), card(3, 100, "¥8,850", "+¥1,380")];
+  const data = { screen: "selection", period: "金曜日 午前4時00分 ～ 月曜日 午前4時00分", cards, bottom: "padding_only" };
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    const values = JSON.parse(options.body).text.format.schema.properties.bottom.enum;
+    assert.ok(values.includes("padding_only"));
+    return response(data);
+  });
+  const complete = await read(input);
+  assert.deepEqual(complete.candidates.map(c => c.label), ["クエスト1", "クエスト2", "クエスト3"]);
+  assert.deepEqual(complete.candidates[2].tiers, [{ target: 100, reward: 8850 }, { target: 110, reward: 1380 }]);
+  assert.equal(complete.skipped, 0);
+  for (const bottom of ["cut_off", "uncertain", null]) {
+    data.bottom = bottom;
+    assert.deepEqual((await read(input)).candidates, complete.candidates.slice(0, 2));
+  }
+  data.bottom = "padding_only";
+  for (const bonus of [[], [{ add: 10, yen: null }], [{ add: null, yen: "+¥1,380" }], [{ add: 10, yen: "+¥1,38" }]]) {
+    data.cards = [cards[0], cards[1], { ...cards[2], bonus }];
+    assert.deepEqual((await read(input)).candidates, complete.candidates.slice(0, 2));
+  }
+});
+
 test("invalid inputs never send the key or an arbitrary URL", async t => {
   const fetch = t.mock.method(globalThis, "fetch", () => assert.fail("unexpected network request"));
   for (const imageUrl of ["https://example.com/image.jpeg", "blob:test", "data:image/png;base64,abcd",

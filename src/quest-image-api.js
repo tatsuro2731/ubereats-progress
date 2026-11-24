@@ -24,7 +24,7 @@
           record({ n: integerOrNull, ...rewards }),
           record({ done: integerOrNull, left: integerOrNull, ...rewards })
         ] } },
-        bottom: { type: ["string", "null"], enum: ["visible", "cut_off", "uncertain", null] }
+        bottom: { type: ["string", "null"], enum: ["visible", "padding_only", "cut_off", "uncertain", null] }
       }),
       $defs: { bonusRow: record({ add: integerOrNull, yen: textOrNull }) }
     }
@@ -36,7 +36,9 @@
     "Copy every bonus row in order. add and yen are printed additional rides and reward, never totals.",
     "Copy each amount with its yen sign, every digit, commas and any leading plus. Recheck the digit immediately after the yen sign. Never infer digits, rows, or amounts from other cards.",
     "ok means every digit and row on that card is legible and consistent with the summary. A progress crop may omit the header but must show the fraction and all reward rows, including the final bonus row in full.",
-    "For the LAST selection card set bottom=cut_off if its sides disappear behind the sticky 完了 button, navigation bar, or image edge before its own lower border. Use visible for a visible lower outline, uncertain if unclear, null outside selection.",
+    "Inspect the LAST selection card above the sticky 完了 footer, navigation bar or image edge. Read each printed count and yen amount, including dim locked bonus rows.",
+    "bottom=visible when its lower outline is visible. Use padding_only when the last reward row is fully legible and only blank space or the bottom outline is obscured. A missing bottom border alone does not make ok false.",
+    "Check the spacing and end of the reward list for a continuation. If the footer interrupts a row, a connecting line continues into it, or an expected bonus row is hidden, use cut_off. If you cannot tell whether the reward list ends there, use uncertain. Use null outside selection.",
     "period is the exact Japanese start–end date/time range if both ends are visible, otherwise null. Exclude the selection deadline; do not infer dates or years."
   ].join(" ");
   class UnreadableQuest extends Error {
@@ -82,10 +84,12 @@
     const candidates = [];
     for (const [index, card] of data.cards.entries()) {
       const lastChoice = selection && index === data.cards.length - 1;
-      if (lastChoice && data.bottom !== "visible") continue;
+      if (lastChoice && data.bottom !== "visible" && data.bottom !== "padding_only") continue;
       const candidate = candidateFrom(card, selection);
       if (!candidate) continue;
       if (lastChoice && candidates.some(other => other.tiers.length > candidate.tiers.length)) {
+        // With no lower outline, a shorter list may have another row behind the footer.
+        if (data.bottom === "padding_only") continue;
         candidate.checkTiers = true;
       }
       candidates.push(candidate);
