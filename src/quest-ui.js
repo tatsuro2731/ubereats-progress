@@ -129,6 +129,18 @@
     byId("questConfigError").hidden = true;
     byId("questStartDate").focus();
   }
+  function savedProgressHint() {
+    if (!editingId || editingId === "new") return undefined;
+    const state = store.read();
+    const quest = state.quests.find(item => item.id === editingId);
+    if (!quest) return undefined;
+    const value = core.calculateQuest(quest, state.entries);
+    if (value.phase !== "active" || value.total > quest.tiers[0].target) return undefined;
+    const saved = core.questPeriodFields(quest);
+    if (Object.entries(periodFields()).some(([field, date]) => date !== saved[field])) return undefined;
+    return { startAt: quest.startAt, endAt: quest.endAt, tiers: quest.tiers.map(({ target, reward }) => ({ target, reward })), total: value.total };
+  }
+
   async function readQuestImage(file, pickedAsOwner) {
     if (!file) return;
     resetImage();
@@ -150,14 +162,15 @@
     }, 60000);
     try {
       text("questImageStatus", "送信する画像を準備しています…");
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=104");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=105");
       if (signal.aborted) return;
       const imageUrl = await crop.defaultJpeg(file, { signal });
       if (signal.aborted) return;
       if (!owner.hasSession()) throw new Error("読み取りを続けるには、もう一度本人確認してください。");
       text("questImageStatus", "OpenAIでクエストを読み取っています…");
-      const result = await owner.read({ imageUrl, signal });
-      if (!signal.aborted) showImageResult(result, file);
+      const progressHint = savedProgressHint();
+      const result = await owner.read({ imageUrl, signal, progressHint });
+      if (!signal.aborted) showImageResult(result, file, progressHint);
     } catch (error) {
       if (signal.aborted) return;
       updateOwnerControls();
@@ -170,9 +183,26 @@
     }
   }
 
-  function showImageResult(result, file) {
-    imageResult = { ...result, period: core.readQuestImagePeriod(result.periodText, Date.now(), result.screen === "selection") };
+  function showImageResult(result, file, progressHint) {
+    if (result.screen === "count") {
+      const current = savedProgressHint();
+      if (!current || !progressHint || current.startAt !== progressHint.startAt || current.endAt !== progressHint.endAt ||
+          JSON.stringify(current.tiers) !== JSON.stringify(progressHint.tiers)) throw new Error("読み取り中にクエストが変わりました。画像を選び直してください。");
+    }
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     imagePreviewUrl = URL.createObjectURL(file); byId("questImageOriginal").src = imagePreviewUrl; byId("questImagePreview").hidden = false;
+    if (result.screen === "count") {
+      imageCountApplied = true;
+      checkPeriodEdit();
+      byId("questInitialTotal").value = String(result.completed);
+      byId("questInitialToday").value = result.completed === 0 ? "0" : "";
+      text("questImageStatus", `登録済みのクエストと一致しました。累計${result.completed}件を入力しました。`);
+      text("questImageDateNote", "元の画像と累計を確認し、今日の件数を入力して保存してください。");
+      byId("questImageDateNote").hidden = false;
+      byId("questInitialToday").focus();
+      return;
+    }
+    imageResult = { ...result, period: core.readQuestImagePeriod(result.periodText, Date.now(), result.screen === "selection") };
     byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
       const button = document.createElement("button"); button.type = "button"; button.className = "questImageChoice"; button.setAttribute("aria-pressed", "false");
       const title = document.createElement("strong"); title.textContent = candidate.label; button.append(title);
@@ -216,7 +246,7 @@
     byId("questOwnerSignIn").hidden = signedIn;
     byId("questOwnerSignOut").hidden = !signedIn;
     text("questOwnerNotice", signedIn
-      ? "画像を選ぶと、画像全体をNetlify経由でOpenAIに1回送信します。送信ごとにAPI利用料がかかります。"
+      ? "画像を選ぶと、Netlify経由でOpenAIに送信します。進行中のクエストを編集中は登録内容と画像を照合し、判定できない場合は画像全体を再解析します。API利用は最大2回です。"
       : "所有者は一度本人確認すると、画像を選ぶだけで送信できます。ご自身のAPIキーで読み取る場合は、画像を選んで送信範囲を確認してください。");
   }
 
@@ -283,12 +313,13 @@
     text("questApiNotice", manualOwnerSession
       ? "選択範囲をNetlify経由でOpenAIへ送ります。送信ごとにAPI利用料がかかります。"
       : "ご自身のAPIキーで選択範囲をOpenAIへ直接送ります。送信ごとにAPI利用料がかかります。");
+    if (editingId && editingId !== "new") byId("questApiNotice").textContent += " 進行中のクエストは登録内容と照合し、必要に応じて最大2回読み取ります。";
     byId("questApiOpen").hidden = true;
     byId("questApiPanel").hidden = false;
     byId("questImageError").hidden = true;
     text("questImageStatus", "送信範囲を準備しています…");
     try {
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=104");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=105");
       if (apiController !== controller) return;
       const getCrop = await crop.open(file, byId("questApiCrop"), { signal: controller.signal });
       if (apiController !== controller) return;
@@ -323,14 +354,14 @@
     try {
       const imageUrl = getApiCrop();
       text("questImageStatus", "選択範囲をOpenAIで読み取っています…");
-      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=104");
+      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=105");
       if (apiController !== controller) return;
-      const request = { imageUrl, signal: controller.signal };
+      const request = { imageUrl, signal: controller.signal, progressHint: savedProgressHint() };
       if (!manualOwnerSession) request.key = key;
       const result = await api.read(request);
       if (apiController !== controller) return;
+      showImageResult(result, lastImageFile, request.progressHint);
       closeApiPanel();
-      showImageResult(result, lastImageFile);
     } catch (error) {
       if (apiController !== controller) return;
       if (manualOwnerSession && !owner.hasSession()) {

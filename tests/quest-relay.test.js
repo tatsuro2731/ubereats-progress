@@ -37,6 +37,7 @@ test("only the app origin passes preflight and unauthorized callers cannot trigg
   assert.equal(preflight.headers.get("Access-Control-Max-Age"), "600");
   assert.equal(preflight.headers.get("Cache-Control"), "no-store");
   assert.match(preflight.headers.get("Access-Control-Allow-Headers"), /Authorization/);
+  assert.match(preflight.headers.get("Access-Control-Allow-Headers"), /X-Quest-Progress/);
   const other = await handle(request({ headers: { Origin: "https://other.invalid" } }), context);
   assert.equal(other.status, 403);
   assert.equal(other.headers.get("Access-Control-Allow-Origin"), null);
@@ -45,6 +46,29 @@ test("only the app origin passes preflight and unauthorized callers cannot trigg
   assert.equal((await handle(request({ headers: { Authorization: "" } }), context)).status, 401);
   assert.equal((await handle(request(), context)).status, 503);
   assert.equal(fetch.mock.callCount(), 0);
+});
+
+test("the authenticated relay passes only a bounded progress hint and emits a count-only result", async t => {
+  configure(t, { QUEST_OWNER_ID: user.id, QUEST_OPENAI_API_KEY: openAiKey });
+  const hint = { startAt: 1795374000000, endAt: 1795719600000, total: 16, tiers: [{ target: 40, reward: 3680 }] };
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    if (String(url).endsWith("/identity/user")) return Response.json(user);
+    calls.push(url);
+    if (url.endsWith("/responses")) return new Response(null, { status: 500 });
+    assert.equal(options.headers.Authorization, "Bearer " + openAiKey);
+    assert.equal(JSON.parse(options.body).model, "gpt-6-luna");
+    return Response.json({ answers: [
+      { type: "predicate", name: "same_quest", probability: 1 },
+      { type: "choice", name: "remaining", choice: "22", confidence: 1 },
+      { type: "choice", name: "completed", choice: "18", confidence: 1 }
+    ] });
+  });
+  const handle = await relay;
+  const result = await handle(request({ headers: { "X-Quest-Progress": JSON.stringify(hint) } }), context);
+  assert.deepEqual(await result.json(), { screen: "count", completed: 18 });
+  for (const value of ["{", "x".repeat(513)]) await handle(request({ headers: { "X-Quest-Progress": value } }), context);
+  assert.deepEqual(calls.map(url => url.split("/").at(-1)), ["decisions", "responses", "responses"]);
 });
 
 test("only a confirmed owner from this site's Identity can invoke OCR", async t => {

@@ -18,7 +18,7 @@
   }
 
   async function signIn() {
-    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=104");
+    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=105");
     const request = await startTransfer();
     try { localStorage.setItem(pendingKey, JSON.stringify(request)); } catch {
       throw new Error("本人確認には、このブラウザーのサイトデータ保存を許可してください。");
@@ -52,7 +52,7 @@
       throw new Error("本人確認を開始したブラウザーでアプリを開き、もう一度お試しください。");
     }
     try {
-      const { openCredential } = await import("./quest-owner-transfer.mjs?v=104");
+      const { openCredential } = await import("./quest-owner-transfer.mjs?v=105");
       const refresh = await openCredential(pending, result);
       const session = await exchange(refresh);
       // The encrypted handoff identifies the recipient, not the issuer.
@@ -118,13 +118,15 @@
     return Uint8Array.from(binary, c => c.charCodeAt(0));
   }
 
-  async function read({ imageUrl, signal }) {
+  async function read({ imageUrl, signal, progressHint }) {
     const image = jpegBytes(imageUrl);
     const access = await getAccess();
     if (signal?.aborted) throw new DOMException("読み取りを中止しました。", "AbortError");
+    const headers = { Authorization: "Bearer " + access, "Content-Type": "image/jpeg" };
+    if (progressHint) headers["X-Quest-Progress"] = JSON.stringify(progressHint);
     const response = await fetch(readUrl, {
       method: "POST", credentials: "omit", cache: "no-store", redirect: "error", referrerPolicy: "no-referrer", signal,
-      headers: { Authorization: "Bearer " + access, "Content-Type": "image/jpeg" }, body: image
+      headers, body: image
     });
     if (response.status === 401 || response.status === 403) {
       if (load(sessionKey)?.access === access) signOut();
@@ -132,6 +134,10 @@
     }
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(payload?.error || "クエストのAPI読み取りに失敗しました。");
+    if (payload?.screen === "count" && progressHint && Number.isInteger(payload.completed) &&
+        payload.completed >= 0 && payload.completed <= progressHint.tiers[0].target) {
+      return { screen: "count", completed: payload.completed };
+    }
     const selection = payload?.screen === "selection";
     const candidates = payload?.candidates;
     if ((!selection && payload?.screen !== "progress") || !Array.isArray(candidates) ||

@@ -11,6 +11,77 @@ function response(data) {
     content: [{ type: "output_text", text: JSON.stringify(data.cards ? data : { screen: "progress", period: null, cards: [data], bottom: null }) }] }] }) };
 }
 
+const progressHint = { startAt: 1795374000000, endAt: 1795719600000,
+  total: 16, tiers: [{ target: 40, reward: 3680 }, { target: 50, reward: 1290 }] };
+const sameQuest = { type: "predicate", name: "same_quest", probability: 0.99 };
+const remaining = { type: "choice", name: "remaining", choice: "22", confidence: 0.99 };
+const completed = { type: "choice", name: "completed", choice: "18", confidence: 0.98 };
+
+test("a matching quest returns only the exact count, including zero, without full transcription", async t => {
+  let choice = "18";
+  const fetch = t.mock.method(globalThis, "fetch", async (url, options) => {
+    assert.equal(url, "https://api.openai.com/v1/decisions");
+    const body = JSON.parse(options.body);
+    assert.equal(body.model, "gpt-6-luna");
+    assert.equal(body.input[0].content[0].image_url, input.imageUrl);
+    assert.ok(body.questions[1].choices.some(c => c.value === choice));
+    assert.ok(body.questions[1].choices.some(c => c.value === "other"));
+    return Response.json({ answers: [{ ...completed, choice }, sameQuest, { ...remaining, choice: String(40 - Number(choice)) }] });
+  });
+  assert.deepEqual(await read({ ...input, progressHint }), { screen: "count", completed: 18 });
+  choice = "0";
+  assert.deepEqual(await read({ ...input, progressHint: { ...progressHint, total: 0 } }), { screen: "count", completed: 0 });
+  assert.equal(fetch.mock.callCount(), 2);
+});
+
+test("unclear, refused, invalid and unavailable decisions all fall back once to the ordinary reader", async t => {
+  let decision;
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async url => {
+    calls.push(url.split("/").at(-1));
+    return calls.at(-1) === "decisions" ? decision : response(example);
+  });
+  for (const answers of [[sameQuest, { ...completed, choice: "other" }], [sameQuest, { ...completed, choice: "38" }],
+    [{ ...sameQuest, probability: 0.4 }, completed], [sameQuest, { ...completed, confidence: 0.8 }],
+    [sameQuest, { type: "refusal", name: "completed" }], [completed, completed], [sameQuest, completed, { ...remaining, choice: "21" }], [sameQuest, completed, { ...remaining, choice: "other" }], null]) {
+    decision = answers ? Response.json({ answers: answers.length === 2 ? [...answers, remaining] : answers }) : new Response(null, { status: 403 });
+    calls.length = 0;
+    assert.equal((await read({ ...input, progressHint })).candidates[0].completed, 20);
+    assert.deepEqual(calls, ["decisions", "responses"]);
+  }
+  calls.length = 0;
+  await read({ ...input, progressHint: { ...progressHint, tiers: [{ target: "from user", reward: 0 }] } });
+  assert.deepEqual(calls, ["responses"]);
+});
+
+test("cancelling the decision request does not start a second paid call", async t => {
+  const controller = new AbortController();
+  const fetch = t.mock.method(globalThis, "fetch", async (_url, { signal }) => {
+    controller.abort();
+    assert.ok(signal.aborted);
+    throw new DOMException("Cancelled", "AbortError");
+  });
+  await assert.rejects(read({ ...input, progressHint, signal: controller.signal }), { name: "AbortError" });
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
+test("a slow Decisions request times out independently and the full reader still works", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, { signal }) => {
+    calls.push(url.split("/").at(-1));
+    if (calls.at(-1) === "responses") {
+      assert.equal(signal.aborted, false);
+      return response(example);
+    }
+    return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+  });
+  const reading = read({ ...input, progressHint, signal: new AbortController().signal });
+  t.mock.timers.tick(3000);
+  assert.equal((await reading).candidates[0].completed, 20);
+  assert.deepEqual(calls, ["decisions", "responses"]);
+});
+
 test("only the reviewed JPEG goes to OpenAI, the key is used only for authorization, and tiers are cumulative", async t => {
   const signal = new AbortController().signal;
   const fetch = t.mock.method(globalThis, "fetch", async (url, options) => {

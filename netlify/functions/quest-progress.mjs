@@ -55,7 +55,7 @@ export default async function questProgress(request, context) {
   else if (!relayOwnerCheck) return fail(403, forbidden);
   if (request.method === "OPTIONS") {
     headers.set("Access-Control-Allow-Methods", allowedMethods);
-    headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Quest-Progress");
     headers.set("Access-Control-Max-Age", "600");
     return new Response(null, { status: 204, headers });
   }
@@ -121,10 +121,15 @@ export default async function questProgress(request, context) {
   if (!bytes) return failedRead(413, tooLarge);
   if (!isCroppedJpeg(bytes)) return failedRead(422, "クエストのJPEG画像を選んでください。");
 
+  const hint = request.headers.get("X-Quest-Progress");
+  let progressHint;
+  if (hint && hint.length <= 512) {
+    try { progressHint = JSON.parse(hint); } catch { /* A missing or invalid hint uses the full reader. */ }
+  }
   modelStart = performance.now();
   try {
     const result = await questImageApi.read({
-      key, imageUrl: "data:image/jpeg;base64," + bytes.toString("base64"),
+      key, imageUrl: "data:image/jpeg;base64," + bytes.toString("base64"), progressHint,
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(35000)])
     });
     // Installed v101 clients expect this field for their progress-only import.

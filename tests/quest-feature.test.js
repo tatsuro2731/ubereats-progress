@@ -363,6 +363,7 @@ function imageImportHarness({ periodText = null, openCrop = async () => () => cr
       super();
       Object.assign(this, { tagName, value: "", textContent: "", hidden: false, children: [], dataset: {}, attributes: {}, className: "", open: false });
       this.classList = { toggle() {} };
+      this.style = {};
     }
     get firstElementChild() { return this.children[0]; }
     append(...children) { this.children.push(...children); }
@@ -406,6 +407,7 @@ function imageImportHarness({ periodText = null, openCrop = async () => () => cr
   document.body = new Element("body"); document.head = new Element("head");
   document.hidden = false; document.activeElement = document.body;
   document.getElementById = id => elements.get(id) || null; document.createElement = tag => new Element(tag);
+  document.createTextNode = text => Object.assign(new Element("#text"), { textContent: text });
   class FakeDate extends Date {
     constructor(...args) { super(...(args.length ? args : [NOW])); }
     static now() { return NOW; }
@@ -509,6 +511,7 @@ test("the first selection calls only the owner API once and keeps candidates sep
   assert.equal(defaultJpeg.mock.callCount(), 1);
   assert.equal(read.mock.callCount(), 1);
   assert.equal(read.mock.calls[0].arguments[0].imageUrl, cropUrl);
+  assert.equal(read.mock.calls[0].arguments[0].progressHint, undefined);
   assert.equal(app.element("questApiPanel").hidden, true);
   assert.equal(app.element("questImageSkipped").hidden, false);
   assert.equal(app.element("questTierInputs").querySelector("[data-tier-reward]").value, "");
@@ -518,6 +521,30 @@ test("the first selection calls only the owner API once and keeps candidates sep
   assert.deepEqual(app.element("questTierInputs").querySelectorAll("[data-tier-reward]").map(el => el.value), ["7580", "1010"]);
   assert.equal(app.element("questStartDate").value, "2026-09-14");
   assert.equal(app.storage.getItem(QUEST_KEY), stored);
+});
+
+test("an exact count on an existing quest only fills the count fields and waits for save", async () => {
+  const read = test.mock.fn(async () => ({ screen: "count", completed: 7 }));
+  const app = imageImportHarness({ owner: testOwner(read) });
+  const state = JSON.parse(app.storage.getItem(QUEST_KEY));
+  state.quests.push(quest());
+  app.storage.setItem(QUEST_KEY, JSON.stringify(state));
+  await app.emit("questTab", "click");
+  await app.emit("questEdit", "click");
+  const period = app.period();
+  const reward = app.element("questTierInputs").querySelector("[data-tier-reward]");
+  reward.value = "11000";
+  await app.importImage();
+  assert.equal(read.mock.callCount(), 1);
+  const hint = read.mock.calls[0].arguments[0].progressHint;
+  assert.equal(hint.total, 0);
+  assert.equal(hint.tiers[0].reward, 12000);
+  assert.equal(reward.value, "11000");
+  assert.deepEqual(app.period(), period);
+  assert.equal(app.element("questInitialTotal").value, "7");
+  assert.equal(app.element("questInitialToday").value, "");
+  assert.equal(app.element("questInitialCounts").hidden, false);
+  assert.equal(app.storage.getItem(QUEST_KEY), JSON.stringify(state));
 });
 
 test("a guest previews the crop and explicitly sends it with a transient personal key", async () => {
