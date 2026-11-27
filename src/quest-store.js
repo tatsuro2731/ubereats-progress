@@ -95,5 +95,14 @@
       return { ...state, selectedId: quest.id, quests: exists ? state.quests.map(item => item.id === quest.id ? quest : item) : [...state.quests, quest] };
     });
   }
-  root.UberQuestStore = Object.freeze({ read, update, currentDone, saveProgress, resetCounter, putQuest, report });
+  function alignCounts(id, total, today, at) {
+    return update(state => {
+      const index = state.quests.findIndex(quest => quest.id === id);
+      if (index < 0) throw new Error("表示するクエストを選び直してください。");
+      state.quests[index] = core.alignQuestCounts(state.quests[index], state.entries, total, today, at);
+      state.selectedId = id;
+      if (state.needsCountCheck) state.needsCountCheck = false;
+    });
+  }
+  root.UberQuestStore = Object.freeze({ read, update, currentDone, saveProgress, resetCounter, putQuest, alignCounts, report });
 })(typeof window === "object" ? window : globalThis);

@@ -520,5 +520,5 @@ if (typeof window.setInterval === "function") {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=106").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=107").catch(() => {}));
 }

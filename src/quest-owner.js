@@ -18,7 +18,7 @@
   }
 
   async function signIn() {
-    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=106");
+    const { startTransfer } = await import("./quest-owner-transfer.mjs?v=107");
     const request = await startTransfer();
     try { localStorage.setItem(pendingKey, JSON.stringify(request)); } catch {
       throw new Error("本人確認には、このブラウザーのサイトデータ保存を許可してください。");
@@ -52,7 +52,7 @@
       throw new Error("本人確認を開始したブラウザーでアプリを開き、もう一度お試しください。");
     }
     try {
-      const { openCredential } = await import("./quest-owner-transfer.mjs?v=106");
+      const { openCredential } = await import("./quest-owner-transfer.mjs?v=107");
       const refresh = await openCredential(pending, result);
       const session = await exchange(refresh);
       // The encrypted handoff identifies the recipient, not the issuer.

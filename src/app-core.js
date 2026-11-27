@@ -538,9 +538,10 @@
       adjustments[key] = finite(adjustments[key]) + wanted - finite(counts[key]);
       counts[key] = wanted;
     };
-    for (const key of dates) if (counts[key] < 0) setCount(key, 0);
+    for (const key of earlier) if (counts[key] < 0) setCount(key, 0);
     if (includesToday) setCount(day, today);
-    let difference = total - Object.values(counts).reduce((sum, value) => sum + value, 0);
+    // The form may stay open overnight. Later business days keep their own deliveries.
+    let difference = total - today - earlier.reduce((sum, key) => sum + counts[key], 0);
     const unverifiedDays = new Set(quest.unverifiedDays || []);
     // A cumulative import cannot establish which of several past days contained deliveries.
     if (difference !== 0 && earlier.length > 1) earlier.forEach(key => unverifiedDays.add(key));

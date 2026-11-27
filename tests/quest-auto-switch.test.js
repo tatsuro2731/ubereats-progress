@@ -470,3 +470,64 @@ test("closing an unsaved official correction releases the held period without wr
   assert.equal(app.selected(), "weekend");
   assert.equal(app.writes(), 0);
 });
+
+test("correcting either first-day field saves both counts and survives reopening", () => {
+  const app = harness({ now: BOUNDARY });
+  const before = app.storage.get(PROGRESS_KEY);
+  for (const [field, count] of [["questAlignTotal", "17"], ["questAlignToday", "4"], ["questAlignTotal", "0"]]) {
+    app.details(true);
+    app.element(field).value = count;
+    app.emit(field, "input");
+    assert.equal(app.element("questAlignTotal").value, count);
+    assert.equal(app.element("questAlignToday").value, count);
+    app.emit("questAlignForm", "submit");
+    assert.equal(app.element("questTotal").textContent, count);
+    assert.match(app.element("questLive").textContent, new RegExp(`累計${count}件`));
+    assert.equal(harness({ now: BOUNDARY, state: app.read() }).element("questTotal").textContent, count);
+  }
+  assert.equal(app.storage.get(PROGRESS_KEY), before);
+});
+
+test("opening toggle does not prefill over an edit made immediately after opening", () => {
+  const app = harness();
+  app.emit("questAlignSummary", "click");
+  app.element("questAlignDetails").open = true;
+  app.element("questAlignTotal").value = "20";
+  app.emit("questAlignTotal", "input"); // dispatch the queued toggle after the input
+  assert.equal(app.element("questAlignTotal").value, "20");
+  assert.equal(app.element("questAlignToday").value, "7");
+  app.emit("questAlignForm", "submit");
+  assert.equal(app.element("questTotal").textContent, "20");
+});
+
+test("invalid later-day counts report the error by the inputs and can be corrected", () => {
+  const app = harness();
+  app.details(true);
+  app.element("questAlignToday").value = "12";
+  app.emit("questAlignToday", "input");
+  app.emit("questAlignForm", "submit");
+  assert.equal(app.element("questAlignDetails").open, true);
+  assert.equal(app.element("questAlignError").hidden, false);
+  assert.match(app.element("questAlignError").textContent, /累計以下/);
+  assert.equal(app.writes(), 0);
+  app.element("questAlignTotal").value = "15";
+  app.emit("questAlignTotal", "input");
+  app.emit("questAlignForm", "submit");
+  assert.equal(app.element("questTotal").textContent, "15");
+  assert.equal(app.element("questAlignError").hidden, true);
+});
+
+test("an overnight correction keeps deliveries recorded on the following business day", () => {
+  const nextDay = BOUNDARY + 2 * 86400000;
+  const app = harness({ now: nextDay - 1 });
+  app.details(true);
+  app.element("questAlignTotal").value = "32";
+  app.emit("questAlignTotal", "input");
+  app.element("questAlignToday").value = "17";
+  app.setTime(nextDay);
+  app.saveProgress({ done: "9" }, { countChange: true });
+  app.emit("questAlignForm", "submit");
+  assert.equal(app.element("questTotal").textContent, "34");
+  app.details(true);
+  assert.equal(app.element("questAlignToday").value, "2");
+});

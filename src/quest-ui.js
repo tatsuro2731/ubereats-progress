@@ -22,7 +22,6 @@
   let manualSelection = null;
   let selectionContext = null;
   let boundaryTimer = null;
-  let alignAt = null;
   let workDaysSignature = "";
   let imageController = null;
   let imageResult = null;
@@ -162,7 +161,7 @@
     }, 60000);
     try {
       text("questImageStatus", "送信する画像を準備しています…");
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=106");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=107");
       if (signal.aborted) return;
       const imageUrl = await crop.defaultJpeg(file, { signal });
       if (signal.aborted) return;
@@ -319,7 +318,7 @@
     byId("questImageError").hidden = true;
     text("questImageStatus", "送信範囲を準備しています…");
     try {
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=106");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=107");
       if (apiController !== controller) return;
       const getCrop = await crop.open(file, byId("questApiCrop"), { signal: controller.signal });
       if (apiController !== controller) return;
@@ -354,7 +353,7 @@
     try {
       const imageUrl = getApiCrop();
       text("questImageStatus", "選択範囲をOpenAIで読み取っています…");
-      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=106");
+      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=107");
       if (apiController !== controller) return;
       const request = { imageUrl, signal: controller.signal, progressHint: savedProgressHint() };
       if (!manualOwnerSession) request.key = key;
@@ -693,17 +692,58 @@
       salesDirty = false; render();
     }, "配達売上を保存しました。");
   });
-  byId("questAlignDetails").addEventListener("toggle", () => {
-    if (!byId("questAlignDetails").open) { alignAt = null; render(); return; }
-    try { alignAt = Date.now(); const state = store.read(); const value = core.calculateQuest(selected(state), state.entries, alignAt); byId("questAlignTotal").value = String(value.total); byId("questAlignToday").value = String(value.today); } catch (error) { errorMessage(error); }
+  const alignDetails = byId("questAlignDetails");
+  const totalInput = byId("questAlignTotal");
+  const todayInput = byId("questAlignToday");
+  let alignment = null;
+
+  function openAlignment() {
+    alignment = null;
+    text("questLive", "");
+    byId("questAlignError").hidden = true;
+    try {
+      const at = Date.now();
+      const state = store.read();
+      const quest = selected(state);
+      const value = core.calculateQuest(quest, state.entries, at);
+      const firstDay = at >= quest.startAt && value.day === value.dates[0];
+      alignment = { id: quest.id, at, day: value.day, firstDay };
+      totalInput.value = String(value.total);
+      todayInput.value = String(value.today);
+      text("questAlignHint", firstDay
+        ? "初日は累計と今日が同じ件数です。どちらか一方にUberの完了件数を入力してください。"
+        : "Uberの完了件数だけを入力してください。他社分は含めません。");
+    } catch (error) { errorMessage(error, "questAlignError"); }
+  }
+  // Native details queues its toggle event. Prefill before the fields become editable.
+  byId("questAlignSummary").addEventListener("click", () => {
+    if (!alignDetails.open) openAlignment();
   });
+  alignDetails.addEventListener("toggle", () => {
+    if (!alignDetails.open) { alignment = null; render(); }
+    else if (!alignment) openAlignment();
+  });
+  for (const input of [totalInput, todayInput]) {
+    input.addEventListener("input", () => {
+      if (alignment?.firstDay) {
+        const other = input === totalInput ? todayInput : totalInput;
+        other.value = input.value;
+      }
+      byId("questAlignError").hidden = true;
+    });
+  }
   byId("questAlignForm").addEventListener("submit", event => {
-    event.preventDefault(); attempt(() => {
-      const total = Number(byId("questAlignTotal").value); const today = Number(byId("questAlignToday").value);
-      const state = store.read(); store.putQuest(selected(state), { align: true, total, today, at: alignAt ?? Date.now() });
-      if (state.needsCountCheck) store.update(next => ({ ...next, needsCountCheck: false }));
-      byId("questAlignDetails").open = false;
-    }, "公式アプリの件数に合わせました。進捗画面の完了件数は変更しません。");
+    event.preventDefault();
+    try {
+      if (!alignment || alignment.id !== lastSelectedId) throw new Error("件数合わせを開き直してください。");
+      const total = Number(totalInput.value || NaN);
+      const today = Number(todayInput.value || NaN);
+      store.alignCounts(alignment.id, total, today, alignment.at);
+      text("questLive", `${dateLabel(alignment.day)}時点の累計${total}件（うち当日${today}件）を保存しました。`);
+      byId("questError").hidden = true;
+      byId("questAlignError").hidden = true;
+      alignDetails.open = false;
+    } catch (error) { errorMessage(error, "questAlignError"); }
   });
   showTab(location.hash === "#quest", false);
   if (owner) owner.init().then(signedIn => {
