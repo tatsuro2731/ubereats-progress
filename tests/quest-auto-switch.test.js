@@ -531,3 +531,50 @@ test("an overnight correction keeps deliveries recorded on the following busines
   app.details(true);
   assert.equal(app.element("questAlignToday").value, "2");
 });
+
+test("an upcoming quest directs today's ten deliveries to the existing current quest", () => {
+  const now = at("2026-11-27T11:49:00");
+  const active = quest("this-week", at("2026-11-27T04:00:00"), at("2026-11-30T04:00:00"));
+  const upcoming = quest("next-week", at("2026-12-04T04:00:00"), at("2026-12-07T04:00:00"), {
+    tiers: [{ target: 130, reward: 14100 }], sales: { "2026-12-04": 0 },
+  });
+  const app = harness({ state: stateFor([active, upcoming]), now });
+  const progressBefore = app.storage.get(PROGRESS_KEY);
+  app.choose(upcoming.id);
+  app.details(true);
+  assert.equal(app.element("questAlignForm").hidden, true);
+  assert.equal(app.element("questAlignCurrent").hidden, false);
+  assert.match(app.element("questAlignHint").textContent, /11\/27/);
+  assert.match(app.element("questAlignHint").textContent, /12\/4/);
+  app.emit("questAlignCurrent", "click");
+  assert.equal(app.selected(), active.id);
+  assert.equal(app.writes(), 0);
+
+  app.details(true);
+  assert.equal(app.element("questAlignForm").hidden, false);
+  app.element("questAlignToday").value = "10";
+  app.emit("questAlignToday", "input");
+  assert.equal(app.element("questAlignTotal").value, "10");
+  app.emit("questAlignForm", "submit");
+  const saved = app.read();
+  const reopened = harness({ state: saved, now });
+  assert.equal(reopened.selected(), active.id);
+  assert.equal(reopened.element("questTotal").textContent, "10");
+  assert.deepEqual(saved.quests.find(item => item.id === upcoming.id), upcoming);
+  assert.equal(saved.quests.length, 2);
+  assert.equal(app.storage.get(PROGRESS_KEY), progressBefore);
+});
+
+test("opening count alignment with only a future reservation leaves its data intact", () => {
+  const upcoming = quest("next-week", at("2026-12-04T04:00:00"), at("2026-12-07T04:00:00"));
+  const state = stateFor([upcoming]);
+  const app = harness({ state, now: at("2026-11-27T11:48:00") });
+  assert.equal(app.selected(), upcoming.id);
+  app.details(true);
+  assert.equal(app.element("questAlignForm").hidden, true);
+  assert.equal(app.element("questAlignCurrent").hidden, false);
+  app.periodic();
+  app.details(false);
+  assert.equal(app.writes(), 0);
+  assert.deepEqual(app.read(), state);
+});

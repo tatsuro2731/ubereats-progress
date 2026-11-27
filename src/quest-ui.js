@@ -77,26 +77,38 @@
     imagePreviewUrl = null;
     byId("questImageOriginal").removeAttribute("src");
     byId("questImageFile").value = "";
-    for (const id of ["questImageResults", "questImageError", "questImagePreview", "questImageDateNote"]) byId(id).hidden = true;
+    for (const id of ["questImageResults", "questImageError", "questImagePreview", "questImageDateNote", "questImageWeekField"]) byId(id).hidden = true;
     byId("questImagePreview").open = false;
     byId("questImageChoices").replaceChildren(); text("questImageStatus", ""); imageBusy(false);
+  }
+  function imagePeriodFields(period) {
+    // Uber can show the exclusive 04:00 boundary or the last included minute.
+    if (period.endTime === "03:59") return period;
+    return core.questPeriodFields({
+      startAt: Date.parse(`${period.startDate}T${period.startTime}:00+09:00`),
+      endAt: Date.parse(`${period.endDate}T${period.endTime}:00+09:00`)
+    });
+  }
+  function selectedImagePeriod() {
+    return imageResult.activePeriod && byId("questImageWeek").value === "active" ? imageResult.activePeriod : imageResult.period;
+  }
+  function resetPeriodCounts() {
+    const future = Date.parse(`${byId("questStartDate").value}T${byId("questStartTime").value}:00+09:00`) > Date.now();
+    for (const id of ["questInitialTotal", "questInitialToday"]) byId(id).value = future ? "0" : "";
   }
   function applyImageCandidate(index) {
     const candidate = imageResult?.candidates[index];
     if (!candidate) return;
     const before = ["questStartDate", "questStartTime", "questEndDate", "questEndTime"].map(id => byId(id).value).join();
-    const period = imageResult.period;
+    const period = selectedImagePeriod();
+    byId("questImageWeekField").hidden = !imageResult.activePeriod;
     if (period) {
-      // Uber shows either the 04:00 boundary or the already-inclusive 03:59.
-      // Keep the raw OCR period intact and convert only the form presentation.
-      const fields = period.endTime === "03:59" ? period : core.questPeriodFields({
-        startAt: Date.parse(`${period.startDate}T${period.startTime}:00+09:00`),
-        endAt: Date.parse(`${period.endDate}T${period.endTime}:00+09:00`)
-      });
+      const fields = imagePeriodFields(period);
       fillPeriod(fields);
       byId("questTemplate").value = period.template;
       text("questImageDateNote", period.dateSource === "calendar"
         ? `${fields.startDate} ${fields.startTime} 〜 ${fields.endDate} ${fields.endTime}までを入力しました。${period.inferred ? "年は推定です。" : ""}画像の対象期間を確認してください。`
+        : imageResult.activePeriod ? "画像には曜日だけが表示されています。「画像の対象期間」で週を選んでください。"
         : `画像には曜日だけが表示されているため、${fields.startDate} ${fields.startTime} 〜 ${fields.endDate} ${fields.endTime}までを仮入力しました。対象の週を確認し、違う場合は日付を変更してください。`);
     } else {
       text("questImageDateNote", "期間を読み取れなかったため、入力済みの日時を保持しました。Uberの画面と一致するか確認してください。未入力の日時は入力してください。");
@@ -108,10 +120,7 @@
     imageCountApplied = Number.isInteger(candidate.completed);
     checkPeriodEdit();
     const after = ["questStartDate", "questStartTime", "questEndDate", "questEndTime"].map(id => byId(id).value).join();
-    if (editingId === "new" || before !== after) {
-      const future = Date.parse(`${byId("questStartDate").value}T${byId("questStartTime").value}:00+09:00`) > Date.now();
-      for (const id of ["questInitialTotal", "questInitialToday"]) byId(id).value = future ? "0" : "";
-    }
+    if (editingId === "new" || before !== after) resetPeriodCounts();
     if (imageCountApplied) {
       byId("questInitialCounts").hidden = false;
       byId("questInitialTotal").required = byId("questInitialToday").required = true;
@@ -161,7 +170,7 @@
     }, 60000);
     try {
       text("questImageStatus", "送信する画像を準備しています…");
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=107");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=108");
       if (signal.aborted) return;
       const imageUrl = await crop.defaultJpeg(file, { signal });
       if (signal.aborted) return;
@@ -201,7 +210,22 @@
       byId("questInitialToday").focus();
       return;
     }
-    imageResult = { ...result, period: core.readQuestImagePeriod(result.periodText, Date.now(), result.screen === "selection") };
+    const now = Date.now();
+    const period = core.readQuestImagePeriod(result.periodText, now, result.screen === "selection");
+    imageResult = { ...result, period };
+    if (result.screen === "selection" && period?.next) {
+      const active = core.readQuestImagePeriod(result.periodText, now);
+      if (active && active.startDate !== period.startDate) {
+        imageResult.activePeriod = active;
+        const entered = periodFields();
+        const fields = imagePeriodFields(active);
+        const keepActive = (editingId !== "new" || !byId("questCurrentDraftNote").hidden) && Object.keys(entered).every(key => entered[key] === fields[key]);
+        options(byId("questImageWeek"), [
+          ["next", `次回 · ${dateLabel(period.startDate)} 開始`],
+          ["active", `開催中 · ${dateLabel(active.startDate)} 開始`]
+        ], keepActive ? "active" : "next");
+      }
+    }
     byId("questImageChoices").replaceChildren(...result.candidates.map((candidate, index) => {
       const button = document.createElement("button"); button.type = "button"; button.className = "questImageChoice"; button.setAttribute("aria-pressed", "false");
       const title = document.createElement("strong"); title.textContent = candidate.label; button.append(title);
@@ -318,7 +342,7 @@
     byId("questImageError").hidden = true;
     text("questImageStatus", "送信範囲を準備しています…");
     try {
-      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=107");
+      const crop = await loadImageModule("UberQuestImageCrop", "src/quest-image-crop.js?v=108");
       if (apiController !== controller) return;
       const getCrop = await crop.open(file, byId("questApiCrop"), { signal: controller.signal });
       if (apiController !== controller) return;
@@ -353,7 +377,7 @@
     try {
       const imageUrl = getApiCrop();
       text("questImageStatus", "選択範囲をOpenAIで読み取っています…");
-      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=107");
+      const api = manualOwnerSession ? owner : await loadImageModule("UberQuestImageApi", "src/quest-image-api.js?v=108");
       if (apiController !== controller) return;
       const request = { imageUrl, signal: controller.signal, progressHint: savedProgressHint() };
       if (!manualOwnerSession) request.key = key;
@@ -448,6 +472,7 @@
     if (!quest) return;
     const changedPeriod = quest.id !== lastSelectedId;
     if (changedPeriod) { lastSelectedId = quest.id; displayDay = null; salesDirty = false; byId("questAlignDetails").open = false; }
+    if (byId("questAlignDetails").open && alignment?.upcoming) openAlignment();
     const value = core.calculateQuest(quest, state.entries, now, displayDay);
     const automatic = core.currentQuest(state.quests, now);
     text("questAutoNotice", automatic && automatic.id !== quest.id && manualSelection !== quest.id && (salesDirty || editingId || byId("questAlignDetails").open)
@@ -541,7 +566,7 @@
     byId("questStartTime").value = "04:00";
     byId("questEndTime").value = "03:59";
   }
-  function openForm(isNew) {
+  function openForm(isNew, forToday = null) {
     try {
       const state = store.read(); const quest = isNew ? null : selected(state);
       editingId = quest ? quest.id : "new";
@@ -551,11 +576,25 @@
       text("questFormTitle", quest ? "クエストを編集" : "クエストを登録");
       byId("questInitialCounts").hidden = Boolean(quest);
       byId("questInitialTotal").required = !quest; byId("questInitialToday").required = !quest;
-      if (quest) {
-        byId("questTemplate").value = quest.template || "custom";
-        fillPeriod(core.questPeriodFields(quest));
-        quest.tiers.forEach(tier => addTier(tier.target, tier.reward)); refreshTierLabels(quest.goalIndex);
-      } else { fillTemplate(); addTier(120, ""); }
+      const source = quest || forToday?.suggestion;
+      byId("questCurrentDraftNote").hidden = !forToday;
+      if (forToday) {
+        text("questFormTitle", "今日のクエストを登録");
+        text("questCurrentDraftNote", source
+          ? "表示していた予約から報酬条件を仮入力しました。今週の公式条件を確認し、件数を入力して保存してください。"
+          : "今日を含む期間と公式の報酬条件・完了件数を入力してください。");
+      }
+      if (source) {
+        byId("questTemplate").value = source.template || "custom";
+        fillPeriod(core.questPeriodFields(source));
+        source.tiers.forEach(tier => addTier(tier.target, tier.reward)); refreshTierLabels(source.goalIndex);
+      } else {
+        if (forToday) {
+          const weekday = new Date(core.questDayKey(Date.now(), 240)).getUTCDay();
+          byId("questTemplate").value = weekday >= 1 && weekday <= 4 ? "weekday" : "weekend";
+        }
+        fillTemplate(); addTier(120, "");
+      }
       render(); byId("questTemplate").focus();
     } catch (error) { errorMessage(error); }
   }
@@ -624,6 +663,14 @@
     byId("questImageFile").click();
   });
   byId("questImageFile").addEventListener("change", event => readQuestImage(event.target.files[0], ownerAtPickerOpen));
+  byId("questImageWeek").addEventListener("change", () => {
+    if (!imageResult?.activePeriod) return;
+    const period = selectedImagePeriod();
+    fillPeriod(imagePeriodFields(period));
+    byId("questTemplate").value = period.template;
+    resetPeriodCounts();
+    checkPeriodEdit();
+  });
   byId("questImageStop").addEventListener("click", () => stopImageRead("読み取りを中止しました。"));
 
   byId("progressTab").addEventListener("click", () => showTab(false));
@@ -654,6 +701,8 @@
       const [hours, minutes] = byId("questStartTime").value.split(":").map(Number);
       const quest = { ...old, id: old ? old.id : `quest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, startAt, endAt, boundaryMinutes: hours * 60 + minutes, template: byId("questTemplate").value, tiers: tierRows().map(row => ({ target: Number(row.querySelector("[data-tier-count]").value), reward: Number(row.querySelector("[data-tier-reward]").value) })), goalIndex: Number(byId("questGoalInput").value), adjustments: old ? old.adjustments : {}, sales: old ? old.sales : {} };
       const error = core.validateQuest(quest, state.quests); if (error) throw new Error(error);
+      const now = Date.now();
+      if (!byId("questCurrentDraftNote").hidden && (now < startAt || now >= endAt)) throw new Error("今日の件数を登録するため、今日を含む開始日・終了日を指定してください。");
       const changedPeriod = old && (old.startAt !== startAt || old.endAt !== endAt);
       const needsAlign = !old || changedPeriod || imageCountApplied;
       if (needsAlign && (byId("questInitialTotal").value === "" || byId("questInitialToday").value === "")) throw new Error("この期間の公式の累計と今日の件数を入力してください。");
@@ -707,12 +756,23 @@
       const quest = selected(state);
       const value = core.calculateQuest(quest, state.entries, at);
       const firstDay = at >= quest.startAt && value.day === value.dates[0];
-      alignment = { id: quest.id, at, day: value.day, firstDay };
+      const upcoming = value.phase === "upcoming";
+      alignment = { id: quest.id, at, day: value.day, firstDay, upcoming };
       totalInput.value = String(value.total);
       todayInput.value = String(value.today);
-      text("questAlignHint", firstDay
-        ? "初日は累計と今日が同じ件数です。どちらか一方にUberの完了件数を入力してください。"
-        : "Uberの完了件数だけを入力してください。他社分は含めません。");
+      byId("questAlignForm").hidden = upcoming;
+      const currentButton = byId("questAlignCurrent");
+      currentButton.hidden = !upcoming;
+      if (upcoming) {
+        const current = core.currentQuest(state.quests, at);
+        const hasActive = current && current.startAt <= at && at < current.endAt;
+        text("questAlignHint", `表示中のクエストは${timeLabel(quest.startAt)}開始です。今日（${dateLabel(value.day)}）の配達は、今日を含むクエストに記録します。`);
+        currentButton.textContent = hasActive ? "開催中のクエストで件数を合わせる" : "今日のクエストを登録";
+      } else {
+        text("questAlignHint", firstDay
+          ? "初日は累計と今日が同じ件数です。どちらか一方にUberの完了件数を入力してください。"
+          : "Uberの完了件数だけを入力してください。他社分は含めません。");
+      }
     } catch (error) { errorMessage(error, "questAlignError"); }
   }
   // Native details queues its toggle event. Prefill before the fields become editable.
@@ -723,6 +783,45 @@
     if (!alignDetails.open) { alignment = null; render(); }
     else if (!alignment) openAlignment();
   });
+  byId("questAlignCurrent").addEventListener("click", () => {
+    try {
+      const state = store.read();
+      const source = selected(state);
+      const now = Date.now();
+      const current = core.currentQuest(state.quests, now);
+      alignDetails.open = false;
+      salesDirty = false;
+      manualSelection = null;
+      if (current && current.startAt <= now && now < current.endAt) {
+        render();
+        openAlignment();
+        alignDetails.open = true;
+        totalInput.focus();
+        return;
+      }
+      // Reuse the reservation's terms only as a draft when its weekly slot covers today.
+      const week = 7 * 86400000;
+      const shift = Math.ceil((source.startAt - now) / week) * week;
+      const startAt = source.startAt - shift;
+      const endAt = source.endAt - shift;
+      const overlaps = state.quests.some(item => item.startAt < endAt && startAt < item.endAt);
+      const suggestion = shift > 0 && endAt - startAt <= week && now < endAt && !overlaps
+        ? { startAt, endAt, template: source.template, tiers: source.tiers, goalIndex: source.goalIndex }
+        : null;
+      openForm(true, { suggestion });
+    } catch (error) { errorMessage(error); }
+  });
+  // During registration the two official counts also refer to the same day on day one.
+  for (const id of ["questInitialTotal", "questInitialToday"]) {
+    byId(id).addEventListener("input", () => {
+      const fields = periodFields();
+      const { startAt, endAt } = core.questPeriodTimes(fields);
+      const now = Date.now();
+      if (!(startAt <= now && now < endAt && now - startAt < 86400000)) return;
+      const other = id === "questInitialTotal" ? "questInitialToday" : "questInitialTotal";
+      byId(other).value = byId(id).value;
+    });
+  }
   for (const input of [totalInput, todayInput]) {
     input.addEventListener("input", () => {
       if (alignment?.firstDay) {
@@ -735,7 +834,7 @@
   byId("questAlignForm").addEventListener("submit", event => {
     event.preventDefault();
     try {
-      if (!alignment || alignment.id !== lastSelectedId) throw new Error("件数合わせを開き直してください。");
+      if (!alignment || byId("questAlignForm").hidden || alignment.id !== lastSelectedId) throw new Error("件数合わせを開き直してください。");
       const total = Number(totalInput.value || NaN);
       const today = Number(todayInput.value || NaN);
       store.alignCounts(alignment.id, total, today, alignment.at);

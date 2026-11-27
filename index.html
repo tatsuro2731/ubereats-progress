@@ -13,20 +13,20 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png?v=10">
   <link rel="manifest" href="manifest.webmanifest?v=10">
   <title>Uber配達進捗</title>
-  <script src="src/appearance.js?v=107"></script>
-  <link rel="stylesheet" href="styles/main.css?v=107">
-  <link rel="stylesheet" href="styles/appearance.css?v=107">
-  <link rel="stylesheet" href="styles/quest.css?v=107">
-  <link rel="stylesheet" href="styles/rich.css?v=107">
-  <script defer src="src/app-core.js?v=107"></script>
-  <script defer src="src/quest-store.js?v=107"></script>
-  <script defer src="src/main-app.js?v=107"></script>
-  <script defer src="src/session-engine.js?v=107"></script>
-  <script defer src="src/session-editors.js?v=107"></script>
-  <script defer src="src/quest-owner.js?v=107"></script>
-  <script defer src="src/quest-ui.js?v=107"></script>
-  <script defer src="src/data-backup.js?v=107"></script>
-  <script defer src="src/haptics.js?v=107"></script>
+  <script src="src/appearance.js?v=108"></script>
+  <link rel="stylesheet" href="styles/main.css?v=108">
+  <link rel="stylesheet" href="styles/appearance.css?v=108">
+  <link rel="stylesheet" href="styles/quest.css?v=108">
+  <link rel="stylesheet" href="styles/rich.css?v=108">
+  <script defer src="src/app-core.js?v=108"></script>
+  <script defer src="src/quest-store.js?v=108"></script>
+  <script defer src="src/main-app.js?v=108"></script>
+  <script defer src="src/session-engine.js?v=108"></script>
+  <script defer src="src/session-editors.js?v=108"></script>
+  <script defer src="src/quest-owner.js?v=108"></script>
+  <script defer src="src/quest-ui.js?v=108"></script>
+  <script defer src="src/data-backup.js?v=108"></script>
+  <script defer src="src/haptics.js?v=108"></script>
 </head>
 <body class="progressApp mainView">
 <div id="appRoot" class="wrap">
@@ -97,8 +97,9 @@
       </div>
       <details id="questAlignDetails" class="questCard">
         <summary id="questAlignSummary">公式アプリの件数に合わせる</summary>
+        <p id="questAlignHint" class="questMuted">Uberの完了件数を入力してください。</p>
+        <button id="questAlignCurrent" type="button" class="questPrimary" hidden></button>
         <form id="questAlignForm">
-          <p id="questAlignHint" class="questMuted">Uberの完了件数を入力してください。</p>
           <div class="questFormPair">
             <label class="questField" for="questAlignTotal">期間中の累計件数<input id="questAlignTotal" type="number" min="0" max="99999" step="1" inputmode="numeric" required></label>
             <label class="questField" for="questAlignToday">うち今日の件数<input id="questAlignToday" type="number" min="0" max="99999" step="1" inputmode="numeric" required></label>
@@ -111,6 +112,7 @@
     </div>
     <form id="questConfigForm" class="questCard questConfigForm" hidden>
       <div class="questBetween"><h3 id="questFormTitle">クエストを登録</h3><button id="questCancel" class="questTextButton" type="button">閉じる</button></div>
+      <p id="questCurrentDraftNote" class="questMuted" hidden></p>
       <section class="questImport" aria-labelledby="questImportTitle">
         <div class="questBetween"><h4 id="questImportTitle">スクリーンショットから入力</h4><button id="questImagePick" class="questSecondary" type="button">画像を選ぶ</button></div>
         <input id="questImageFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
@@ -137,6 +139,7 @@
       </section>
       <label class="questField" for="questTemplate">期間のひな形<select id="questTemplate"><option value="weekday">月〜木</option><option value="weekend">金〜日</option><option value="custom">自由に設定</option></select></label>
       <div class="questFormPair questDateTimeFields"><label class="questField" for="questStartDate">開始日<input id="questStartDate" type="date" required></label><label class="questField" for="questStartTime">開始時刻<input id="questStartTime" type="time" required></label><label class="questField" for="questEndDate">終了日<input id="questEndDate" type="date" required></label><label class="questField" for="questEndTime">終了時刻（この分まで）<input id="questEndTime" type="time" aria-describedby="questEndTimeNote" required></label></div>
+      <label id="questImageWeekField" class="questField" for="questImageWeek" hidden>画像の対象期間<select id="questImageWeek"></select></label>
       <p id="questImageDateNote" class="questImportNotice" hidden></p>
       <p id="questEndTimeNote" class="questMuted">日時は日本時間です。終了はその分の終わりまで含みます。午前4:00に切り替わるクエストは「03:59まで」と入力・表示します。</p>
       <div class="questBetween"><h4>段階ごとの件数と報酬</h4><button id="questAddTier" class="questTextButton" type="button">段階を追加</button></div><div id="questTierInputs"></div>

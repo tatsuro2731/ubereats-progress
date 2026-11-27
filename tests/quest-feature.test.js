@@ -344,7 +344,7 @@ function testOwner(read, signedIn = true) {
     signOut: () => { signedIn = false; }, init: async () => false };
 }
 
-function imageImportHarness({ periodText = null, openCrop = async () => () => cropUrl, defaultJpeg = async () => cropUrl,
+function imageImportHarness({ now = NOW, periodText = null, openCrop = async () => () => cropUrl, defaultJpeg = async () => cropUrl,
     readApi, owner = testOwner(async () => ({ ...apiResult, periodText })), sessionStorage = new MemoryStorage() } = {}) {
   class Events {
     constructor() { this.listeners = new Map(); }
@@ -409,8 +409,8 @@ function imageImportHarness({ periodText = null, openCrop = async () => () => cr
   document.getElementById = id => elements.get(id) || null; document.createElement = tag => new Element(tag);
   document.createTextNode = text => Object.assign(new Element("#text"), { textContent: text });
   class FakeDate extends Date {
-    constructor(...args) { super(...(args.length ? args : [NOW])); }
-    static now() { return NOW; }
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
   }
   class Event { constructor(type, options = {}) { this.type = type; Object.assign(this, options); } preventDefault() {} }
   const storage = seedStore();
@@ -521,6 +521,54 @@ test("the first selection calls only the owner API once and keeps candidates sep
   assert.deepEqual(app.element("questTierInputs").querySelectorAll("[data-tier-reward]").map(el => el.value), ["7580", "1010"]);
   assert.equal(app.element("questStartDate").value, "2026-09-14");
   assert.equal(app.storage.getItem(QUEST_KEY), stored);
+});
+
+test("a weekday-only Friday selection image can be assigned to this weekend or next weekend", async () => {
+  const now = at("2026-11-27T11:49:00");
+  const result = { screen: "selection", periodText: "金曜4:00〜月曜4:00", skipped: 0,
+    candidates: [{ label: "クエスト1", tiers: [{ target: 130, reward: 14100 }] }] };
+  const app = imageImportHarness({ now, owner: testOwner(async () => result) });
+  const saved = app.storage.getItem(QUEST_KEY);
+  await app.emit("questNew", "click");
+  await app.importImage();
+  assert.equal(app.period().StartDate, "2026-12-04");
+  assert.equal(app.element("questImageWeekField").hidden, false);
+  assert.equal(app.element("questInitialTotal").value, "0");
+  const reward = app.element("questTierInputs").querySelector("[data-tier-reward]");
+  reward.value = "14000";
+  app.element("questImageWeek").value = "active";
+  await app.emit("questImageWeek", "change");
+  assert.deepEqual(app.period(), { StartDate: "2026-11-27", StartTime: "04:00", EndDate: "2026-11-30", EndTime: "03:59" });
+  assert.equal(app.element("questInitialTotal").value, "");
+  assert.equal(reward.value, "14000");
+  assert.equal(app.storage.getItem(QUEST_KEY), saved);
+  app.element("questInitialTotal").value = app.element("questInitialToday").value = "10";
+  await app.emit("questConfigForm", "submit");
+  const state = JSON.parse(app.storage.getItem(QUEST_KEY));
+  assert.equal(state.quests.length, 1);
+  assert.equal(core.calculateQuest(state.quests[0], state.entries, now).total, 10);
+  await app.emit("questEdit", "click");
+  await app.importImage();
+  assert.equal(app.element("questImageWeek").value, "active");
+  assert.equal(app.period().StartDate, "2026-11-27");
+  assert.equal(app.element("questInitialCounts").hidden, true);
+  assert.equal(app.storage.getItem(QUEST_KEY), JSON.stringify(state));
+});
+
+test("fully dated selection images and active progress screens keep the read period", async () => {
+  const now = at("2026-11-27T11:49:00");
+  for (const [screen, periodText, expected] of [
+    ["selection", "12月4日(金)4:00〜12月7日(月)4:00", "2026-12-04"],
+    ["progress", "金曜4:00〜月曜4:00", "2026-11-27"],
+    ["selection", "月曜4:00〜金曜4:00", "2026-11-30"]
+  ]) {
+    const result = { screen, periodText, skipped: 0, candidates: [progressCandidate] };
+    const app = imageImportHarness({ now, owner: testOwner(async () => result) });
+    await app.emit("questNew", "click");
+    await app.importImage();
+    assert.equal(app.period().StartDate, expected);
+    assert.equal(app.element("questImageWeekField").hidden, true);
+  }
 });
 
 test("an exact count on an existing quest only fills the count fields and waits for save", async () => {
